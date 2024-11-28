@@ -18,7 +18,7 @@ export type Action =
   | {
       // this one won't be used in the real deal; we'll want to have
       // better ways than opaque functions to specify & show actions
-      type: "test";
+      type: "test-func";
       func: (input: Scene) => Scene[];
     }
   | {
@@ -162,7 +162,7 @@ function performAction(
 ): void {
   const { flowchartId, scene, caller } = step;
 
-  if (!action || action.type === "test") {
+  if (!action || action.type === "test-func") {
     const nextScenes = action ? action.func(scene) : [scene];
     for (const nextScene of nextScenes) {
       const nextStep: Step = {

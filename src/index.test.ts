@@ -40,7 +40,7 @@ test("runAll works with a simple flowchart", () => {
           {
             id: "2",
             action: {
-              type: "test",
+              type: "test-func",
               func: ({ value: x }) => [
                 {
                   value: x + 1,
@@ -110,7 +110,7 @@ test("runAll works with NFA split & merge", () => {
           {
             id: "2",
             action: {
-              type: "test",
+              type: "test-func",
               func: ({ value: [x, y] }) => [
                 {
                   value: x + y,
@@ -121,7 +121,7 @@ test("runAll works with NFA split & merge", () => {
           {
             id: "3",
             action: {
-              type: "test",
+              type: "test-func",
               func: ({ value: [x, y] }) => [
                 {
                   value: x * y,
@@ -132,7 +132,7 @@ test("runAll works with NFA split & merge", () => {
           {
             id: "4",
             action: {
-              type: "test",
+              type: "test-func",
               func: ({ value: x }) => [
                 {
                   value: x + 1,
@@ -257,7 +257,7 @@ test("runAll works with SIMD split & merge", () => {
           {
             id: "2",
             action: {
-              type: "test",
+              type: "test-func",
               func: ({ value: [x, y] }) => [
                 {
                   value: x + y,
@@ -271,7 +271,7 @@ test("runAll works with SIMD split & merge", () => {
           {
             id: "3",
             action: {
-              type: "test",
+              type: "test-func",
               func: ({ value: x }) => [
                 {
                   value: x + 1,
@@ -381,7 +381,7 @@ test("runAll works with a single call", () => {
           {
             id: "2",
             action: {
-              type: "test",
+              type: "test-func",
               func: ({ value: x }) => [
                 {
                   value: x + 10,
@@ -502,7 +502,7 @@ test("runAll works with two calls in a row", () => {
           {
             id: "2",
             action: {
-              type: "test",
+              type: "test-func",
               func: ({ value: x }) => [
                 {
                   value: x + 10,
@@ -640,7 +640,7 @@ test("runAll works with test-cond", () => {
           type: "test-cond",
           func: ({ value: x }) => x > 0,
           then: {
-            type: "test",
+            type: "test-func",
             func: ({ value: x }) => [
               {
                 value: x + 1,
@@ -648,7 +648,7 @@ test("runAll works with test-cond", () => {
             ],
           },
           else: {
-            type: "test",
+            type: "test-func",
             func: ({ value: x }) => [
               {
                 value: x - 1,
@@ -734,7 +734,7 @@ test("runAll works with recursion (gcd!)", () => {
           type: "test-cond",
           func: ({ value: [a, b] }) => a < b,
           then: {
-            type: "test",
+            type: "test-func",
             func: ({ value: [a, b] }) => [
               {
                 value: [a, b - a],
@@ -742,7 +742,7 @@ test("runAll works with recursion (gcd!)", () => {
             ],
           },
           else: {
-            type: "test",
+            type: "test-func",
             func: ({ value: [a, b] }) => [
               {
                 value: [a - b, b],
