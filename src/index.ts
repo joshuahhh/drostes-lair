@@ -229,3 +229,25 @@ export function scenesByFrame(
     ]),
   );
 }
+
+/**
+ * A frame in the UI is identified by a "frame path" – describing in
+ * static terms the sequence of calls that led to it. This might
+ * compute that for a step correctly? Or not.
+ */
+export function framePathForStep(
+  step: Step,
+  traceTree: TraceTree,
+): { flowchartId: string; frameId: string }[] {
+  const rest = step.caller
+    ? framePathForStep(
+        // TODO: does this work?
+        {
+          ...traceTree.steps[step.caller.prevStepId],
+          frameId: step.caller.frameId,
+        },
+        traceTree,
+      )
+    : [];
+  return [{ flowchartId: step.flowchartId, frameId: step.frameId }, ...rest];
+}
