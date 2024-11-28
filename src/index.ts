@@ -60,11 +60,19 @@ export type TraceTree = {
  */
 export type Step = {
   id: string;
-  prevId?: string;
+  prevStepId: string | undefined;
   frameId: string;
   flowchartId: string;
   scene: Scene;
-  callerId?: string;
+  caller:
+    | {
+        // We need to know:
+        // 1. The input to the call
+        prevStepId: string;
+        // 2. The call that was made
+        frameId: string;
+      }
+    | undefined;
 };
 
 /**
@@ -98,14 +106,32 @@ export function runAll(
   // this is our responsibility I guess
   traceTreeOut.steps[step.id] = step;
 
-  const { flowchartId, frameId, scene } = step;
+  const { flowchartId, frameId, scene, caller } = step;
   const flowchart = defs.flowcharts[flowchartId];
   const nextArrows = flowchart.arrows.filter(({ from }) => from === frameId);
 
-  // TODO: If there are no further arrows, we assume the flowchart is
-  // done. Design decision!
+  // If there are no further arrows, we assume the current flowchart
+  // is done (and return to the caller if necessary).
+  //
+  // TODO: Any need to be more explicit about returning? Design
+  // decision!
   if (nextArrows.length === 0) {
-    traceTreeOut.finalStepIds.push(step.id);
+    if (caller === undefined) {
+      traceTreeOut.finalStepIds.push(step.id);
+      return;
+    }
+
+    const callerPrevStep = traceTreeOut.steps[caller.prevStepId];
+
+    const nextStep: Step = {
+      id: `${step.id}↑${callerPrevStep.flowchartId}→${caller.frameId}`,
+      prevStepId: step.id,
+      flowchartId: callerPrevStep.flowchartId,
+      frameId: caller.frameId,
+      scene, // TODO: replace part of the scene
+      caller: callerPrevStep.caller,
+    };
+    runAll(nextStep, defs, traceTreeOut);
     return;
   }
 
@@ -121,19 +147,37 @@ export function runAll(
         ? nextFrame.action.func(scene)
         : [scene];
       for (const nextScene of nextScenes) {
-        const nextStep = {
+        const nextStep: Step = {
           id: `${step.id}→${nextFrameId}`,
-          prevId: step.id,
+          prevStepId: step.id,
           flowchartId,
           frameId: nextFrameId,
           scene: nextScene,
+          caller,
         };
         runAll(nextStep, defs, traceTreeOut);
       }
       return;
     }
     if (nextFrame.action.type === "call") {
-      throw new Error("Not implemented");
+      // time to step into the call
+      const nextFlowchart = defs.flowcharts[nextFrame.action.flowchartId];
+      if (!nextFlowchart) {
+        throw new Error(`Flowchart ${nextFrame.action.flowchartId} not found`);
+      }
+      const nextStep: Step = {
+        id: `${step.id}→${nextFrameId}↓${nextFlowchart.id}`,
+        prevStepId: step.id,
+        flowchartId: nextFrame.action.flowchartId,
+        frameId: nextFlowchart.initialFrameId,
+        scene,
+        caller: {
+          prevStepId: step.id,
+          frameId: nextFrameId,
+        },
+      };
+      runAll(nextStep, defs, traceTreeOut);
+      return;
     }
     assertNever(nextFrame.action);
   }
@@ -152,7 +196,12 @@ export function scenesByFrame(
     Object.keys(flowchart.frames).map((id) => [
       id,
       Object.values(traceTree.steps)
-        .map((step) => step.frameId === id && step.scene)
+        .map(
+          (step) =>
+            step.flowchartId === flowchart.id &&
+            step.frameId === id &&
+            step.scene,
+        )
         .filter(truthy),
     ]),
   );

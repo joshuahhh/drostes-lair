@@ -8,10 +8,12 @@ function runHelper(flowcharts: Flowchart[], value: any) {
   const flowchart = flowcharts[0];
   runAll(
     {
-      id: "1",
+      id: "*",
+      prevStepId: undefined,
       flowchartId: flowchart.id,
       frameId: flowchart.initialFrameId,
       scene: { value },
+      caller: undefined,
     },
     defs,
     traceTree,
@@ -23,7 +25,7 @@ test("runAll works with a simple flowchart", () => {
   const { traceTree, flowchart } = runHelper(
     [
       {
-        id: "flowchart1",
+        id: "fc1",
         initialFrameId: "1",
         frames: indexById([
           { id: "1" },
@@ -47,22 +49,25 @@ test("runAll works with a simple flowchart", () => {
   expect(traceTree).toMatchInlineSnapshot(`
     {
       "finalStepIds": [
-        "1→2",
+        "*→2",
       ],
       "steps": {
-        "1": {
-          "flowchartId": "flowchart1",
+        "*": {
+          "caller": undefined,
+          "flowchartId": "fc1",
           "frameId": "1",
-          "id": "1",
+          "id": "*",
+          "prevStepId": undefined,
           "scene": {
             "value": 3,
           },
         },
-        "1→2": {
-          "flowchartId": "flowchart1",
+        "*→2": {
+          "caller": undefined,
+          "flowchartId": "fc1",
           "frameId": "2",
-          "id": "1→2",
-          "prevId": "1",
+          "id": "*→2",
+          "prevStepId": "*",
           "scene": {
             "value": 4,
           },
@@ -90,7 +95,7 @@ test("runAll works with NFA split & merge", () => {
   const { traceTree, flowchart } = runHelper(
     [
       {
-        id: "flowchart1",
+        id: "fc1",
         initialFrameId: "1",
         frames: indexById([
           { id: "1" },
@@ -141,13 +146,15 @@ test("runAll works with NFA split & merge", () => {
   expect(traceTree).toMatchInlineSnapshot(`
     {
       "finalStepIds": [
-        "1→2→4",
+        "*→2→4",
       ],
       "steps": {
-        "1": {
-          "flowchartId": "flowchart1",
+        "*": {
+          "caller": undefined,
+          "flowchartId": "fc1",
           "frameId": "1",
-          "id": "1",
+          "id": "*",
+          "prevStepId": undefined,
           "scene": {
             "value": [
               3,
@@ -155,20 +162,22 @@ test("runAll works with NFA split & merge", () => {
             ],
           },
         },
-        "1→2": {
-          "flowchartId": "flowchart1",
+        "*→2": {
+          "caller": undefined,
+          "flowchartId": "fc1",
           "frameId": "2",
-          "id": "1→2",
-          "prevId": "1",
+          "id": "*→2",
+          "prevStepId": "*",
           "scene": {
             "value": 7,
           },
         },
-        "1→2→4": {
-          "flowchartId": "flowchart1",
+        "*→2→4": {
+          "caller": undefined,
+          "flowchartId": "fc1",
           "frameId": "4",
-          "id": "1→2→4",
-          "prevId": "1→2",
+          "id": "*→2→4",
+          "prevStepId": "*→2",
           "scene": {
             "value": 8,
           },
@@ -205,7 +214,7 @@ test("runAll works with SIMD split & merge", () => {
   const { traceTree, flowchart } = runHelper(
     [
       {
-        id: "flowchart1",
+        id: "fc1",
         initialFrameId: "1",
         frames: indexById([
           { id: "1" },
@@ -246,14 +255,16 @@ test("runAll works with SIMD split & merge", () => {
   expect(traceTree).toMatchInlineSnapshot(`
     {
       "finalStepIds": [
-        "1→2→3",
-        "1→2→3",
+        "*→2→3",
+        "*→2→3",
       ],
       "steps": {
-        "1": {
-          "flowchartId": "flowchart1",
+        "*": {
+          "caller": undefined,
+          "flowchartId": "fc1",
           "frameId": "1",
-          "id": "1",
+          "id": "*",
+          "prevStepId": undefined,
           "scene": {
             "value": [
               3,
@@ -261,20 +272,22 @@ test("runAll works with SIMD split & merge", () => {
             ],
           },
         },
-        "1→2": {
-          "flowchartId": "flowchart1",
+        "*→2": {
+          "caller": undefined,
+          "flowchartId": "fc1",
           "frameId": "2",
-          "id": "1→2",
-          "prevId": "1",
+          "id": "*→2",
+          "prevStepId": "*",
           "scene": {
             "value": 12,
           },
         },
-        "1→2→3": {
-          "flowchartId": "flowchart1",
+        "*→2→3": {
+          "caller": undefined,
+          "flowchartId": "fc1",
           "frameId": "3",
-          "id": "1→2→3",
-          "prevId": "1→2",
+          "id": "*→2→3",
+          "prevStepId": "*→2",
           "scene": {
             "value": 13,
           },
@@ -300,6 +313,279 @@ test("runAll works with SIMD split & merge", () => {
       "3": [
         {
           "value": 13,
+        },
+      ],
+    }
+  `);
+});
+
+test("runAll works with a single call", () => {
+  const { traceTree, flowchart } = runHelper(
+    [
+      {
+        id: "fc1",
+        initialFrameId: "1",
+        frames: indexById([
+          { id: "1" },
+          {
+            id: "2",
+            action: {
+              type: "call",
+              flowchartId: "fc2",
+            },
+          },
+        ]),
+        arrows: [{ from: "1", to: "2" }],
+      },
+      {
+        id: "fc2",
+        initialFrameId: "1",
+        frames: indexById([
+          { id: "1" },
+          {
+            id: "2",
+            action: {
+              type: "test",
+              func: ({ value: x }) => [
+                {
+                  value: x + 10,
+                },
+              ],
+            },
+          },
+        ]),
+        arrows: [{ from: "1", to: "2" }],
+      },
+    ],
+    3,
+  );
+  expect(traceTree).toMatchInlineSnapshot(`
+    {
+      "finalStepIds": [
+        "*→2↓fc2→2↑fc1→2",
+      ],
+      "steps": {
+        "*": {
+          "caller": undefined,
+          "flowchartId": "fc1",
+          "frameId": "1",
+          "id": "*",
+          "prevStepId": undefined,
+          "scene": {
+            "value": 3,
+          },
+        },
+        "*→2↓fc2": {
+          "caller": {
+            "frameId": "2",
+            "prevStepId": "*",
+          },
+          "flowchartId": "fc2",
+          "frameId": "1",
+          "id": "*→2↓fc2",
+          "prevStepId": "*",
+          "scene": {
+            "value": 3,
+          },
+        },
+        "*→2↓fc2→2": {
+          "caller": {
+            "frameId": "2",
+            "prevStepId": "*",
+          },
+          "flowchartId": "fc2",
+          "frameId": "2",
+          "id": "*→2↓fc2→2",
+          "prevStepId": "*→2↓fc2",
+          "scene": {
+            "value": 13,
+          },
+        },
+        "*→2↓fc2→2↑fc1→2": {
+          "caller": undefined,
+          "flowchartId": "fc1",
+          "frameId": "2",
+          "id": "*→2↓fc2→2↑fc1→2",
+          "prevStepId": "*→2↓fc2→2",
+          "scene": {
+            "value": 13,
+          },
+        },
+      },
+    }
+  `);
+  expect(scenesByFrame(flowchart, traceTree)).toMatchInlineSnapshot(`
+    {
+      "1": [
+        {
+          "value": 3,
+        },
+      ],
+      "2": [
+        {
+          "value": 13,
+        },
+      ],
+    }
+  `);
+});
+
+test("runAll works with two calls in a row", () => {
+  const { traceTree, flowchart } = runHelper(
+    [
+      {
+        id: "fc1",
+        initialFrameId: "1",
+        frames: indexById([
+          { id: "1" },
+          {
+            id: "2",
+            action: {
+              type: "call",
+              flowchartId: "fc2",
+            },
+          },
+          {
+            id: "3",
+            action: {
+              type: "call",
+              flowchartId: "fc2",
+            },
+          },
+        ]),
+        arrows: [
+          { from: "1", to: "2" },
+          { from: "2", to: "3" },
+        ],
+      },
+      {
+        id: "fc2",
+        initialFrameId: "1",
+        frames: indexById([
+          { id: "1" },
+          {
+            id: "2",
+            action: {
+              type: "test",
+              func: ({ value: x }) => [
+                {
+                  value: x + 10,
+                },
+              ],
+            },
+          },
+        ]),
+        arrows: [{ from: "1", to: "2" }],
+      },
+    ],
+    3,
+  );
+  expect(traceTree).toMatchInlineSnapshot(`
+    {
+      "finalStepIds": [
+        "*→2↓fc2→2↑fc1→2→3↓fc2→2↑fc1→3",
+      ],
+      "steps": {
+        "*": {
+          "caller": undefined,
+          "flowchartId": "fc1",
+          "frameId": "1",
+          "id": "*",
+          "prevStepId": undefined,
+          "scene": {
+            "value": 3,
+          },
+        },
+        "*→2↓fc2": {
+          "caller": {
+            "frameId": "2",
+            "prevStepId": "*",
+          },
+          "flowchartId": "fc2",
+          "frameId": "1",
+          "id": "*→2↓fc2",
+          "prevStepId": "*",
+          "scene": {
+            "value": 3,
+          },
+        },
+        "*→2↓fc2→2": {
+          "caller": {
+            "frameId": "2",
+            "prevStepId": "*",
+          },
+          "flowchartId": "fc2",
+          "frameId": "2",
+          "id": "*→2↓fc2→2",
+          "prevStepId": "*→2↓fc2",
+          "scene": {
+            "value": 13,
+          },
+        },
+        "*→2↓fc2→2↑fc1→2": {
+          "caller": undefined,
+          "flowchartId": "fc1",
+          "frameId": "2",
+          "id": "*→2↓fc2→2↑fc1→2",
+          "prevStepId": "*→2↓fc2→2",
+          "scene": {
+            "value": 13,
+          },
+        },
+        "*→2↓fc2→2↑fc1→2→3↓fc2": {
+          "caller": {
+            "frameId": "3",
+            "prevStepId": "*→2↓fc2→2↑fc1→2",
+          },
+          "flowchartId": "fc2",
+          "frameId": "1",
+          "id": "*→2↓fc2→2↑fc1→2→3↓fc2",
+          "prevStepId": "*→2↓fc2→2↑fc1→2",
+          "scene": {
+            "value": 13,
+          },
+        },
+        "*→2↓fc2→2↑fc1→2→3↓fc2→2": {
+          "caller": {
+            "frameId": "3",
+            "prevStepId": "*→2↓fc2→2↑fc1→2",
+          },
+          "flowchartId": "fc2",
+          "frameId": "2",
+          "id": "*→2↓fc2→2↑fc1→2→3↓fc2→2",
+          "prevStepId": "*→2↓fc2→2↑fc1→2→3↓fc2",
+          "scene": {
+            "value": 23,
+          },
+        },
+        "*→2↓fc2→2↑fc1→2→3↓fc2→2↑fc1→3": {
+          "caller": undefined,
+          "flowchartId": "fc1",
+          "frameId": "3",
+          "id": "*→2↓fc2→2↑fc1→2→3↓fc2→2↑fc1→3",
+          "prevStepId": "*→2↓fc2→2↑fc1→2→3↓fc2→2",
+          "scene": {
+            "value": 23,
+          },
+        },
+      },
+    }
+  `);
+  expect(scenesByFrame(flowchart, traceTree)).toMatchInlineSnapshot(`
+    {
+      "1": [
+        {
+          "value": 3,
+        },
+      ],
+      "2": [
+        {
+          "value": 13,
+        },
+      ],
+      "3": [
+        {
+          "value": 23,
         },
       ],
     }
