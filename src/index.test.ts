@@ -147,6 +147,7 @@ test("runAll works with NFA split & merge", () => {
     {
       "finalStepIds": [
         "*→2→4",
+        "*→3→4",
       ],
       "steps": {
         "*": {
@@ -182,6 +183,26 @@ test("runAll works with NFA split & merge", () => {
             "value": 8,
           },
         },
+        "*→3": {
+          "caller": undefined,
+          "flowchartId": "fc1",
+          "frameId": "3",
+          "id": "*→3",
+          "prevStepId": "*",
+          "scene": {
+            "value": 12,
+          },
+        },
+        "*→3→4": {
+          "caller": undefined,
+          "flowchartId": "fc1",
+          "frameId": "4",
+          "id": "*→3→4",
+          "prevStepId": "*→3",
+          "scene": {
+            "value": 13,
+          },
+        },
       },
     }
   `);
@@ -200,10 +221,17 @@ test("runAll works with NFA split & merge", () => {
           "value": 7,
         },
       ],
-      "3": [],
+      "3": [
+        {
+          "value": 12,
+        },
+      ],
       "4": [
         {
           "value": 8,
+        },
+        {
+          "value": 13,
         },
       ],
     }

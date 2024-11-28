@@ -142,45 +142,55 @@ export function runAll(
     if (!nextFrame) {
       throw new Error(`Frame ${nextFrameId} not found`);
     }
-    if (!nextFrame.action || nextFrame.action.type === "test") {
-      const nextScenes = nextFrame.action
-        ? nextFrame.action.func(scene)
-        : [scene];
-      for (const nextScene of nextScenes) {
-        const nextStep: Step = {
-          id: `${step.id}→${nextFrameId}`,
-          prevStepId: step.id,
-          flowchartId,
-          frameId: nextFrameId,
-          scene: nextScene,
-          caller,
-        };
-        runAll(nextStep, defs, traceTreeOut);
-      }
-      return;
-    }
-    if (nextFrame.action.type === "call") {
-      // time to step into the call
-      const nextFlowchart = defs.flowcharts[nextFrame.action.flowchartId];
-      if (!nextFlowchart) {
-        throw new Error(`Flowchart ${nextFrame.action.flowchartId} not found`);
-      }
+    performAction(step, nextFrameId, nextFrame.action, defs, traceTreeOut);
+  }
+}
+
+function performAction(
+  step: Step,
+  nextFrameId: string,
+  action: Action | undefined,
+  defs: Definitions,
+  traceTreeOut: TraceTree,
+): void {
+  const { flowchartId, scene, caller } = step;
+
+  if (!action || action.type === "test") {
+    const nextScenes = action ? action.func(scene) : [scene];
+    for (const nextScene of nextScenes) {
       const nextStep: Step = {
-        id: `${step.id}→${nextFrameId}↓${nextFlowchart.id}`,
+        id: `${step.id}→${nextFrameId}`,
         prevStepId: step.id,
-        flowchartId: nextFrame.action.flowchartId,
-        frameId: nextFlowchart.initialFrameId,
-        scene,
-        caller: {
-          prevStepId: step.id,
-          frameId: nextFrameId,
-        },
+        flowchartId,
+        frameId: nextFrameId,
+        scene: nextScene,
+        caller,
       };
       runAll(nextStep, defs, traceTreeOut);
-      return;
     }
-    assertNever(nextFrame.action);
+    return;
   }
+  if (action.type === "call") {
+    // time to step into the call
+    const nextFlowchart = defs.flowcharts[action.flowchartId];
+    if (!nextFlowchart) {
+      throw new Error(`Flowchart ${action.flowchartId} not found`);
+    }
+    const nextStep: Step = {
+      id: `${step.id}→${nextFrameId}↓${nextFlowchart.id}`,
+      prevStepId: step.id,
+      flowchartId: action.flowchartId,
+      frameId: nextFlowchart.initialFrameId,
+      scene,
+      caller: {
+        prevStepId: step.id,
+        frameId: nextFrameId,
+      },
+    };
+    runAll(nextStep, defs, traceTreeOut);
+    return;
+  }
+  assertNever(action);
 }
 
 /**
