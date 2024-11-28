@@ -17,28 +17,45 @@ test("runAll works with a simple flowchart", () => {
     ],
     arrows: [{ from: "1", to: "2" }],
   };
-  const traces = runAll(flowchart, {
-    steps: [{ frameId: "1", scene: { value: 3 } }],
+  const traceTree = runAll(flowchart, {
+    id: "1",
+    frameId: "1",
+    scene: { value: 3 },
   });
-  expect(traces).toMatchInlineSnapshot(`
-    [
-      {
-        "steps": [
-          {
-            "frameId": "1",
-            "scene": {
-              "value": 3,
-            },
+  expect(traceTree).toMatchInlineSnapshot(`
+    {
+      "steps": [
+        {
+          "frameId": "1",
+          "id": "1",
+          "scene": {
+            "value": 3,
           },
-          {
-            "frameId": "2",
-            "scene": {
-              "value": 4,
-            },
+        },
+        {
+          "frameId": "2",
+          "id": "1.2",
+          "prevId": "1",
+          "scene": {
+            "value": 4,
           },
-        ],
-      },
-    ]
+        },
+      ],
+    }
+  `);
+  expect(scenesByFrame(flowchart, traceTree)).toMatchInlineSnapshot(`
+    {
+      "1": [
+        {
+          "value": 3,
+        },
+      ],
+      "2": [
+        {
+          "value": 4,
+        },
+      ],
+    }
   `);
 });
 
@@ -79,72 +96,62 @@ test("runAll works with NFA split & merge", () => {
       { from: "3", to: "4" },
     ],
   };
-  const traces = runAll(flowchart, {
-    steps: [{ frameId: "1", scene: { value: [3, 4] } }],
+  const traceTree = runAll(flowchart, {
+    id: "1",
+    frameId: "1",
+    scene: { value: [3, 4] },
   });
-  expect(traces).toMatchInlineSnapshot(`
-    [
-      {
-        "steps": [
-          {
-            "frameId": "1",
-            "scene": {
-              "value": [
-                3,
-                4,
-              ],
-            },
+  expect(traceTree).toMatchInlineSnapshot(`
+    {
+      "steps": [
+        {
+          "frameId": "1",
+          "id": "1",
+          "scene": {
+            "value": [
+              3,
+              4,
+            ],
           },
-          {
-            "frameId": "2",
-            "scene": {
-              "value": 7,
-            },
+        },
+        {
+          "frameId": "2",
+          "id": "1.2",
+          "prevId": "1",
+          "scene": {
+            "value": 7,
           },
-          {
-            "frameId": "4",
-            "scene": {
-              "value": 8,
-            },
+        },
+        {
+          "frameId": "4",
+          "id": "1.2.4",
+          "prevId": "1.2",
+          "scene": {
+            "value": 8,
           },
-        ],
-      },
-      {
-        "steps": [
-          {
-            "frameId": "1",
-            "scene": {
-              "value": [
-                3,
-                4,
-              ],
-            },
+        },
+        {
+          "frameId": "3",
+          "id": "1.3",
+          "prevId": "1",
+          "scene": {
+            "value": 12,
           },
-          {
-            "frameId": "3",
-            "scene": {
-              "value": 12,
-            },
+        },
+        {
+          "frameId": "4",
+          "id": "1.3.4",
+          "prevId": "1.3",
+          "scene": {
+            "value": 13,
           },
-          {
-            "frameId": "4",
-            "scene": {
-              "value": 13,
-            },
-          },
-        ],
-      },
-    ]
+        },
+      ],
+    }
   `);
-  expect(scenesByFrame(flowchart, traces)).toMatchInlineSnapshot(`
+  expect(scenesByFrame(flowchart, traceTree)).toMatchInlineSnapshot(`
     {
       "1": [
-        {
-          "value": [
-            3,
-            4,
-          ],
-        },
         {
           "value": [
             3,
@@ -204,72 +211,62 @@ test("runAll works with SIMD split & merge", () => {
       { from: "2", to: "3" },
     ],
   };
-  const traces = runAll(flowchart, {
-    steps: [{ frameId: "1", scene: { value: [3, 4] } }],
+  const traceTree = runAll(flowchart, {
+    id: "1",
+    frameId: "1",
+    scene: { value: [3, 4] },
   });
-  expect(traces).toMatchInlineSnapshot(`
-    [
-      {
-        "steps": [
-          {
-            "frameId": "1",
-            "scene": {
-              "value": [
-                3,
-                4,
-              ],
-            },
+  expect(traceTree).toMatchInlineSnapshot(`
+    {
+      "steps": [
+        {
+          "frameId": "1",
+          "id": "1",
+          "scene": {
+            "value": [
+              3,
+              4,
+            ],
           },
-          {
-            "frameId": "2",
-            "scene": {
-              "value": 7,
-            },
+        },
+        {
+          "frameId": "2",
+          "id": "1.2",
+          "prevId": "1",
+          "scene": {
+            "value": 7,
           },
-          {
-            "frameId": "3",
-            "scene": {
-              "value": 8,
-            },
+        },
+        {
+          "frameId": "3",
+          "id": "1.2.3",
+          "prevId": "1.2",
+          "scene": {
+            "value": 8,
           },
-        ],
-      },
-      {
-        "steps": [
-          {
-            "frameId": "1",
-            "scene": {
-              "value": [
-                3,
-                4,
-              ],
-            },
+        },
+        {
+          "frameId": "2",
+          "id": "1.2",
+          "prevId": "1",
+          "scene": {
+            "value": 12,
           },
-          {
-            "frameId": "2",
-            "scene": {
-              "value": 12,
-            },
+        },
+        {
+          "frameId": "3",
+          "id": "1.2.3",
+          "prevId": "1.2",
+          "scene": {
+            "value": 13,
           },
-          {
-            "frameId": "3",
-            "scene": {
-              "value": 13,
-            },
-          },
-        ],
-      },
-    ]
+        },
+      ],
+    }
   `);
-  expect(scenesByFrame(flowchart, traces)).toMatchInlineSnapshot(`
+  expect(scenesByFrame(flowchart, traceTree)).toMatchInlineSnapshot(`
     {
       "1": [
-        {
-          "value": [
-            3,
-            4,
-          ],
-        },
         {
           "value": [
             3,

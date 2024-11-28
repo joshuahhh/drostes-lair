@@ -1,5 +1,3 @@
-import { last } from "./util";
-
 // STATIC WORLD
 
 export type Flowchart = {
@@ -15,11 +13,13 @@ export type Frame = {
 
 // DYNAMIC WORLD
 
-export type Trace = {
+export type TraceTree = {
   steps: Step[];
 };
 
 export type Step = {
+  id: string;
+  prevId?: string;
   frameId: string;
   scene: Scene;
 };
@@ -29,57 +29,54 @@ export type Scene = {
 };
 
 /**
- * Given trace running in flowchart, returns all completed traces
+ * Given step running in a flowchart, returns all completed traces
  * that continue it.
  */
-export function runAll(flowchart: Flowchart, trace: Trace): Trace[] {
-  // log(trace);
-  const { frameId, scene } = last(trace.steps);
+export function runAll(flowchart: Flowchart, step: Step): TraceTree {
+  const { frameId, scene } = step;
   const nextArrows = flowchart.arrows.filter(({ from }) => from === frameId);
   // TODO: If there are no further arrows, we assume the flowchart is
   // done. Design decision!
   if (nextArrows.length === 0) {
-    return [trace];
+    return { steps: [step] };
   }
   // Otherwise, we follow all arrows.
-  return nextArrows.flatMap((nextArrow) => {
-    const nextFrameId = nextArrow.to;
-    const nextFrame = flowchart.frames.find(({ id }) => nextFrameId === id);
-    const nextScenes = nextFrame?.action ? nextFrame.action(scene) : [scene];
-    return nextScenes.flatMap((nextScene) => {
-      const nextTrace = { ...trace };
-      nextTrace.steps = [
-        ...nextTrace.steps,
-        {
-          frameId: nextFrameId,
-          scene: nextScene,
-        },
-      ];
-      return runAll(flowchart, nextTrace);
-    });
-  });
-}
-
-export function sceneInFrame(trace: Trace, frameId: string): Scene | undefined {
-  const matchingSteps = trace.steps.filter(
-    ({ frameId: someFrameId }) => someFrameId === frameId,
-  );
-  if (matchingSteps.length > 1) {
-    throw new Error("we're assuming a trace can only visit a frame once");
-  }
-  return matchingSteps[0]?.scene;
+  return {
+    steps: [
+      step,
+      ...nextArrows.flatMap((nextArrow) => {
+        const nextFrameId = nextArrow.to;
+        const nextFrame = flowchart.frames.find(({ id }) => nextFrameId === id);
+        const nextScenes = nextFrame?.action
+          ? nextFrame.action(scene)
+          : [scene];
+        return nextScenes.flatMap((nextScene) => {
+          const nextStep = {
+            id: `${step.id}.${nextFrameId}`,
+            prevId: step.id,
+            frameId: nextFrameId,
+            scene: nextScene,
+          };
+          return runAll(flowchart, nextStep).steps;
+        });
+      }),
+    ],
+  };
 }
 
 export function scenesByFrame(
   flowchart: Flowchart,
-  traces: Trace[],
+  traceTree: TraceTree,
 ): Record<string, Scene[]> {
-  let ret: Record<string, Scene[]> = {};
-  for (const frame of flowchart.frames) {
-    const scenesInFrame = traces.flatMap(
-      (trace) => sceneInFrame(trace, frame.id) ?? [],
-    );
-    ret[frame.id] = scenesInFrame;
-  }
-  return ret;
+  return Object.fromEntries(
+    flowchart.frames.map(({ id }) => [
+      id,
+      traceTree.steps.flatMap((step) => {
+        if (step.frameId === id) {
+          return [step.scene];
+        }
+        return [];
+      }),
+    ]),
+  );
 }
