@@ -191,6 +191,18 @@ Promise.all([
       }
     });
 
+    // hand-tuned candle flicker frame machine
+    const incCandleTime = (t: number) => {
+      if (t > 127) return 0;
+      // make the flame calmer (slow down time) after it flickered in frames 40 to 70
+      if (t > 75 && Math.random() < 0.6) return t;
+      // chances to not flicker, returning to previous points in the flame to look natural
+      if (t === 30 && Math.random() < 0.3) return 80;
+      if (t === 110 && Math.random() < 0.6) return 80;
+      if (t === 127 && Math.random() < 0.6) return 71;
+      return t + 1;
+    };
+
     requestAnimationFrame(drawLoop);
     let t = 0;
     function drawLoop() {
@@ -259,13 +271,11 @@ Promise.all([
         ...radialCenter,
         800 - radialFlickerAmt,
       );
-      // Add three color stops
       gradient.addColorStop(0, "rgba(255, 181, 174,0.2)");
       gradient.addColorStop(0.1, "rgba(235, 120, 54,0.1)");
       gradient.addColorStop(0.5, "rgba(255, 217, 66, 0)");
       gradient.addColorStop(0.5, "rgba(0, 0, 0, 0)");
       gradient.addColorStop(1, "rgba(0,0,0,0.6)");
-      // Set the fill style and draw a rectangle
       ctx.fillStyle = gradient;
       ctx.fillRect(0, 0, c.width, c.height);
       // candle flicker dimming
@@ -275,7 +285,7 @@ Promise.all([
         ctx.fillRect(0, 0, c.width, c.height);
       }
 
-      t++;
+      t = incCandleTime(t);
     }
   },
 );
