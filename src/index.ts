@@ -155,7 +155,7 @@ export function runAll(
 
 function performAction(
   step: Step,
-  nextFrameId: string,
+  frameId: string,
   action: Action | undefined,
   defs: Definitions,
   traceTreeOut: TraceTree,
@@ -167,10 +167,10 @@ function performAction(
     let i = 0;
     for (const nextScene of nextScenes) {
       const nextStep: Step = {
-        id: `${step.id}→${nextFrameId}${nextScenes.length > 1 ? `[${i++}]` : ""}`,
+        id: `${step.id}→${frameId}${nextScenes.length > 1 ? `[${i++}]` : ""}`,
         prevStepId: step.id,
         flowchartId,
-        frameId: nextFrameId,
+        frameId,
         scene: nextScene,
         caller,
       };
@@ -185,14 +185,14 @@ function performAction(
       throw new Error(`Flowchart ${action.flowchartId} not found`);
     }
     const nextStep: Step = {
-      id: `${step.id}→${nextFrameId}↓${nextFlowchart.id}`,
+      id: `${step.id}→${frameId}↓${nextFlowchart.id}`,
       prevStepId: step.id,
       flowchartId: action.flowchartId,
       frameId: nextFlowchart.initialFrameId,
       scene,
       caller: {
         prevStepId: step.id,
-        frameId: nextFrameId,
+        frameId,
       },
     };
     runAll(nextStep, defs, traceTreeOut);
@@ -200,7 +200,7 @@ function performAction(
   }
   if (action.type === "test-cond") {
     const nextAction = action.func(scene) ? action.then : action.else;
-    performAction(step, nextFrameId, nextAction, defs, traceTreeOut);
+    performAction(step, frameId, nextAction, defs, traceTreeOut);
     return;
   }
   assertNever(action);
