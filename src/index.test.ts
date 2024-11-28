@@ -1,6 +1,7 @@
 import { expect, test } from "vitest";
 import { Flowchart, makeTraceTree, runAll, scenesByFrame } from ".";
-import { indexById, log } from "./util";
+import { log } from "./node_util";
+import { indexById } from "./util";
 
 function runHelper(flowcharts: Flowchart[], value: any) {
   const defs = { flowcharts: indexById(flowcharts) };
