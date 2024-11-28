@@ -47,7 +47,7 @@ test("runAll works with a simple flowchart", () => {
   expect(traceTree).toMatchInlineSnapshot(`
     {
       "finalStepIds": [
-        "1.2",
+        "1→2",
       ],
       "steps": {
         "1": {
@@ -58,10 +58,10 @@ test("runAll works with a simple flowchart", () => {
             "value": 3,
           },
         },
-        "1.2": {
+        "1→2": {
           "flowchartId": "flowchart1",
           "frameId": "2",
-          "id": "1.2",
+          "id": "1→2",
           "prevId": "1",
           "scene": {
             "value": 4,
@@ -141,7 +141,7 @@ test("runAll works with NFA split & merge", () => {
   expect(traceTree).toMatchInlineSnapshot(`
     {
       "finalStepIds": [
-        "1.2.4",
+        "1→2→4",
       ],
       "steps": {
         "1": {
@@ -155,20 +155,20 @@ test("runAll works with NFA split & merge", () => {
             ],
           },
         },
-        "1.2": {
+        "1→2": {
           "flowchartId": "flowchart1",
           "frameId": "2",
-          "id": "1.2",
+          "id": "1→2",
           "prevId": "1",
           "scene": {
             "value": 7,
           },
         },
-        "1.2.4": {
+        "1→2→4": {
           "flowchartId": "flowchart1",
           "frameId": "4",
-          "id": "1.2.4",
-          "prevId": "1.2",
+          "id": "1→2→4",
+          "prevId": "1→2",
           "scene": {
             "value": 8,
           },
@@ -246,8 +246,8 @@ test("runAll works with SIMD split & merge", () => {
   expect(traceTree).toMatchInlineSnapshot(`
     {
       "finalStepIds": [
-        "1.2.3",
-        "1.2.3",
+        "1→2→3",
+        "1→2→3",
       ],
       "steps": {
         "1": {
@@ -261,20 +261,20 @@ test("runAll works with SIMD split & merge", () => {
             ],
           },
         },
-        "1.2": {
+        "1→2": {
           "flowchartId": "flowchart1",
           "frameId": "2",
-          "id": "1.2",
+          "id": "1→2",
           "prevId": "1",
           "scene": {
             "value": 12,
           },
         },
-        "1.2.3": {
+        "1→2→3": {
           "flowchartId": "flowchart1",
           "frameId": "3",
-          "id": "1.2.3",
-          "prevId": "1.2",
+          "id": "1→2→3",
+          "prevId": "1→2",
           "scene": {
             "value": 13,
           },

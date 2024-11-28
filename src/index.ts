@@ -122,7 +122,7 @@ export function runAll(
         : [scene];
       for (const nextScene of nextScenes) {
         const nextStep = {
-          id: `${step.id}.${nextFrameId}`,
+          id: `${step.id}→${nextFrameId}`,
           prevId: step.id,
           flowchartId,
           frameId: nextFrameId,
