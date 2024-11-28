@@ -291,8 +291,8 @@ test("runAll works with SIMD split & merge", () => {
   expect(traceTree).toMatchInlineSnapshot(`
     {
       "finalStepIds": [
-        "*→2→3",
-        "*→2→3",
+        "*→2[0]→3",
+        "*→2[1]→3",
       ],
       "steps": {
         "*": {
@@ -308,22 +308,42 @@ test("runAll works with SIMD split & merge", () => {
             ],
           },
         },
-        "*→2": {
+        "*→2[0]": {
           "caller": undefined,
           "flowchartId": "fc1",
           "frameId": "2",
-          "id": "*→2",
+          "id": "*→2[0]",
+          "prevStepId": "*",
+          "scene": {
+            "value": 7,
+          },
+        },
+        "*→2[0]→3": {
+          "caller": undefined,
+          "flowchartId": "fc1",
+          "frameId": "3",
+          "id": "*→2[0]→3",
+          "prevStepId": "*→2[0]",
+          "scene": {
+            "value": 8,
+          },
+        },
+        "*→2[1]": {
+          "caller": undefined,
+          "flowchartId": "fc1",
+          "frameId": "2",
+          "id": "*→2[1]",
           "prevStepId": "*",
           "scene": {
             "value": 12,
           },
         },
-        "*→2→3": {
+        "*→2[1]→3": {
           "caller": undefined,
           "flowchartId": "fc1",
           "frameId": "3",
-          "id": "*→2→3",
-          "prevStepId": "*→2",
+          "id": "*→2[1]→3",
+          "prevStepId": "*→2[1]",
           "scene": {
             "value": 13,
           },
@@ -343,10 +363,16 @@ test("runAll works with SIMD split & merge", () => {
       ],
       "2": [
         {
+          "value": 7,
+        },
+        {
           "value": 12,
         },
       ],
       "3": [
+        {
+          "value": 8,
+        },
         {
           "value": 13,
         },

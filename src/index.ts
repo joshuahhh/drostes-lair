@@ -164,9 +164,10 @@ function performAction(
 
   if (!action || action.type === "test-func") {
     const nextScenes = action ? action.func(scene) : [scene];
+    let i = 0;
     for (const nextScene of nextScenes) {
       const nextStep: Step = {
-        id: `${step.id}→${nextFrameId}`,
+        id: `${step.id}→${nextFrameId}${nextScenes.length > 1 ? `[${i++}]` : ""}`,
         prevStepId: step.id,
         flowchartId,
         frameId: nextFrameId,
