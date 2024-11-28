@@ -3,6 +3,7 @@
 import { assertNever, truthy } from "./util";
 
 export type Flowchart = {
+  id: string;
   initialFrameId: string;
   frames: { [id: string]: Frame };
   arrows: { from: string; to: string }[];
@@ -22,9 +23,9 @@ export type Action =
     }
   | {
       type: "call";
-      procedure: string;
-      // TODO: for now, procedures run at the top level of a frame;
-      // this will have to change soon
+      flowchartId: string;
+      // TODO: for now, calls run at the top level of a frame; this
+      // will have to change soon
     };
 
 /**
@@ -32,7 +33,7 @@ export type Action =
  * what flowcharts are out there.
  */
 export type Definitions = {
-  procedures: Record<string, Flowchart>;
+  flowcharts: Record<string, Flowchart>;
 };
 
 // DYNAMIC WORLD
@@ -52,15 +53,18 @@ export type TraceTree = {
 };
 
 /**
- * A step in the execution of a flowchart. It's /concrete/ – no
- * ambing or suchlike. A specific scene! But it happens somewhere (a
- * frame) and it (probably) came from somewhere (a previous step).
+ * A (completed) step in the execution of a flowchart. It's
+ * /concrete/ – no ambing or suchlike. A specific scene! But it
+ * happens somewhere (a frame, maybe in some nested calls) and it
+ * (probably) came from somewhere (a previous step).
  */
 export type Step = {
   id: string;
   prevId?: string;
   frameId: string;
+  flowchartId: string;
   scene: Scene;
+  callerId?: string;
 };
 
 /**
@@ -87,7 +91,6 @@ export function makeTraceTree(): TraceTree {
  * mutable traceTreeOut.
  */
 export function runAll(
-  flowchart: Flowchart,
   step: Step,
   defs: Definitions,
   traceTreeOut: TraceTree,
@@ -95,7 +98,8 @@ export function runAll(
   // this is our responsibility I guess
   traceTreeOut.steps[step.id] = step;
 
-  const { frameId, scene } = step;
+  const { flowchartId, frameId, scene } = step;
+  const flowchart = defs.flowcharts[flowchartId];
   const nextArrows = flowchart.arrows.filter(({ from }) => from === frameId);
 
   // TODO: If there are no further arrows, we assume the flowchart is
@@ -120,10 +124,11 @@ export function runAll(
         const nextStep = {
           id: `${step.id}.${nextFrameId}`,
           prevId: step.id,
+          flowchartId,
           frameId: nextFrameId,
           scene: nextScene,
         };
-        runAll(flowchart, nextStep, defs, traceTreeOut);
+        runAll(nextStep, defs, traceTreeOut);
       }
       return;
     }

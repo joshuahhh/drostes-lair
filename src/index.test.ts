@@ -1,46 +1,48 @@
 import { expect, test } from "vitest";
-import {
-  Definitions,
-  Flowchart,
-  makeTraceTree,
-  runAll,
-  scenesByFrame,
-} from ".";
+import { Flowchart, makeTraceTree, runAll, scenesByFrame } from ".";
 import { indexById } from "./util";
 
-const defs: Definitions = {
-  procedures: {},
-};
-
-test("runAll works with a simple flowchart", () => {
-  const flowchart: Flowchart = {
-    initialFrameId: "1",
-    frames: indexById([
-      { id: "1" },
-      {
-        id: "2",
-        action: {
-          type: "test",
-          func: ({ value: x }) => [
-            {
-              value: x + 1,
-            },
-          ],
-        },
-      },
-    ]),
-    arrows: [{ from: "1", to: "2" }],
-  };
+function runHelper(flowcharts: Flowchart[], value: any) {
+  const defs = { flowcharts: indexById(flowcharts) };
   const traceTree = makeTraceTree();
+  const flowchart = flowcharts[0];
   runAll(
-    flowchart,
     {
       id: "1",
-      frameId: "1",
-      scene: { value: 3 },
+      flowchartId: flowchart.id,
+      frameId: flowchart.initialFrameId,
+      scene: { value },
     },
     defs,
     traceTree,
+  );
+  return { traceTree, flowchart };
+}
+
+test("runAll works with a simple flowchart", () => {
+  const { traceTree, flowchart } = runHelper(
+    [
+      {
+        id: "flowchart1",
+        initialFrameId: "1",
+        frames: indexById([
+          { id: "1" },
+          {
+            id: "2",
+            action: {
+              type: "test",
+              func: ({ value: x }) => [
+                {
+                  value: x + 1,
+                },
+              ],
+            },
+          },
+        ]),
+        arrows: [{ from: "1", to: "2" }],
+      },
+    ],
+    3,
   );
   expect(traceTree).toMatchInlineSnapshot(`
     {
@@ -49,6 +51,7 @@ test("runAll works with a simple flowchart", () => {
       ],
       "steps": {
         "1": {
+          "flowchartId": "flowchart1",
           "frameId": "1",
           "id": "1",
           "scene": {
@@ -56,6 +59,7 @@ test("runAll works with a simple flowchart", () => {
           },
         },
         "1.2": {
+          "flowchartId": "flowchart1",
           "frameId": "2",
           "id": "1.2",
           "prevId": "1",
@@ -83,61 +87,56 @@ test("runAll works with a simple flowchart", () => {
 });
 
 test("runAll works with NFA split & merge", () => {
-  const flowchart: Flowchart = {
-    initialFrameId: "1",
-    frames: indexById([
-      { id: "1" },
+  const { traceTree, flowchart } = runHelper(
+    [
       {
-        id: "2",
-        action: {
-          type: "test",
-          func: ({ value: [x, y] }) => [
-            {
-              value: x + y,
+        id: "flowchart1",
+        initialFrameId: "1",
+        frames: indexById([
+          { id: "1" },
+          {
+            id: "2",
+            action: {
+              type: "test",
+              func: ({ value: [x, y] }) => [
+                {
+                  value: x + y,
+                },
+              ],
             },
-          ],
-        },
-      },
-      {
-        id: "3",
-        action: {
-          type: "test",
-          func: ({ value: [x, y] }) => [
-            {
-              value: x * y,
+          },
+          {
+            id: "3",
+            action: {
+              type: "test",
+              func: ({ value: [x, y] }) => [
+                {
+                  value: x * y,
+                },
+              ],
             },
-          ],
-        },
-      },
-      {
-        id: "4",
-        action: {
-          type: "test",
-          func: ({ value: x }) => [
-            {
-              value: x + 1,
+          },
+          {
+            id: "4",
+            action: {
+              type: "test",
+              func: ({ value: x }) => [
+                {
+                  value: x + 1,
+                },
+              ],
             },
-          ],
-        },
+          },
+        ]),
+        arrows: [
+          { from: "1", to: "2" },
+          { from: "1", to: "3" },
+          { from: "2", to: "4" },
+          { from: "3", to: "4" },
+        ],
       },
-    ]),
-    arrows: [
-      { from: "1", to: "2" },
-      { from: "1", to: "3" },
-      { from: "2", to: "4" },
-      { from: "3", to: "4" },
     ],
-  };
-  const traceTree = makeTraceTree();
-  runAll(
-    flowchart,
-    {
-      id: "1",
-      frameId: "1",
-      scene: { value: [3, 4] },
-    },
-    defs,
-    traceTree,
+    [3, 4],
   );
   expect(traceTree).toMatchInlineSnapshot(`
     {
@@ -146,6 +145,7 @@ test("runAll works with NFA split & merge", () => {
       ],
       "steps": {
         "1": {
+          "flowchartId": "flowchart1",
           "frameId": "1",
           "id": "1",
           "scene": {
@@ -156,6 +156,7 @@ test("runAll works with NFA split & merge", () => {
           },
         },
         "1.2": {
+          "flowchartId": "flowchart1",
           "frameId": "2",
           "id": "1.2",
           "prevId": "1",
@@ -164,6 +165,7 @@ test("runAll works with NFA split & merge", () => {
           },
         },
         "1.2.4": {
+          "flowchartId": "flowchart1",
           "frameId": "4",
           "id": "1.2.4",
           "prevId": "1.2",
@@ -200,51 +202,46 @@ test("runAll works with NFA split & merge", () => {
 });
 
 test("runAll works with SIMD split & merge", () => {
-  const flowchart: Flowchart = {
-    initialFrameId: "1",
-    frames: indexById([
-      { id: "1" },
+  const { traceTree, flowchart } = runHelper(
+    [
       {
-        id: "2",
-        action: {
-          type: "test",
-          func: ({ value: [x, y] }) => [
-            {
-              value: x + y,
+        id: "flowchart1",
+        initialFrameId: "1",
+        frames: indexById([
+          { id: "1" },
+          {
+            id: "2",
+            action: {
+              type: "test",
+              func: ({ value: [x, y] }) => [
+                {
+                  value: x + y,
+                },
+                {
+                  value: x * y,
+                },
+              ],
             },
-            {
-              value: x * y,
+          },
+          {
+            id: "3",
+            action: {
+              type: "test",
+              func: ({ value: x }) => [
+                {
+                  value: x + 1,
+                },
+              ],
             },
-          ],
-        },
+          },
+        ]),
+        arrows: [
+          { from: "1", to: "2" },
+          { from: "2", to: "3" },
+        ],
       },
-      {
-        id: "3",
-        action: {
-          type: "test",
-          func: ({ value: x }) => [
-            {
-              value: x + 1,
-            },
-          ],
-        },
-      },
-    ]),
-    arrows: [
-      { from: "1", to: "2" },
-      { from: "2", to: "3" },
     ],
-  };
-  const traceTree = makeTraceTree();
-  runAll(
-    flowchart,
-    {
-      id: "1",
-      frameId: "1",
-      scene: { value: [3, 4] },
-    },
-    defs,
-    traceTree,
+    [3, 4],
   );
   expect(traceTree).toMatchInlineSnapshot(`
     {
@@ -254,6 +251,7 @@ test("runAll works with SIMD split & merge", () => {
       ],
       "steps": {
         "1": {
+          "flowchartId": "flowchart1",
           "frameId": "1",
           "id": "1",
           "scene": {
@@ -264,6 +262,7 @@ test("runAll works with SIMD split & merge", () => {
           },
         },
         "1.2": {
+          "flowchartId": "flowchart1",
           "frameId": "2",
           "id": "1.2",
           "prevId": "1",
@@ -272,6 +271,7 @@ test("runAll works with SIMD split & merge", () => {
           },
         },
         "1.2.3": {
+          "flowchartId": "flowchart1",
           "frameId": "3",
           "id": "1.2.3",
           "prevId": "1.2",
