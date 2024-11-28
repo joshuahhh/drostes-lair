@@ -26,6 +26,13 @@ export type Action =
       flowchartId: string;
       // TODO: for now, calls run at the top level of a frame; this
       // will have to change soon
+    }
+  | {
+      // another fake one
+      type: "test-cond";
+      func: (input: Scene) => boolean;
+      then: Action | undefined;
+      else: Action | undefined;
     };
 
 /**
@@ -188,6 +195,11 @@ function performAction(
       },
     };
     runAll(nextStep, defs, traceTreeOut);
+    return;
+  }
+  if (action.type === "test-cond") {
+    const nextAction = action.func(scene) ? action.then : action.else;
+    performAction(step, nextFrameId, nextAction, defs, traceTreeOut);
     return;
   }
   assertNever(action);
