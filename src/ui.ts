@@ -1,5 +1,5 @@
-import { framePathForStep, Scene, Step, TraceTree } from ".";
-import { loadImg, runHelper } from "./ui_util";
+import { framePathForStep, runHelper, Scene, Step, TraceTree } from ".";
+import { loadImg } from "./ui_util";
 import { indexById, truthy } from "./util";
 import { add, v } from "./vec2";
 
@@ -19,7 +19,7 @@ const loadAudio = async (url: string): Promise<AudioBufferSourceNode> => {
   return source;
 };
 
-const { traceTree, flowchart, initStep } = runHelper(
+const { traceTree, flowchart, initStepId } = runHelper(
   [
     {
       id: "fc1",
@@ -305,10 +305,11 @@ Promise.all([
         stackFromStepId: { [key: string]: Step[] };
       };
       const getTraceStacks = (
-        step: Step,
+        stepId: string,
         stacks: { [key: string]: Step[] } = {},
         stackFromStepId: { [key: string]: Step[] } = {},
       ): TraceStacks => {
+        const step = traceTree.steps[stepId];
         const serializedFramePath = JSON.stringify(
           framePathForStep(step, traceTree),
         );
@@ -316,10 +317,10 @@ Promise.all([
         if (stepStack) stepStack.push(step);
         else stacks[serializedFramePath] = [step];
 
-        stackFromStepId[step.id] = stacks[serializedFramePath];
+        stackFromStepId[stepId] = stacks[serializedFramePath];
 
         for (const nextStep of nextSteps(traceTree, step)) {
-          getTraceStacks(nextStep, stacks, stackFromStepId);
+          getTraceStacks(nextStep.id, stacks, stackFromStepId);
         }
         return { stacks, stackFromStepId };
       };
@@ -369,8 +370,8 @@ Promise.all([
         }
         return Math.max(j, 1);
       };
-      const s = getTraceStacks(initStep);
-      renderTrace(s.stackFromStepId[initStep.id], s, ...add(pan, v(100)));
+      const s = getTraceStacks(initStepId);
+      renderTrace(s.stackFromStepId[initStepId], s, ...add(pan, v(100)));
 
       // render candle
       renderSpriteSheet(

@@ -1,6 +1,6 @@
 // STATIC WORLD
 
-import { assertNever, truthy } from "./util";
+import { assertNever, indexById, log, truthy } from "./util";
 
 export type Flowchart = {
   id: string;
@@ -204,6 +204,33 @@ function performAction(
     return;
   }
   assertNever(action);
+}
+
+/**
+ * Convenience function to run a flowchart in a typical situation.
+ */
+export function runHelper(flowcharts: Flowchart[], value: any) {
+  const defs = { flowcharts: indexById(flowcharts) };
+  const traceTree = makeTraceTree();
+  const flowchart = flowcharts[0];
+  const initStep = {
+    id: "*",
+    prevStepId: undefined,
+    flowchartId: flowchart.id,
+    frameId: flowchart.initialFrameId,
+    scene: { value },
+    caller: undefined,
+  };
+  try {
+    runAll(initStep, defs, traceTree);
+  } catch (e) {
+    if (e instanceof RangeError) {
+      console.error("Infinite loop detected, dumping top of traceTree:");
+      log(Object.values(traceTree).slice(10));
+    }
+    throw e;
+  }
+  return { traceTree, flowchart, initStepId: initStep.id };
 }
 
 /**

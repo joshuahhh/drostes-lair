@@ -1,34 +1,6 @@
 import { expect, test } from "vitest";
-import { Flowchart, makeTraceTree, runAll, scenesByFrame } from ".";
-import { log } from "./node_util";
+import { Flowchart, runHelper, scenesByFrame } from ".";
 import { indexById } from "./util";
-
-function runHelper(flowcharts: Flowchart[], value: any) {
-  const defs = { flowcharts: indexById(flowcharts) };
-  const traceTree = makeTraceTree();
-  const flowchart = flowcharts[0];
-  try {
-    runAll(
-      {
-        id: "*",
-        prevStepId: undefined,
-        flowchartId: flowchart.id,
-        frameId: flowchart.initialFrameId,
-        scene: { value },
-        caller: undefined,
-      },
-      defs,
-      traceTree,
-    );
-  } catch (e) {
-    if (e instanceof RangeError) {
-      console.error("Infinite loop detected, dumping top of traceTree:");
-      log(Object.values(traceTree).slice(10));
-    }
-    throw e;
-  }
-  return { traceTree, flowchart };
-}
 
 test("runAll works with a simple flowchart", () => {
   const { traceTree, flowchart } = runHelper(
