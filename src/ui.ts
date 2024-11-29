@@ -300,33 +300,9 @@ Promise.all([
 
       // render trace
       const scenePad = 20;
-      type TraceStacks = {
-        stacks: { [key: string]: Step[] };
-        stackFromStepId: { [key: string]: Step[] };
-      };
-      const getTraceStacks = (
-        stepId: string,
-        stacks: { [key: string]: Step[] } = {},
-        stackFromStepId: { [key: string]: Step[] } = {},
-      ): TraceStacks => {
-        const step = traceTree.steps[stepId];
-        const serializedFramePath = JSON.stringify(
-          framePathForStep(step, traceTree),
-        );
-        const stepStack = stacks[serializedFramePath];
-        if (stepStack) stepStack.push(step);
-        else stacks[serializedFramePath] = [step];
-
-        stackFromStepId[stepId] = stacks[serializedFramePath];
-
-        for (const nextStep of nextSteps(traceTree, step)) {
-          getTraceStacks(nextStep.id, stacks, stackFromStepId);
-        }
-        return { stacks, stackFromStepId };
-      };
       const renderTrace = (
         stack: Step[],
-        { stacks, stackFromStepId }: TraceStacks,
+        { stacks, stackFromStepId }: StepStacks,
         initX: number,
         myY: number,
         xFromStack: Map<Step[], number> = new Map(),
@@ -370,7 +346,7 @@ Promise.all([
         }
         return Math.max(j, 1);
       };
-      const s = getTraceStacks(initStepId);
+      const s = getStepStacks(traceTree);
       renderTrace(s.stackFromStepId[initStepId], s, ...add(pan, v(100)));
 
       // render candle
@@ -410,3 +386,31 @@ Promise.all([
     }
   },
 );
+
+// some logic stuff...
+
+// a "step stack" is the set of steps shown at a single location in
+// the diagram (which can be ID'd by a frame path)
+type StepStacks = {
+  // map from frame path to its stack (bijective)
+  stacks: { [framePathId: string]: Step[] };
+  // map from step id to its stack (surjective)
+  stackFromStepId: { [stepId: string]: Step[] };
+};
+
+function getStepStacks(tree: TraceTree) {
+  const stacks: { [framePathId: string]: Step[] } = {};
+  const stackFromStepId: { [stepId: string]: Step[] } = {};
+
+  for (const step of Object.values(tree.steps)) {
+    const serializedFramePath = JSON.stringify(framePathForStep(step, tree));
+    let stack = stacks[serializedFramePath];
+    if (!stack) {
+      stack = stacks[serializedFramePath] = [];
+    }
+    stack.push(step);
+    stackFromStepId[step.id] = stack;
+  }
+
+  return { stacks, stackFromStepId };
+}
