@@ -1,7 +1,7 @@
 import { framePathForStep, Scene, Step, TraceTree } from ".";
 import { loadImg, runHelper } from "./ui_util";
-import { indexById } from "./util";
-import { add } from "./vec2";
+import { indexById, truthy } from "./util";
+import { add, v } from "./vec2";
 
 const c = document.getElementById("c") as HTMLCanvasElement;
 const ctx = c.getContext("2d")!;
@@ -38,12 +38,89 @@ const { traceTree, flowchart, initStep } = runHelper(
           },
         },
         {
+          id: "2.1",
+          action: {
+            type: "test-func",
+            func: ({ value: x }) => [
+              {
+                value: x,
+              },
+            ],
+          },
+        },
+        {
+          id: "2.2",
+          action: {
+            type: "test-func",
+            func: ({ value: x }) => [
+              {
+                value: x,
+              },
+            ],
+          },
+        },
+        {
+          id: "2.2.1",
+          action: {
+            type: "test-func",
+            func: ({ value: x }) => [
+              {
+                value: x,
+              },
+            ],
+          },
+        },
+        {
+          id: "2.2.2",
+          action: {
+            type: "test-func",
+            func: ({ value: x }) => [
+              {
+                value: x,
+              },
+            ],
+          },
+        },
+        {
+          id: "2.3",
+          action: {
+            type: "test-func",
+            func: ({ value: x }) => [
+              {
+                value: x,
+              },
+            ],
+          },
+        },
+        {
           id: "3",
           action: {
             type: "test-func",
             func: ({ value: [x, y] }) => [
               {
                 value: x * y,
+              },
+            ],
+          },
+        },
+        {
+          id: "3again",
+          action: {
+            type: "test-func",
+            func: ({ value: [x, y] }) => [
+              {
+                value: x * y,
+              },
+            ],
+          },
+        },
+        {
+          id: "3.5",
+          action: {
+            type: "test-func",
+            func: ({ value }) => [
+              {
+                value,
               },
             ],
           },
@@ -59,24 +136,19 @@ const { traceTree, flowchart, initStep } = runHelper(
             ],
           },
         },
-        {
-          id: "5",
-          action: {
-            type: "test-func",
-            func: ({ value: x }) => [
-              {
-                value: x + 1,
-              },
-            ],
-          },
-        },
       ]),
       arrows: [
         { from: "1", to: "2" },
         { from: "1", to: "3" },
+        { from: "1", to: "3again" },
         { from: "2", to: "4" },
-        { from: "3", to: "4" },
-        { from: "4", to: "5" },
+        { from: "2", to: "2.1" },
+        { from: "2", to: "2.2" },
+        { from: "2.2", to: "2.2.1" },
+        { from: "2.2", to: "2.2.2" },
+        { from: "2", to: "2.3" },
+        { from: "3.5", to: "4" },
+        { from: "3", to: "3.5" },
       ],
     },
   ],
@@ -194,8 +266,8 @@ Promise.all([
     // hand-tuned candle flicker frame machine
     const incCandleTime = (t: number) => {
       if (t > 127) return 0;
-      // make the flame calmer (slow down time) after it flickered in frames 40 to 70
-      if (t > 75 && Math.random() < 0.6) return t;
+      // make the flame calmer (slow down time) after it flickered from frame 40 to 70
+      if (t > 75 && Math.random() < 0.3) return t;
       // chances to not flicker, returning to previous points in the flame to look natural
       if (t === 30 && Math.random() < 0.3) return 80;
       if (t === 110 && Math.random() < 0.6) return 80;
@@ -228,29 +300,77 @@ Promise.all([
 
       // render trace
       const scenePad = 20;
-      const framePathToPos: { [key: string]: [number, number] } = {};
-      const renderTrace = (step: Step, pos: [number, number]) => {
+      type TraceStacks = {
+        stacks: { [key: string]: Step[] };
+        stackFromStepId: { [key: string]: Step[] };
+      };
+      const getTraceStacks = (
+        step: Step,
+        stacks: { [key: string]: Step[] } = {},
+        stackFromStepId: { [key: string]: Step[] } = {},
+      ): TraceStacks => {
         const serializedFramePath = JSON.stringify(
           framePathForStep(step, traceTree),
         );
-        const fpp = framePathToPos[serializedFramePath];
-        if (fpp) {
-          pos = add([5, 70], fpp);
-        } else {
-          framePathToPos[serializedFramePath] = pos;
+        const stepStack = stacks[serializedFramePath];
+        if (stepStack) stepStack.push(step);
+        else stacks[serializedFramePath] = [step];
+
+        stackFromStepId[step.id] = stacks[serializedFramePath];
+
+        for (const nextStep of nextSteps(traceTree, step)) {
+          getTraceStacks(nextStep, stacks, stackFromStepId);
         }
-        renderScene(step.scene, pos);
+        return { stacks, stackFromStepId };
+      };
+      const renderTrace = (
+        stack: Step[],
+        { stacks, stackFromStepId }: TraceStacks,
+        initX: number,
+        myY: number,
+        xFromStack: Map<Step[], number> = new Map(),
+      ) => {
+        const prevStacks = stack
+          .map((step) =>
+            step.prevStepId ? stackFromStepId[step.prevStepId] : false,
+          )
+          .filter(truthy);
+        const prevStackXs = prevStacks.map((stack) => xFromStack.get(stack));
+        if (!prevStackXs.every(truthy)) return 0;
+
+        const myX = Math.max(initX, ...prevStackXs) + sceneW + scenePad;
+        const myPos = [myX, myY] as [number, number];
+
+        xFromStack.set(stack, myX);
 
         let i = 0;
-        for (const nextStep of nextSteps(traceTree, step)) {
-          renderTrace(
-            nextStep,
-            add(pos, [sceneW + scenePad, (sceneW + scenePad) * i]),
-          );
+        let j = 0;
+        for (const step of stack) {
+          ctx.save();
+          if (i > 0) ctx.globalAlpha = 0.6;
+          renderScene(step.scene, add(myPos, v(i * 10)));
+          ctx.restore();
+
+          for (const nextStep of nextSteps(traceTree, step)) {
+            const v = renderTrace(
+              stackFromStepId[nextStep.id],
+              { stacks, stackFromStepId },
+              initX,
+              myY + j * (sceneH + scenePad),
+              xFromStack,
+            );
+            renderOutlinedText(v + "", [
+              myX + sceneW + scenePad,
+              myY + j * (sceneH + scenePad),
+            ]);
+            j += v;
+          }
           i++;
         }
+        return Math.max(j, 1);
       };
-      renderTrace(initStep, add(pan, [100, 100]));
+      const s = getTraceStacks(initStep);
+      renderTrace(s.stackFromStepId[initStep.id], s, ...add(pan, v(100)));
 
       // render candle
       renderSpriteSheet(
