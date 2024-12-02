@@ -19,6 +19,7 @@ export type Action =
       // this one won't be used in the real deal; we'll want to have
       // better ways than opaque functions to specify & show actions
       type: "test-func";
+      label?: string;
       func: (input: Scene) => Scene[];
       failureFrameId?: string;
     }

@@ -36,6 +36,7 @@ const myFlowchart: Flowchart = {
       id: "one-domino-1",
       action: {
         type: "test-func",
+        label: "place 1 dom",
         func: ({ value }) => {
           if (value.width < 1) {
             throw new Error("width must be at least 1");
@@ -76,6 +77,7 @@ const myFlowchart: Flowchart = {
       id: "two-dominoes-1",
       action: {
         type: "test-func",
+        label: "place 2 doms",
         func: ({ value }) => {
           if (value.width < 2) {
             throw new Error("width must be at least 2");
@@ -208,10 +210,14 @@ Promise.all([
     };
     const sceneW = 100;
     const sceneH = 100;
-    const renderOutlinedText = (text: string, pos: [number, number]) => {
-      const size = 8;
+    const renderOutlinedText = (
+      text: string,
+      pos: [number, number],
+      textAlign: CanvasTextAlign = "center",
+    ) => {
+      const size = 12;
       ctx.font = size + "px serif";
-      ctx.textAlign = "center";
+      ctx.textAlign = textAlign;
       ctx.textBaseline = "middle";
 
       ctx.strokeStyle = "#2B2B29";
@@ -233,10 +239,45 @@ Promise.all([
         ctx.stroke();
       }
       renderParchmentBox(...pos, sceneW, sceneH);
-      renderOutlinedText(JSON.stringify(value, null, 2), [
-        pos[0] + sceneW / 2,
-        pos[1] + sceneH / 2,
-      ]);
+      if ("dominoes" in value) {
+        const cellSize = 20;
+
+        function gridToXY([x, y]: [number, number]): [number, number] {
+          return [pos[0] + 10 + cellSize * x, pos[1] + 10 + cellSize * y];
+        }
+
+        // grid squares
+        ctx.beginPath();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#70665a";
+        for (let c = 0; c < value.width; c++) {
+          for (let r = 0; r < value.height; r++) {
+            ctx.rect(...gridToXY([c, r]), cellSize, cellSize);
+          }
+        }
+        ctx.moveTo(...gridToXY([0, 0]));
+        ctx.lineTo(...gridToXY([value.width, 0]));
+        ctx.moveTo(...gridToXY([0, 0]));
+        ctx.lineTo(...gridToXY([0, value.height]));
+        ctx.stroke();
+
+        // dominoes
+        ctx.beginPath();
+        ctx.fillStyle = "brown";
+        for (const domino of value.dominoes) {
+          ctx.rect(
+            ...add(gridToXY(domino[0]), [5, 5]),
+            (domino[1][0] - domino[0][0] + 1) * cellSize - 10,
+            (domino[1][1] - domino[0][1] + 1) * cellSize - 10,
+          );
+        }
+        ctx.fill();
+      } else {
+        renderOutlinedText(JSON.stringify(value, null, 2), [
+          pos[0] + sceneW / 2,
+          pos[1] + sceneH / 2,
+        ]);
+      }
     };
 
     const renderSpriteSheet = (
@@ -313,7 +354,6 @@ Promise.all([
       ctx.restore();
 
       // render trace
-      // Weird BUG: part of trace disappears sometimes for a certain horizontal pan
       const scenePad = 20;
       const renderTrace = (
         stack: Step[],
@@ -328,7 +368,7 @@ Promise.all([
           )
           .filter(truthy);
         const prevStackXs = prevStacks.map((stack) => xFromStack.get(stack));
-        if (!prevStackXs.every(truthy)) return 0;
+        if (!prevStackXs.every((x) => x !== undefined)) return 0;
 
         const myX = Math.max(initX, ...prevStackXs) + sceneW + scenePad;
         const myPos = [myX, myY] as [number, number];
@@ -343,6 +383,15 @@ Promise.all([
           const isFinalStep = traceTree.finalStepIds.includes(step.id);
           renderScene(step.scene, add(myPos, v(i * 10)), isFinalStep);
           ctx.restore();
+          let action = flowchart.frames[step.frameId].action;
+          let label = !action
+            ? ""
+            : action.type === "test-func"
+              ? (action.label ?? "some action")
+              : action.type === "call"
+                ? `call ${action.flowchartId}`
+                : `[${action.type}]`;
+          renderOutlinedText(label + "", [myX, myY], "left");
 
           for (const nextStep of nextSteps(traceTree, step)) {
             const v = renderTrace(
@@ -352,10 +401,10 @@ Promise.all([
               myY + j * (sceneH + scenePad),
               xFromStack,
             );
-            renderOutlinedText(v + "", [
-              myX + sceneW + scenePad,
-              myY + j * (sceneH + scenePad),
-            ]);
+            // renderOutlinedText(v + "", [
+            //   myX + sceneW + scenePad,
+            //   myY + j * (sceneH + scenePad),
+            // ]);
             j += v;
           }
           i++;
