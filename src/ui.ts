@@ -1,4 +1,5 @@
 import {
+  Flowchart,
   framePathForStep,
   runHelper,
   Scene,
@@ -25,140 +26,114 @@ const loadAudio = async (url: string): Promise<AudioBufferSourceNode> => {
   return source;
 };
 
-const { traceTree, flowchart, initStepId } = runHelper(
-  [
+const myFlowchart: Flowchart = {
+  id: "fc1",
+  initialFrameId: "1",
+  frames: indexById([
+    { id: "1" },
+    // we can place a vertical domino...
     {
-      id: "fc1",
-      initialFrameId: "1",
-      frames: indexById([
-        { id: "1" },
-        {
-          id: "2",
-          action: {
-            type: "test-func",
-            func: ({ value: [x, y] }) => [
-              {
-                value: x + y,
+      id: "one-domino-1",
+      action: {
+        type: "test-func",
+        func: ({ value }) => {
+          if (value.width < 1) {
+            throw new Error("width must be at least 1");
+          }
+          return [
+            {
+              value: {
+                ...value,
+                dominoes: [
+                  ...value.dominoes,
+                  [
+                    [0, 0],
+                    [0, 1],
+                  ],
+                ],
               },
-            ],
-          },
+            },
+          ];
         },
-        {
-          id: "2.1",
-          action: {
-            type: "test-func",
-            func: ({ value: x }) => [
-              {
-                value: x,
-              },
-            ],
-          },
-        },
-        {
-          id: "2.2",
-          action: {
-            type: "test-func",
-            func: ({ value: x }) => [
-              {
-                value: x,
-              },
-            ],
-          },
-        },
-        {
-          id: "2.2.1",
-          action: {
-            type: "test-func",
-            func: ({ value: x }) => [
-              {
-                value: x,
-              },
-            ],
-          },
-        },
-        {
-          id: "2.2.2",
-          action: {
-            type: "test-func",
-            func: ({ value: x }) => [
-              {
-                value: x,
-              },
-            ],
-          },
-        },
-        {
-          id: "2.3",
-          action: {
-            type: "test-func",
-            func: ({ value: x }) => [
-              {
-                value: x,
-              },
-            ],
-          },
-        },
-        {
-          id: "3",
-          action: {
-            type: "test-func",
-            func: ({ value: [x, y] }) => [
-              {
-                value: x * y,
-              },
-            ],
-          },
-        },
-        {
-          id: "3again",
-          action: {
-            type: "test-func",
-            func: ({ value: [x, y] }) => [
-              {
-                value: x * y,
-              },
-            ],
-          },
-        },
-        {
-          id: "3.5",
-          action: {
-            type: "test-func",
-            func: ({ value }) => [
-              {
-                value,
-              },
-            ],
-          },
-        },
-        {
-          id: "4",
-          action: {
-            type: "test-func",
-            func: ({ value: x }) => [
-              {
-                value: x + 1,
-              },
-            ],
-          },
-        },
-      ]),
-      arrows: [
-        { from: "1", to: "2" },
-        { from: "1", to: "3" },
-        { from: "1", to: "3again" },
-        { from: "2", to: "4" },
-        { from: "2", to: "2.1" },
-        { from: "2", to: "2.2" },
-        { from: "2.2", to: "2.2.1" },
-        { from: "2.2", to: "2.2.2" },
-        { from: "2", to: "2.3" },
-        { from: "3.5", to: "4" },
-        { from: "3", to: "3.5" },
-      ],
+        failureFrameId: "base-case",
+      },
     },
+    // ...and recurse
+    {
+      id: "one-domino-2",
+      action: {
+        type: "call",
+        flowchartId: "fc1",
+        lens: {
+          type: "domino-grid",
+          dx: 1,
+          dy: 0,
+        },
+      },
+    },
+    // alternatively, we can place two horizontal dominoes...
+    {
+      id: "two-dominoes-1",
+      action: {
+        type: "test-func",
+        func: ({ value }) => {
+          if (value.width < 2) {
+            throw new Error("width must be at least 2");
+          }
+          return [
+            {
+              value: {
+                ...value,
+                dominoes: [
+                  ...value.dominoes,
+                  [
+                    [0, 0],
+                    [1, 0],
+                  ],
+                  [
+                    [0, 1],
+                    [1, 1],
+                  ],
+                ],
+              },
+            },
+          ];
+        },
+      },
+    },
+    // ...and recurse
+    {
+      id: "two-dominoes-2",
+      action: {
+        type: "call",
+        flowchartId: "fc1",
+        lens: {
+          type: "domino-grid",
+          dx: 2,
+          dy: 0,
+        },
+      },
+    },
+    // and here's where we go if things don't work out
+    {
+      id: "base-case",
+    },
+  ]),
+  arrows: [
+    { from: "1", to: "one-domino-1" },
+    { from: "one-domino-1", to: "one-domino-2" },
+    { from: "1", to: "two-dominoes-1" },
+    { from: "two-dominoes-1", to: "two-dominoes-2" },
   ],
-  [3, 4],
+};
+const initialValue = {
+  width: 2,
+  height: 2,
+  dominoes: [],
+};
+const { traceTree, flowchart, initStepId } = runHelper(
+  [myFlowchart],
+  initialValue,
 );
 
 const nextSteps = (traceTree: TraceTree, step: Step) =>
@@ -166,7 +141,28 @@ const nextSteps = (traceTree: TraceTree, step: Step) =>
     ({ prevStepId }) => prevStepId === step.id,
   );
 
-console.log(traceTree, flowchart);
+const strokeMultiline = (
+  txt: string,
+  x: number,
+  y: number,
+  lineheight: number,
+) => {
+  let lines = txt.split("\n");
+
+  for (let i = 0; i < lines.length; i++)
+    ctx.strokeText(lines[i], x, y + i * lineheight);
+};
+const fillMultiline = (
+  txt: string,
+  x: number,
+  y: number,
+  lineheight: number,
+) => {
+  let lines = txt.split("\n");
+
+  for (let i = 0; i < lines.length; i++)
+    ctx.fillText(lines[i], x, y + i * lineheight);
+};
 
 Promise.all([
   loadImg("./assets/parchment.png"),
@@ -213,19 +209,31 @@ Promise.all([
     const sceneW = 100;
     const sceneH = 100;
     const renderOutlinedText = (text: string, pos: [number, number]) => {
-      ctx.font = "32px serif";
+      const size = 8;
+      ctx.font = size + "px serif";
       ctx.textAlign = "center";
       ctx.textBaseline = "middle";
 
       ctx.strokeStyle = "#2B2B29";
       ctx.lineWidth = 6;
-      ctx.strokeText(text, ...add(pos, [0, 1]));
+      strokeMultiline(text, ...add(pos, [0, 1]), size);
       ctx.fillStyle = "#D9BE67";
-      ctx.fillText(text, ...pos);
+      fillMultiline(text, ...pos, size);
     };
-    const renderScene = ({ value }: Scene, pos: [number, number]) => {
+    const renderScene = (
+      { value }: Scene,
+      pos: [number, number], // TODO: rename: is this the top left corner?
+      isOutlined: boolean = false,
+    ) => {
+      if (isOutlined) {
+        ctx.beginPath();
+        ctx.lineWidth = 10;
+        ctx.strokeStyle = "green";
+        ctx.rect(...pos, sceneW, sceneH);
+        ctx.stroke();
+      }
       renderParchmentBox(...pos, sceneW, sceneH);
-      renderOutlinedText(JSON.stringify(value), [
+      renderOutlinedText(JSON.stringify(value, null, 2), [
         pos[0] + sceneW / 2,
         pos[1] + sceneH / 2,
       ]);
@@ -305,6 +313,7 @@ Promise.all([
       ctx.restore();
 
       // render trace
+      // Weird BUG: part of trace disappears sometimes for a certain horizontal pan
       const scenePad = 20;
       const renderTrace = (
         stack: Step[],
@@ -331,7 +340,8 @@ Promise.all([
         for (const step of stack) {
           ctx.save();
           if (i > 0) ctx.globalAlpha = 0.6;
-          renderScene(step.scene, add(myPos, v(i * 10)));
+          const isFinalStep = traceTree.finalStepIds.includes(step.id);
+          renderScene(step.scene, add(myPos, v(i * 10)), isFinalStep);
           ctx.restore();
 
           for (const nextStep of nextSteps(traceTree, step)) {
