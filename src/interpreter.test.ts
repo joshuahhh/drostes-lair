@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { Flowchart, runHelper, scenesByFrame } from ".";
+import { Flowchart, runHelper, scenesByFrame } from "./interpreter";
 import { indexById } from "./util";
 
 test("runAll works with a simple flowchart", () => {

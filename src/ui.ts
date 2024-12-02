@@ -1,4 +1,10 @@
-import { framePathForStep, runHelper, Scene, Step, TraceTree } from ".";
+import {
+  framePathForStep,
+  runHelper,
+  Scene,
+  Step,
+  TraceTree,
+} from "./interpreter";
 import { loadImg } from "./ui_util";
 import { indexById, truthy } from "./util";
 import { add, v } from "./vec2";
