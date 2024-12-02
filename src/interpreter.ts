@@ -20,12 +20,12 @@ export type Action =
       // better ways than opaque functions to specify & show actions
       type: "test-func";
       func: (input: Scene) => Scene[];
+      failureFrameId?: string;
     }
   | {
       type: "call";
       flowchartId: string;
-      // TODO: for now, calls run at the top level of a frame; this
-      // will have to change soon
+      lens?: Lens;
     }
   | {
       // another fake one
@@ -35,12 +35,28 @@ export type Action =
       else: Action | undefined;
     };
 
+export type Lens = {
+  type: "domino-grid";
+  dx: number;
+  dy: number;
+};
+
 /**
  * If we're going to call one flowchart from another, we need to know
  * what flowcharts are out there.
  */
 export type Definitions = {
   flowcharts: Record<string, Flowchart>;
+};
+
+// IMPLEMENTATION WORLD
+
+export type LensImpl = {
+  // TODO: using "value" here rather than "scene" for convenience; if
+  // a scene is ever more than just a value we'll have to figure this
+  // out
+  getPart(lens: Lens, value: any): any;
+  setPart(lens: Lens, value: any, part: any): any;
 };
 
 // DYNAMIC WORLD
@@ -100,6 +116,8 @@ export function makeTraceTree(): TraceTree {
   };
 }
 
+let RUN_ALL_DEPTH = 0;
+
 /**
  * Given step running in a flowchart, runs the flowchart to
  * completion (in all possible ways) and puts the results into the
@@ -110,46 +128,84 @@ export function runAll(
   defs: Definitions,
   traceTreeOut: TraceTree,
 ): void {
-  // this is our responsibility I guess
-  traceTreeOut.steps[step.id] = step;
+  if (RUN_ALL_DEPTH > 100) {
+    throw new RangeError("runAll depth overflow");
+  }
 
-  const { flowchartId, frameId, scene, caller } = step;
-  const flowchart = defs.flowcharts[flowchartId];
-  const nextArrows = flowchart.arrows.filter(({ from }) => from === frameId);
+  RUN_ALL_DEPTH++;
+  try {
+    // console.log(step.id);
+    // log(step.scene.value);
+    // console.log();
 
-  // If there are no further arrows, we assume the current flowchart
-  // is done (and return to the caller if necessary).
-  //
-  // TODO: Any need to be more explicit about returning? Design
-  // decision!
-  if (nextArrows.length === 0) {
-    if (caller === undefined) {
-      traceTreeOut.finalStepIds.push(step.id);
+    // this is our responsibility I guess
+    traceTreeOut.steps[step.id] = step;
+
+    const { flowchartId, frameId, scene, caller } = step;
+    const flowchart = defs.flowcharts[flowchartId];
+    const nextArrows = flowchart.arrows.filter(({ from }) => from === frameId);
+
+    // If there are no further arrows, we assume the current flowchart
+    // is done (and return to the caller if necessary).
+    //
+    // TODO: Any need to be more explicit about returning? Design
+    // decision!
+    const isFinalFrame = nextArrows.length === 0;
+    if (isFinalFrame) {
+      if (caller === undefined) {
+        traceTreeOut.finalStepIds.push(step.id);
+        // console.log("  *********");
+        // console.log("  * FINAL *");
+        // console.log("  *********");
+        // console.log("");
+        return;
+      }
+
+      const callerPrevStep = traceTreeOut.steps[caller.prevStepId];
+
+      let returnScene = scene;
+      const callerFrame =
+        defs.flowcharts[callerPrevStep.flowchartId].frames[caller.frameId];
+      const callerLens = (callerFrame.action! as Action & { type: "call" })
+        .lens;
+      if (callerLens) {
+        const lensImpl = lenses[callerLens.type];
+        if (!lensImpl) {
+          throw new Error(`Lens type ${callerLens.type} not found`);
+        }
+        returnScene = {
+          ...scene,
+          value: lensImpl.setPart(
+            callerLens,
+            callerPrevStep.scene.value,
+            scene.value,
+          ),
+        };
+      }
+
+      const nextStep: Step = {
+        id: `${step.id}↑${callerPrevStep.flowchartId}→${caller.frameId}`,
+        prevStepId: step.id,
+        flowchartId: callerPrevStep.flowchartId,
+        frameId: caller.frameId,
+        scene: returnScene,
+        caller: callerPrevStep.caller,
+      };
+      runAll(nextStep, defs, traceTreeOut);
       return;
     }
 
-    const callerPrevStep = traceTreeOut.steps[caller.prevStepId];
-
-    const nextStep: Step = {
-      id: `${step.id}↑${callerPrevStep.flowchartId}→${caller.frameId}`,
-      prevStepId: step.id,
-      flowchartId: callerPrevStep.flowchartId,
-      frameId: caller.frameId,
-      scene, // TODO: replace part of the scene
-      caller: callerPrevStep.caller,
-    };
-    runAll(nextStep, defs, traceTreeOut);
-    return;
-  }
-
-  // Otherwise, we follow all arrows.
-  for (const nextArrow of nextArrows) {
-    const nextFrameId = nextArrow.to;
-    const nextFrame = flowchart.frames[nextFrameId];
-    if (!nextFrame) {
-      throw new Error(`Frame ${nextFrameId} not found`);
+    // Otherwise, we follow all arrows.
+    for (const nextArrow of nextArrows) {
+      const nextFrameId = nextArrow.to;
+      const nextFrame = flowchart.frames[nextFrameId];
+      if (!nextFrame) {
+        throw new Error(`Frame ${nextFrameId} not found`);
+      }
+      performAction(step, nextFrameId, nextFrame.action, defs, traceTreeOut);
     }
-    performAction(step, nextFrameId, nextFrame.action, defs, traceTreeOut);
+  } finally {
+    RUN_ALL_DEPTH--;
   }
 }
 
@@ -163,7 +219,27 @@ function performAction(
   const { flowchartId, scene, caller } = step;
 
   if (!action || action.type === "test-func") {
-    const nextScenes = action ? action.func(scene) : [scene];
+    let nextScenes;
+    try {
+      nextScenes = action ? action.func(scene) : [scene];
+    } catch (e) {
+      if (action && action.failureFrameId) {
+        const nextStep: Step = {
+          id: `${step.id}→${frameId}↝${action.failureFrameId}`,
+          prevStepId: step.id,
+          flowchartId,
+          frameId: action.failureFrameId,
+          scene,
+          caller,
+        };
+        runAll(nextStep, defs, traceTreeOut);
+        return;
+      } else {
+        // TODO: if there's no failure path, we abort this branch of
+        // the trace (not as a final branch)
+        return;
+      }
+    }
     let i = 0;
     for (const nextScene of nextScenes) {
       const nextStep: Step = {
@@ -184,12 +260,23 @@ function performAction(
     if (!nextFlowchart) {
       throw new Error(`Flowchart ${action.flowchartId} not found`);
     }
+    let callScene = scene;
+    if (action.lens) {
+      const lensImpl = lenses[action.lens.type];
+      if (!lensImpl) {
+        throw new Error(`Lens type ${action.lens.type} not found`);
+      }
+      callScene = {
+        ...scene,
+        value: lensImpl.getPart(action.lens, scene.value),
+      };
+    }
     const nextStep: Step = {
       id: `${step.id}→${frameId}↓${nextFlowchart.id}`,
       prevStepId: step.id,
       flowchartId: action.flowchartId,
       frameId: nextFlowchart.initialFrameId,
-      scene,
+      scene: callScene,
       caller: {
         prevStepId: step.id,
         frameId,
@@ -205,6 +292,51 @@ function performAction(
   }
   assertNever(action);
 }
+
+const lenses: Record<string, LensImpl> = {
+  "domino-grid": {
+    getPart(lens: Lens & { type: "domino-grid" }, value) {
+      const width = value.width - lens.dx;
+      const height = value.height - lens.dy;
+      if (width < 0 || height < 0) {
+        throw new Error("Lens out of bounds");
+      }
+      return {
+        width,
+        height,
+        dominoes: value.dominoes.flatMap(([a, b]: any) => {
+          const newDomino = [
+            [a[0] - lens.dx, a[1] - lens.dy],
+            [b[0] - lens.dx, b[1] - lens.dy],
+          ];
+          const pt1OutOfBounds = newDomino[0][0] < 0 || newDomino[0][1] < 0;
+          const pt2OutOfBounds = newDomino[1][0] < 0 || newDomino[1][1] < 0;
+          if (pt1OutOfBounds && pt2OutOfBounds) {
+            return [];
+          }
+          if (pt1OutOfBounds || pt2OutOfBounds) {
+            throw new Error("Domino bridges in & out");
+          }
+          return [newDomino];
+        }),
+      };
+    },
+    setPart(lens: Lens & { type: "domino-grid" }, value, part) {
+      // console.log("calling setPart", lens, value, part);
+      return {
+        width: value.width,
+        height: value.height,
+        dominoes: [
+          ...value.dominoes,
+          ...part.dominoes.map(([a, b]: any) => [
+            [a[0] + lens.dx, a[1] + lens.dy],
+            [b[0] + lens.dx, b[1] + lens.dy],
+          ]),
+        ],
+      };
+    },
+  },
+};
 
 /**
  * Convenience function to run a flowchart in a typical situation.
@@ -231,6 +363,10 @@ export function runHelper(flowcharts: Flowchart[], value: any) {
     throw e;
   }
   return { traceTree, flowchart, initStepId: initStep.id };
+}
+
+export function getFinalValues(traceTree: TraceTree): any[] {
+  return traceTree.finalStepIds.map((id) => traceTree.steps[id].scene.value);
 }
 
 /**
