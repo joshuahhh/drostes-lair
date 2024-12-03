@@ -402,6 +402,10 @@ export type FramePath = {
   frameId: string;
 }[];
 
+export function framePathToString(framePath: FramePath) {
+  return JSON.stringify(framePath);
+}
+
 export function framePathForStep(step: Step, traceTree: TraceTree): FramePath {
   const rest = step.caller
     ? framePathForStep(
@@ -494,4 +498,68 @@ export function getNextSteps(step: Step, traceTree: TraceTree) {
   return Object.values(traceTree.steps).filter(
     ({ prevStepId }) => prevStepId === step.id,
   );
+}
+
+/**
+ * A "stack" is the set of steps shown at a single location in
+ * the diagram (which can be ID'd by a frame path).
+ */
+export type Stack = {
+  framePath: FramePath;
+  steps: Step[];
+};
+export type StepsInStacks = {
+  stackByStepId: {
+    [stepId: string]: Stack;
+  };
+};
+
+export function putStepsInStacks(tree: TraceTree): StepsInStacks {
+  const stacks: { [framePathId: string]: Stack } = {};
+  const stackByStepId: { [stepId: string]: Stack } = {};
+
+  for (const step of Object.values(tree.steps)) {
+    const framePath = framePathForStep(step, tree);
+    const framePathStr = framePathToString(framePath);
+    let stack = stacks[framePathStr];
+    if (!stack) {
+      stack = stacks[framePathStr] = { framePath, steps: [] };
+    }
+    stack.steps.push(step);
+    stackByStepId[step.id] = stack;
+  }
+
+  return { stackByStepId };
+}
+
+export function getPrevStacks(
+  stack: Stack,
+  stepsInStacks: StepsInStacks,
+): Stack[] {
+  const { stackByStepId } = stepsInStacks;
+
+  return Array.from(
+    new Set(
+      stack.steps.flatMap((step) =>
+        step.prevStepId ? [stackByStepId[step.prevStepId]] : [],
+      ),
+    ),
+  );
+}
+
+export function getNextStacks(
+  stack: Stack,
+  stepsInStacks: StepsInStacks,
+  traceTree: TraceTree,
+): Stack[] {
+  const { stackByStepId } = stepsInStacks;
+
+  const nextStacks: Set<Stack> = new Set();
+  stack.steps.forEach((step) => {
+    for (const nextStep of getNextSteps(step, traceTree)) {
+      nextStacks.add(stackByStepId[nextStep.id]);
+    }
+  });
+
+  return Array.from(nextStacks);
 }

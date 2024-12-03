@@ -3,14 +3,15 @@ import {
   Action,
   Flowchart,
   framePathForStep,
-  getNextSteps,
+  getNextStacks,
+  getPrevStacks,
+  putStepsInStacks,
   runHelper,
+  Stack,
   Step,
   topLevelValueForStep,
-  TraceTree,
 } from "./interpreter";
 import { loadImg } from "./ui_util";
-import { truthy } from "./util";
 import { add, v } from "./vec2";
 
 const c = document.getElementById("c") as HTMLCanvasElement;
@@ -312,18 +313,16 @@ Promise.all([
       // render trace
       const scenePadX = 20;
       const scenePadY = 40;
+      /**
+       * returns... something?
+       */
       const renderTrace = (
-        stack: Step[],
-        { stacks, stackFromStepId }: StepStacks,
+        stack: Stack,
         initX: number,
         myY: number,
-        xFromStack: Map<Step[], number> = new Map(),
-      ) => {
-        const prevStacks = stack
-          .map((step) =>
-            step.prevStepId ? stackFromStepId[step.prevStepId] : false,
-          )
-          .filter(truthy);
+        xFromStack: Map<Stack, number> = new Map(),
+      ): number => {
+        const prevStacks = getPrevStacks(stack, stepsInStacks);
         const prevStackXs = prevStacks.map((stack) => xFromStack.get(stack));
         if (!prevStackXs.every((x) => x !== undefined)) return 0;
 
@@ -334,7 +333,7 @@ Promise.all([
 
         let i = 0;
         let j = 0;
-        for (const step of stack) {
+        for (const step of stack.steps) {
           ctx.save();
           if (i > 0) ctx.globalAlpha = 0.6;
           renderScene(step, add(myPos, v(i * 10)));
@@ -350,9 +349,9 @@ Promise.all([
           renderOutlinedText(label + "", [myX, myY], "left");
 
           const myJ = j;
-          const nextSteps = getNextSteps(step, traceTree);
-          for (const nextStep of nextSteps) {
-            if (nextSteps.length > 1) {
+          const nextStacks = getNextStacks(stack, stepsInStacks, traceTree);
+          for (const nextStack of nextStacks) {
+            if (nextStacks.length > 1) {
               // draw connector line
               ctx.beginPath();
               ctx.moveTo(
@@ -368,8 +367,7 @@ Promise.all([
               ctx.stroke();
             }
             const v = renderTrace(
-              stackFromStepId[nextStep.id],
-              { stacks, stackFromStepId },
+              nextStack,
               initX,
               myY + j * (sceneH + scenePadY),
               xFromStack,
@@ -384,8 +382,9 @@ Promise.all([
         }
         return Math.max(j, 1);
       };
-      const s = getStepStacks(traceTree);
-      renderTrace(s.stackFromStepId[initStepId], s, ...add(pan, v(100)));
+      const stepsInStacks = putStepsInStacks(traceTree);
+      const { stackByStepId } = stepsInStacks;
+      renderTrace(stackByStepId[initStepId], ...add(pan, v(100)));
 
       // render candle
       renderSpriteSheet(
@@ -424,31 +423,3 @@ Promise.all([
     }
   },
 );
-
-// some logic stuff...
-
-// a "step stack" is the set of steps shown at a single location in
-// the diagram (which can be ID'd by a frame path)
-type StepStacks = {
-  // map from frame path to its stack (bijective)
-  stacks: { [framePathId: string]: Step[] };
-  // map from step id to its stack (surjective)
-  stackFromStepId: { [stepId: string]: Step[] };
-};
-
-function getStepStacks(tree: TraceTree) {
-  const stacks: { [framePathId: string]: Step[] } = {};
-  const stackFromStepId: { [stepId: string]: Step[] } = {};
-
-  for (const step of Object.values(tree.steps)) {
-    const serializedFramePath = JSON.stringify(framePathForStep(step, tree));
-    let stack = stacks[serializedFramePath];
-    if (!stack) {
-      stack = stacks[serializedFramePath] = [];
-    }
-    stack.push(step);
-    stackFromStepId[step.id] = stack;
-  }
-
-  return { stacks, stackFromStepId };
-}
