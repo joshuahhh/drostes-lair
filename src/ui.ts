@@ -330,12 +330,11 @@ Promise.all([
 
         xFromStack.set(stack, myX);
 
-        let i = 0;
-        let j = 0;
-        for (const step of stack.steps) {
+        let rowIdx = 0;
+        for (const [stepIdx, step] of stack.steps.entries()) {
           ctx.save();
-          if (i > 0) ctx.globalAlpha = 0.6;
-          renderScene(step, add(myPos, v(i * 10)));
+          if (stepIdx > 0) ctx.globalAlpha = 0.6;
+          renderScene(step, add(myPos, v(stepIdx * 10)));
           ctx.restore();
           let action = flowchart.frames[step.frameId].action;
           let label = !action
@@ -347,7 +346,7 @@ Promise.all([
                 : `[${action.type}]`;
           renderOutlinedText(label + "", [myX, myY], "left");
 
-          const myJ = j;
+          const myRowIdx = rowIdx;
           const nextStacks = getNextStacks(stack, stepsInStacks, traceTree);
           for (const nextStack of nextStacks) {
             if (nextStacks.length > 1) {
@@ -355,11 +354,11 @@ Promise.all([
               ctx.beginPath();
               ctx.moveTo(
                 myX + sceneW,
-                myY + myJ * (sceneH + scenePadY) + sceneH / 2,
+                myY + myRowIdx * (sceneH + scenePadY) + sceneH / 2,
               );
               ctx.lineTo(
                 myX + sceneW + scenePadX,
-                myY + j * (sceneH + scenePadY) + sceneH / 2,
+                myY + rowIdx * (sceneH + scenePadY) + sceneH / 2,
               );
               ctx.strokeStyle = "yellow";
               ctx.lineWidth = 2;
@@ -368,18 +367,17 @@ Promise.all([
             const v = renderTrace(
               nextStack,
               initX,
-              myY + j * (sceneH + scenePadY),
+              myY + rowIdx * (sceneH + scenePadY),
               xFromStack,
             );
             // renderOutlinedText(v + "", [
             //   myX + sceneW + scenePad,
             //   myY + j * (sceneH + scenePad),
             // ]);
-            j += v;
+            rowIdx += v;
           }
-          i++;
         }
-        return Math.max(j, 1);
+        return Math.max(rowIdx, 1);
       };
       const stepsInStacks = putStepsInStacks(traceTree);
       const { stackByStepId } = stepsInStacks;
