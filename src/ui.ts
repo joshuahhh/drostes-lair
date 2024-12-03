@@ -314,7 +314,8 @@ Promise.all([
       ctx.restore();
 
       // render trace
-      const scenePad = 20;
+      const scenePadX = 20;
+      const scenePadY = 40;
       const renderTrace = (
         stack: Step[],
         { stacks, stackFromStepId }: StepStacks,
@@ -330,7 +331,7 @@ Promise.all([
         const prevStackXs = prevStacks.map((stack) => xFromStack.get(stack));
         if (!prevStackXs.every((x) => x !== undefined)) return 0;
 
-        const myX = Math.max(initX, ...prevStackXs) + sceneW + scenePad;
+        const myX = Math.max(initX, ...prevStackXs) + sceneW + scenePadX;
         const myPos = [myX, myY] as [number, number];
 
         xFromStack.set(stack, myX);
@@ -360,11 +361,11 @@ Promise.all([
               ctx.beginPath();
               ctx.moveTo(
                 myX + sceneW,
-                myY + myJ * (sceneH + scenePad) + sceneH / 2,
+                myY + myJ * (sceneH + scenePadY) + sceneH / 2,
               );
               ctx.lineTo(
-                myX + sceneW + scenePad,
-                myY + j * (sceneH + scenePad) + sceneH / 2,
+                myX + sceneW + scenePadX,
+                myY + j * (sceneH + scenePadY) + sceneH / 2,
               );
               ctx.strokeStyle = "yellow";
               ctx.lineWidth = 2;
@@ -374,7 +375,7 @@ Promise.all([
               stackFromStepId[nextStep.id],
               { stacks, stackFromStepId },
               initX,
-              myY + j * (sceneH + scenePad),
+              myY + j * (sceneH + scenePadY),
               xFromStack,
             );
             // renderOutlinedText(v + "", [
