@@ -201,13 +201,24 @@ Promise.all([
     let pan = [0, 0] as [number, number];
 
     // set up cursor stuff
-    c.style.cursor = `url('./assets/glove3.png'), pointer`;
+    let shiftHeld = false;
+    window.addEventListener("keydown", (e) => {
+      if (e.key === "Shift") {
+        shiftHeld = true;
+      }
+    });
+    window.addEventListener("keyup", (e) => {
+      if (e.key === "Shift") {
+        shiftHeld = false;
+      }
+    });
+    let mouseDown = false;
     c.addEventListener("mousedown", (e) => {
-      c.style.cursor = `url('./assets/glove2.png'), pointer`;
+      mouseDown = true;
       if (e.offsetX > 550 && e.offsetY > 550) audVocal.start();
     });
-    c.addEventListener("mouseup", (e) => {
-      c.style.cursor = `url('./assets/glove3.png'), pointer`;
+    c.addEventListener("mouseup", () => {
+      mouseDown = false;
     });
 
     const renderParchmentBox = (x: number, y: number, w: number, h: number) => {
@@ -322,9 +333,6 @@ Promise.all([
       if (e.shiftKey) {
         pan[0] += e.movementX;
         pan[1] += e.movementY;
-        c.style.cursor = `url('./assets/glove1.png'), pointer`;
-      } else {
-        c.style.cursor = `url('./assets/glove3.png'), pointer`;
       }
     });
 
@@ -344,6 +352,13 @@ Promise.all([
     let t = 0;
     function drawLoop() {
       requestAnimationFrame(drawLoop);
+
+      c.style.cursor = mouseDown
+        ? "url('./assets/glove2.png'), pointer"
+        : shiftHeld
+          ? "url('./assets/glove1.png'), pointer"
+          : "url('./assets/glove3.png'), pointer";
+
       // draw background
       const pattern = ctx.createPattern(img2, "repeat")!;
       ctx.fillStyle = pattern;
