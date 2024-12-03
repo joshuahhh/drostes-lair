@@ -352,7 +352,23 @@ Promise.all([
                 : `[${action.type}]`;
           renderOutlinedText(label + "", [myX, myY], "left");
 
+          const myJ = j;
           for (const nextStep of nextSteps(traceTree, step)) {
+            if (j > myJ) {
+              // draw connector line
+              ctx.beginPath();
+              ctx.moveTo(
+                myX + sceneW,
+                myY + myJ * (sceneH + scenePad) + sceneH / 2,
+              );
+              ctx.lineTo(
+                myX + sceneW + scenePad,
+                myY + j * (sceneH + scenePad) + sceneH / 2,
+              );
+              ctx.strokeStyle = "yellow";
+              ctx.lineWidth = 2;
+              ctx.stroke();
+            }
             const v = renderTrace(
               stackFromStepId[nextStep.id],
               { stacks, stackFromStepId },
