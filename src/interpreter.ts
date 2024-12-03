@@ -393,8 +393,9 @@ export function scenesByFrame(
 
 /**
  * A frame in the UI is identified by a "frame path" – describing in
- * static terms the sequence of calls that led to it. It's expected
- * that every frame here besides the last is a call.
+ * static terms the sequence of calls that led to it, from top to
+ * bottom. It's expected that every frame here besides the last is a
+ * call.
  */
 export type FramePath = {
   flowchartId: string;
@@ -412,7 +413,7 @@ export function framePathForStep(step: Step, traceTree: TraceTree): FramePath {
         traceTree,
       )
     : [];
-  return [{ flowchartId: step.flowchartId, frameId: step.frameId }, ...rest];
+  return [...rest, { flowchartId: step.flowchartId, frameId: step.frameId }];
 }
 
 export function getCallerInfo(

@@ -1,10 +1,11 @@
 import { dominoFlowchart } from "./dominoes.ex";
 import {
+  Action,
   Flowchart,
   framePathForStep,
   runHelper,
-  Scene,
   Step,
+  topLevelValueForStep,
   TraceTree,
 } from "./interpreter";
 import { loadImg } from "./ui_util";
@@ -16,7 +17,6 @@ const cContainer = document.getElementById("c-container") as HTMLDivElement;
 const resizeObserver = new ResizeObserver((entries) => {
   for (const entry of entries) {
     const { width, height } = entry.contentRect;
-    console.log(width, height);
     c.width = width - 56;
     c.height = height - 56;
   }
@@ -39,11 +39,11 @@ const loadAudio = async (url: string): Promise<AudioBufferSourceNode> => {
 
 const myFlowchart: Flowchart = dominoFlowchart;
 const initialValue = {
-  width: 3,
+  width: 4,
   height: 2,
   dominoes: [],
 };
-const { traceTree, flowchart, initStepId } = runHelper(
+const { traceTree, flowchart, initStepId, defs } = runHelper(
   [myFlowchart],
   initialValue,
 );
@@ -149,10 +149,10 @@ Promise.all([
       fillMultiline(text, ...pos, size);
     };
     const renderScene = (
-      { value }: Scene,
+      step: Step,
       pos: [number, number], // TODO: rename: is this the top left corner?
-      isOutlined: boolean = false,
     ) => {
+      const isOutlined = traceTree.finalStepIds.includes(step.id);
       if (isOutlined) {
         ctx.beginPath();
         ctx.lineWidth = 10;
@@ -161,7 +161,10 @@ Promise.all([
         ctx.stroke();
       }
       renderParchmentBox(...pos, sceneW, sceneH);
+      const value = step.scene.value;
       if ("dominoes" in value) {
+        const value = topLevelValueForStep(step, traceTree, defs) as any;
+
         const cellSize = 20;
 
         function gridToXY([x, y]: [number, number]): [number, number] {
@@ -194,6 +197,36 @@ Promise.all([
           );
         }
         ctx.fill();
+
+        // layers
+        const path = framePathForStep(step, traceTree);
+        path.pop(); // remove current frame
+        let x = 0;
+        let y = 0;
+        let width = value.width;
+        let height = value.height;
+        for (const segment of path) {
+          const frame =
+            defs.flowcharts[segment.flowchartId].frames[segment.frameId];
+          const action = frame.action as Action & { type: "call" };
+          const lens = action.lens!; // TODO: what if not here
+          x += lens.dx;
+          y += lens.dy;
+          width -= lens.dx;
+          height -= lens.dy;
+          // shaded background
+          ctx.beginPath();
+          ctx.rect(...pos, sceneW, sceneH);
+          ctx.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
+          ctx.fillStyle = "rgba(0,0,0,0.4)";
+          ctx.fill("evenodd");
+          // outline
+          ctx.beginPath();
+          ctx.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
+          ctx.setLineDash([5, 5]);
+          ctx.strokeStyle = "rgba(255,255,0,0.8)";
+          ctx.stroke();
+        }
       } else {
         renderOutlinedText(JSON.stringify(value, null, 2), [
           pos[0] + sceneW / 2,
@@ -307,8 +340,7 @@ Promise.all([
         for (const step of stack) {
           ctx.save();
           if (i > 0) ctx.globalAlpha = 0.6;
-          const isFinalStep = traceTree.finalStepIds.includes(step.id);
-          renderScene(step.scene, add(myPos, v(i * 10)), isFinalStep);
+          renderScene(step, add(myPos, v(i * 10)));
           ctx.restore();
           let action = flowchart.frames[step.frameId].action;
           let label = !action

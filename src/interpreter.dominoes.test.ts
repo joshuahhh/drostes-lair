@@ -1,6 +1,11 @@
 import { expect, test } from "vitest";
 import { dominoFlowchart } from "./dominoes.ex";
-import { getFinalValues, runHelper, topLevelValueForStep } from "./interpreter";
+import {
+  framePathForStep,
+  getFinalValues,
+  runHelper,
+  topLevelValueForStep,
+} from "./interpreter";
 
 test("runAll works with recursion (dominoes!)", () => {
   const initialValue = {
@@ -247,7 +252,7 @@ test("runAll works with recursion (dominoes!)", () => {
   `);
 });
 
-test("topLevelValueForStep works", () => {
+test("framePathForStep & topLevelValueForStep work", () => {
   const initialValue = {
     width: 4,
     height: 2,
@@ -258,6 +263,23 @@ test("topLevelValueForStep works", () => {
     traceTree.steps[
       "*→one-domino-1→one-domino-2↓fc1→one-domino-1→one-domino-2↓fc1→one-domino-1"
     ];
+
+  expect(framePathForStep(someStep, traceTree)).toMatchInlineSnapshot(`
+    [
+      {
+        "flowchartId": "fc1",
+        "frameId": "one-domino-2",
+      },
+      {
+        "flowchartId": "fc1",
+        "frameId": "one-domino-2",
+      },
+      {
+        "flowchartId": "fc1",
+        "frameId": "one-domino-1",
+      },
+    ]
+  `);
 
   // at this point, we've placed one domino in the 2x2 sub-grid:
   expect(someStep.scene.value).toMatchInlineSnapshot(`
