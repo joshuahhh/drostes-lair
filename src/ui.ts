@@ -11,6 +11,16 @@ import { indexById, truthy } from "./util";
 import { add, v } from "./vec2";
 
 const c = document.getElementById("c") as HTMLCanvasElement;
+const cContainer = document.getElementById("c-container") as HTMLDivElement;
+const resizeObserver = new ResizeObserver((entries) => {
+  for (const entry of entries) {
+    const { width, height } = entry.contentRect;
+    console.log(width, height);
+    c.width = width - 56;
+    c.height = height - 56;
+  }
+});
+resizeObserver.observe(cContainer);
 const ctx = c.getContext("2d")!;
 
 const loadAudio = async (url: string): Promise<AudioBufferSourceNode> => {
@@ -421,17 +431,17 @@ Promise.all([
         127,
         10,
         [100, 100],
-        [550, 560],
+        [c.width - 250, c.height - 240],
         [300, 300],
       );
       //render candle glow
       const radialFlickerAmt = Math.random() * 12;
-      const radialCenter = [700, 650] as [number, number];
+      const radialCenter = [c.width - 100, c.height - 150] as [number, number];
       const gradient = ctx.createRadialGradient(
         ...radialCenter,
         30 - radialFlickerAmt,
         ...radialCenter,
-        800 - radialFlickerAmt,
+        c.width - radialFlickerAmt,
       );
       gradient.addColorStop(0, "rgba(255, 181, 174,0.2)");
       gradient.addColorStop(0.1, "rgba(235, 120, 54,0.1)");

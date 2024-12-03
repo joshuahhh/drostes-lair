@@ -7,6 +7,9 @@
     <style>
       body {
         background-color: #1b1b19;
+        margin: 0;
+        height: 100vh;
+        overflow: hidden;
       }
       canvas {
         border-image: url("data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAAFQAAABUCAYAAAAcaxDBAAAAAXNSR0IArs4c6QAAAnZJREFUeF7tnNtxwzAMBOWC0kTKSgEpK02koOQ3oie6Od/pvf4VCAJLAISgGT8mflUCj6o2lE0ALQcBQO8O9Ovj7ecvg/fPbysoxvUjT1ffuN4ypnyYL6kD6EvY/l8EUIB6BNya5Mora1J9acTXa6jrkCsP0IHAeGsCVISIC8iVv32Eun2cAqyAtvtId7/VayhAwyNJb0kidDgAgM6BPL16qohxUzpMgCk9MHf/1H+AioxzLz2AAtQb1x0u5d2auXXNS4Ep/1x/ZMqrDUeHXANcIKm8a58rD1Ax8QeoOXtQGRgDTVPq7utP903p6AcG0PIJAXRroG5RLtu3uzrXfxmhrsLdCZQNcP0HaLnNAujeQN1xVjkDV1dXn4eqd3OALk+77JQHKECtMlFPedUmqOeW9QcUTv2zx3fphgdkODMp9Q+g4puSGu+NAQLQtYGqlEyLttK/9fO2P7JtunpfCtByCAP06kDdW7DMo65OtU3qeVxDATp/FQWo2TYRoWZRUMDUcxmh7VvQ9G9z8dRfgIqUd8eVAAXoulVg85S/WpukjkddQnLapN7dAVr+BAJQgKqsXnxeT/nImhsulm3TDZlELgM0wve8GKBbA3WLsitf9keqS+1T62WEKgVn61tdf1z/ABr+M9nYlwN0b6DuOEsWNSGQpmh7f+W/HaFKYeqAW7Pa+6n9lf8ANTMEoGEIu/NRGaGhPXK5MlgqGATcaVi7RgM0/IPX8cABCtDlInD6lHdrkKqZKRB1C7f3r6c8QOdI4xoKUIDO/rZdlQi3batHaGqgG/Guw2vLA7RMGKAALRMoq4sjtGzP6dUBtHyEAAVomUBZ3S8kNOBzPhAe0wAAAABJRU5ErkJggg==")
@@ -17,46 +20,49 @@
     </style>
   </head>
   <body>
-    <div id="root"></div>
     <script type="module" src="/src/ui.ts"></script>
-    <canvas id="c" width="800" height="800"></canvas>
-    <br />
-    asset sources:<br />
-    <a href="https://maxbittker.github.io/broider/">broider by Max Bittker</a
-    ><br />
-    <a href="https://www.newgrounds.com/art/view/aleha84/candle"
-      >candle gif by aleha84</a
-    >
-    <br />
-    <a href="https://freesound.org/people/szegvari/sounds/523051/"
-      >vocal effect</a
-    >
-    <br />
-    <a href="https://freesound.org/people/Beetlemuse/sounds/564235/"
-      >mysterious ambient sound</a
-    >
-    <br />
-    <a href="https://freesound.org/people/zagi2/sounds/219167/"
-      >baroque jingle</a
-    >
-    <br />
-    <a href="https://freesound.org/people/plasterbrain/sounds/464919/"
-      >positive mystical jingle</a
-    >
-    <br />
-    <a
-      href="https://aerrond.com/seamless_parchment_texture_by_fantasystock2-jpg/"
-      >parchment texture</a
-    >
+    <div id="c-container" style="height: 100%">
+      <canvas id="c"></canvas>
+    </div>
+    <div id="credits" style="display: hidden">
+      <br />
+      asset sources:<br />
+      <a href="https://maxbittker.github.io/broider/">broider by Max Bittker</a
+      ><br />
+      <a href="https://www.newgrounds.com/art/view/aleha84/candle"
+        >candle gif by aleha84</a
+      >
+      <br />
+      <a href="https://freesound.org/people/szegvari/sounds/523051/"
+        >vocal effect</a
+      >
+      <br />
+      <a href="https://freesound.org/people/Beetlemuse/sounds/564235/"
+        >mysterious ambient sound</a
+      >
+      <br />
+      <a href="https://freesound.org/people/zagi2/sounds/219167/"
+        >baroque jingle</a
+      >
+      <br />
+      <a href="https://freesound.org/people/plasterbrain/sounds/464919/"
+        >positive mystical jingle</a
+      >
+      <br />
+      <a
+        href="https://aerrond.com/seamless_parchment_texture_by_fantasystock2-jpg/"
+        >parchment texture</a
+      >
 
-    <br />
-    <a href="https://kronbits.itch.io/matriax-free-cg-textures"
-      >asfault texture</a
-    >
-    <br />
-    <a href="https://opengameart.org/content/pointers-part-5"
-      >gauntlet cursor</a
-    >
-    <br />
+      <br />
+      <a href="https://kronbits.itch.io/matriax-free-cg-textures"
+        >asfault texture</a
+      >
+      <br />
+      <a href="https://opengameart.org/content/pointers-part-5"
+        >gauntlet cursor</a
+      >
+      <br />
+    </div>
   </body>
 </html>
