@@ -1,9 +1,9 @@
 import { expect, test } from "vitest";
 import { dominoFlowchart } from "./dominoes.ex";
 import {
-  framePathForStep,
   getFinalValues,
   runHelper,
+  stackPathForStep,
   topLevelValueForStep,
 } from "./interpreter";
 
@@ -264,22 +264,22 @@ test("framePathForStep & topLevelValueForStep work", () => {
       "*→one-domino-1→one-domino-2↓fc1→one-domino-1→one-domino-2↓fc1→one-domino-1"
     ];
 
-  expect(framePathForStep(someStep, traceTree)).toMatchInlineSnapshot(`
-    [
+  expect(stackPathForStep(someStep, traceTree)).toEqual({
+    callPath: [
       {
-        "flowchartId": "fc1",
-        "frameId": "one-domino-2",
+        flowchartId: "fc1",
+        frameId: "one-domino-2",
       },
       {
-        "flowchartId": "fc1",
-        "frameId": "one-domino-2",
+        flowchartId: "fc1",
+        frameId: "one-domino-2",
       },
-      {
-        "flowchartId": "fc1",
-        "frameId": "one-domino-1",
-      },
-    ]
-  `);
+    ],
+    final: {
+      flowchartId: "fc1",
+      frameId: "one-domino-1",
+    },
+  });
 
   // at this point, we've placed one domino in the 2x2 sub-grid:
   expect(someStep.scene.value).toMatchInlineSnapshot(`

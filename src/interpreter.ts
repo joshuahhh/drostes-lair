@@ -397,27 +397,40 @@ export function scenesByFrame(
  * bottom. It's expected that every frame here besides the last is a
  * call.
  */
-export type FramePath = {
+export type Segment = {
   flowchartId: string;
   frameId: string;
-}[];
+};
+// from the UI perspective, callPath is a containment path thru nested call boxes,
+// along with a segment that identifies where the stack is within the call
+export type StackPath = {
+  callPath: Segment[];
+  final: Segment;
+};
 
-export function framePathToString(framePath: FramePath) {
-  return JSON.stringify(framePath);
+export function stackPathToString(stackPath: StackPath) {
+  return JSON.stringify(stackPath);
 }
+export function stackPathForStep(step: Step, traceTree: TraceTree): StackPath {
+  let callPath: Segment[];
+  if (step.caller) {
+    const fakeCallerStep = {
+      ...traceTree.steps[step.caller.prevStepId],
+      frameId: step.caller.frameId,
+    };
+    const callerStackPath = stackPathForStep(fakeCallerStep, traceTree);
+    callPath = [...callerStackPath.callPath, callerStackPath.final];
+  } else {
+    callPath = [];
+  }
 
-export function framePathForStep(step: Step, traceTree: TraceTree): FramePath {
-  const rest = step.caller
-    ? framePathForStep(
-        // TODO: does this work?
-        {
-          ...traceTree.steps[step.caller.prevStepId],
-          frameId: step.caller.frameId,
-        },
-        traceTree,
-      )
-    : [];
-  return [...rest, { flowchartId: step.flowchartId, frameId: step.frameId }];
+  return {
+    callPath,
+    final: {
+      flowchartId: step.flowchartId,
+      frameId: step.frameId,
+    },
+  };
 }
 
 export function getCallerInfo(
@@ -445,8 +458,8 @@ export function getCallerInfo(
  *
  * This means we need to know 1. the top-level scene value, and 2. a
  * series of lenses chained from the top to get to each call. The
- * latter is a FramePath, basically, which you can get with
- * framePathForStep. So we just need to implement the top-level scene
+ * latter is a stackPath, basically, which you can get with
+ * stackPathForStep. So we just need to implement the top-level scene
  * value part.
  */
 
@@ -505,7 +518,7 @@ export function getNextSteps(step: Step, traceTree: TraceTree) {
  * the diagram (which can be ID'd by a frame path).
  */
 export type Stack = {
-  framePath: FramePath;
+  stackPath: StackPath;
   steps: Step[];
 };
 export type StepsInStacks = {
@@ -515,15 +528,15 @@ export type StepsInStacks = {
 };
 
 export function putStepsInStacks(tree: TraceTree): StepsInStacks {
-  const stacks: { [framePathId: string]: Stack } = {};
+  const stacks: { [stackPathId: string]: Stack } = {};
   const stackByStepId: { [stepId: string]: Stack } = {};
 
   for (const step of Object.values(tree.steps)) {
-    const framePath = framePathForStep(step, tree);
-    const framePathStr = framePathToString(framePath);
-    let stack = stacks[framePathStr];
+    const stackPath = stackPathForStep(step, tree);
+    const stackPathStr = stackPathToString(stackPath);
+    let stack = stacks[stackPathStr];
     if (!stack) {
-      stack = stacks[framePathStr] = { framePath, steps: [] };
+      stack = stacks[stackPathStr] = { stackPath, steps: [] };
     }
     stack.steps.push(step);
     stackByStepId[step.id] = stack;

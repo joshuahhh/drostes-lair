@@ -2,13 +2,13 @@ import { dominoFlowchart } from "./dominoes.ex";
 import {
   Action,
   Flowchart,
-  framePathForStep,
+  Stack,
+  Step,
   getNextStacks,
   getPrevStacks,
   putStepsInStacks,
   runHelper,
-  Stack,
-  Step,
+  stackPathForStep,
   topLevelValueForStep,
 } from "./interpreter";
 import { loadImg } from "./ui_util";
@@ -196,13 +196,12 @@ Promise.all([
         ctx.fill();
 
         // layers
-        const path = framePathForStep(step, traceTree);
-        path.pop(); // remove current frame
+        const path = stackPathForStep(step, traceTree);
         let x = 0;
         let y = 0;
         let width = value.width;
         let height = value.height;
-        for (const segment of path) {
+        for (const segment of path.callPath) {
           const frame =
             defs.flowcharts[segment.flowchartId].frames[segment.frameId];
           const action = frame.action as Action & { type: "call" };
