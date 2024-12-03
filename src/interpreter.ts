@@ -371,6 +371,8 @@ export function getFinalValues(traceTree: TraceTree): any[] {
  * We're going to eventually have a visualization that shows a
  * flowchart with the different scenes that occur at each frame. This
  * function makes an extremely cheap version of this visualization.
+ *
+ * The UI is used instead of this now.
  */
 export function scenesByFrame(
   flowchart: Flowchart,
@@ -562,4 +564,34 @@ export function getNextStacks(
   });
 
   return Array.from(nextStacks);
+}
+
+type Viewchart = {
+  flowchart: Flowchart;
+  stackByFrameId: Record<string, Stack>;
+  callViewchartsByFrameId: Record<string, Viewchart>;
+};
+
+export function nestifyTraceTree(traceTree: TraceTree): Viewchart {
+  const stacks = putStepsInStacks(traceTree);
+
+  Object.values(stacks.stackByStepId).filter(
+    (stack) => stack.framePath[0].flowchartId === flowchart,
+  );
+
+  const stackByFrameId: Record<string, Stack> = {};
+  for (const stack of Object.values(stacks.stackByStepId))
+    if (stack.framePath.length === 1)
+      stackByFrameId[stack.framePath[0].frameId] = stack;
+
+  nestifyTraceTreeHelper;
+}
+function nestifyTraceTreeHelper(
+  stacks: StepsInStacks,
+  depth: number,
+): Viewchart {
+  const stackByFrameId: Record<string, Stack> = {};
+  for (const stack of Object.values(stacks.stackByStepId))
+    if (stack.framePath.length === depth + 1)
+      stackByFrameId[stack.framePath[depth].frameId] = stack;
 }
