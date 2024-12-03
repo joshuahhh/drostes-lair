@@ -49,7 +49,7 @@ const { traceTree, flowchart, initStepId, defs } = runHelper(
 );
 console.log(traceTree);
 
-const nextSteps = (traceTree: TraceTree, step: Step) =>
+const getNextSteps = (traceTree: TraceTree, step: Step) =>
   Object.values(traceTree.steps).filter(
     ({ prevStepId }) => prevStepId === step.id,
   );
@@ -353,8 +353,9 @@ Promise.all([
           renderOutlinedText(label + "", [myX, myY], "left");
 
           const myJ = j;
-          for (const nextStep of nextSteps(traceTree, step)) {
-            if (j > myJ) {
+          const nextSteps = getNextSteps(traceTree, step);
+          for (const nextStep of nextSteps) {
+            if (nextSteps.length > 1) {
               // draw connector line
               ctx.beginPath();
               ctx.moveTo(
