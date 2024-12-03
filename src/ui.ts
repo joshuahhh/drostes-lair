@@ -3,6 +3,7 @@ import {
   Action,
   Flowchart,
   framePathForStep,
+  getNextSteps,
   runHelper,
   Step,
   topLevelValueForStep,
@@ -48,11 +49,6 @@ const { traceTree, flowchart, initStepId, defs } = runHelper(
   initialValue,
 );
 console.log(traceTree);
-
-const getNextSteps = (traceTree: TraceTree, step: Step) =>
-  Object.values(traceTree.steps).filter(
-    ({ prevStepId }) => prevStepId === step.id,
-  );
 
 const strokeMultiline = (
   txt: string,
@@ -354,7 +350,7 @@ Promise.all([
           renderOutlinedText(label + "", [myX, myY], "left");
 
           const myJ = j;
-          const nextSteps = getNextSteps(traceTree, step);
+          const nextSteps = getNextSteps(step, traceTree);
           for (const nextStep of nextSteps) {
             if (nextSteps.length > 1) {
               // draw connector line

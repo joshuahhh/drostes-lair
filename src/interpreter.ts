@@ -489,3 +489,9 @@ function topLevelValueForCall(
     return value;
   }
 }
+
+export function getNextSteps(step: Step, traceTree: TraceTree) {
+  return Object.values(traceTree.steps).filter(
+    ({ prevStepId }) => prevStepId === step.id,
+  );
+}
