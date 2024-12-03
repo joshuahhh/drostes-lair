@@ -88,15 +88,15 @@ export type Step = {
   frameId: string;
   flowchartId: string;
   scene: Scene;
-  caller:
-    | {
-        // We need to know:
-        // 1. The input to the call
-        prevStepId: string;
-        // 2. The call that was made
-        frameId: string;
-      }
-    | undefined;
+  caller: Call | undefined;
+};
+
+export type Call = {
+  // We need to know:
+  // 1. The input to the call
+  prevStepId: string;
+  // 2. The call that was made
+  frameId: string;
 };
 
 /**
@@ -162,13 +162,10 @@ export function runAll(
         return;
       }
 
-      const callerPrevStep = traceTreeOut.steps[caller.prevStepId];
+      const callerInfo = getCallerInfo(caller, traceTreeOut, defs);
 
       let returnScene = scene;
-      const callerFrame =
-        defs.flowcharts[callerPrevStep.flowchartId].frames[caller.frameId];
-      const callerLens = (callerFrame.action! as Action & { type: "call" })
-        .lens;
+      const callerLens = callerInfo.frame.action.lens;
       if (callerLens) {
         const lensImpl = lenses[callerLens.type];
         if (!lensImpl) {
@@ -178,19 +175,19 @@ export function runAll(
           ...scene,
           value: lensImpl.setPart(
             callerLens,
-            callerPrevStep.scene.value,
+            callerInfo.prevStep.scene.value,
             scene.value,
           ),
         };
       }
 
       const nextStep: Step = {
-        id: `${step.id}↑${callerPrevStep.flowchartId}→${caller.frameId}`,
+        id: `${step.id}↑${callerInfo.flowchart.id}→${caller.frameId}`,
         prevStepId: step.id,
-        flowchartId: callerPrevStep.flowchartId,
+        flowchartId: callerInfo.flowchart.id,
         frameId: caller.frameId,
         scene: returnScene,
-        caller: callerPrevStep.caller,
+        caller: callerInfo.prevStep.caller,
       };
       runAll(nextStep, defs, traceTreeOut);
       return;
@@ -363,7 +360,7 @@ export function runHelper(flowcharts: Flowchart[], value: any) {
     }
     throw e;
   }
-  return { traceTree, flowchart, initStepId: initStep.id };
+  return { traceTree, flowchart, initStepId: initStep.id, defs };
 }
 
 export function getFinalValues(traceTree: TraceTree): any[] {
@@ -396,13 +393,15 @@ export function scenesByFrame(
 
 /**
  * A frame in the UI is identified by a "frame path" – describing in
- * static terms the sequence of calls that led to it. This might
- * compute that for a step correctly? Or not.
+ * static terms the sequence of calls that led to it. It's expected
+ * that every frame here besides the last is a call.
  */
-export function framePathForStep(
-  step: Step,
-  traceTree: TraceTree,
-): { flowchartId: string; frameId: string }[] {
+export type FramePath = {
+  flowchartId: string;
+  frameId: string;
+}[];
+
+export function framePathForStep(step: Step, traceTree: TraceTree): FramePath {
   const rest = step.caller
     ? framePathForStep(
         // TODO: does this work?
@@ -414,4 +413,78 @@ export function framePathForStep(
       )
     : [];
   return [{ flowchartId: step.flowchartId, frameId: step.frameId }, ...rest];
+}
+
+export function getCallerInfo(
+  call: Call,
+  traceTree: TraceTree,
+  defs: Definitions,
+) {
+  const prevStep = traceTree.steps[call.prevStepId];
+  const flowchart = defs.flowcharts[prevStep.flowchartId];
+  const frame = flowchart.frames[call.frameId] as Frame & {
+    action: Action & { type: "call" };
+  };
+  return { prevStep, flowchart, frame };
+}
+
+/**
+ * We want to show scenes in the context of nested function calls.
+ * How to do this in total generality is TBD, but for now we make a
+ * simplifying assumption: To see a scene in the context of nested
+ * function calls, we will...
+ * 1. Draw the top-level scene value, with progress from nested calls
+ *    filled in.
+ * 2. Draw outlines around the parts of the scene considered at each
+ *    level.
+ *
+ * This means we need to know 1. the top-level scene value, and 2. a
+ * series of lenses chained from the top to get to each call. The
+ * latter is a FramePath, basically, which you can get with
+ * framePathForStep. So we just need to implement the top-level scene
+ * value part.
+ */
+
+export function topLevelValueForStep(
+  step: Step,
+  traceTree: TraceTree,
+  defs: Definitions,
+): unknown {
+  if (step.caller) {
+    return topLevelValueForCall(step.scene.value, step.caller, traceTree, defs);
+  } else {
+    return step.scene.value;
+  }
+}
+
+function topLevelValueForCall(
+  nestedValue: unknown,
+  call: Call,
+  traceTree: TraceTree,
+  defs: Definitions,
+): unknown {
+  const callInfo = getCallerInfo(call, traceTree, defs);
+  // BIG TODO: deal with missing lens
+  const lens = callInfo.frame.action.lens!;
+  const lensImpl = lenses[lens.type];
+  if (!lensImpl) {
+    throw new Error(`Lens type ${lens.type} not found`);
+  }
+  // figure out the value at this level by simulating early return
+  const value = lensImpl.setPart(
+    lens,
+    callInfo.prevStep.scene.value,
+    nestedValue,
+  );
+  // keep recursing if there's more to do
+  if (callInfo.prevStep.caller) {
+    return topLevelValueForCall(
+      value,
+      callInfo.prevStep.caller,
+      traceTree,
+      defs,
+    );
+  } else {
+    return value;
+  }
 }
