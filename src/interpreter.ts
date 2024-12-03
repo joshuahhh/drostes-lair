@@ -413,6 +413,9 @@ export type StackPath = {
 export function stackPathToString(stackPath: StackPath) {
   return JSON.stringify(stackPath);
 }
+export function callPathToString(callPath: Segment[]) {
+  return JSON.stringify(callPath);
+}
 export function stackPathForStep(step: Step, traceTree: TraceTree): StackPath {
   let callPath: Segment[];
   if (step.caller) {
@@ -591,23 +594,37 @@ type Viewchart = {
 export function nestifyTraceTree(traceTree: TraceTree): Viewchart {
   const stacks = putStepsInStacks(traceTree);
 
-  Object.values(stacks.stackByStepId).filter(
-    (stack) => stack.framePath[0].flowchartId === flowchart,
-  );
-
   const stackByFrameId: Record<string, Stack> = {};
   for (const stack of Object.values(stacks.stackByStepId))
-    if (stack.framePath.length === 1)
-      stackByFrameId[stack.framePath[0].frameId] = stack;
+    if (stack.stackPath.length === 1)
+      stackByFrameId[stack.stackPath.final.frameId] = stack;
 
   nestifyTraceTreeHelper;
 }
 function nestifyTraceTreeHelper(
+  callPath: Segment[],
   stacks: StepsInStacks,
-  depth: number,
 ): Viewchart {
   const stackByFrameId: Record<string, Stack> = {};
-  for (const stack of Object.values(stacks.stackByStepId))
-    if (stack.framePath.length === depth + 1)
-      stackByFrameId[stack.framePath[depth].frameId] = stack;
+  const callViewchartsByFrameId: Record<string, Viewchart> = {};
+  const callFrameIds = new Set<string>();
+  for (const stack of Object.values(stacks.stackByStepId)) {
+    const isStackAtCallPath =
+      callPathToString(stack.stackPath.callPath) === callPathToString(callPath);
+
+    if (isStackAtCallPath)
+      stackByFrameId[stack.stackPath.final.frameId] = stack;
+
+    // callPath is a prefix of stack.stackPath.callPath
+    const isStackDeeperThanCallPath = callPath.every(
+      (segment, i) =>
+        JSON.stringify(segment) === JSON.stringify(stack.stackPath.callPath[i]),
+    );
+    if (isStackDeeperThanCallPath && !isStackAtCallPath) {
+      callFrameIds.add(stack.stackPath.callPath[callPath.length].frameId);
+    }
+  }
+  for (const frameIds of callFrameIds) {
+    //nestifyTraceTreeHelper()
+  }
 }
