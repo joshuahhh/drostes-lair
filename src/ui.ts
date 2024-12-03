@@ -234,7 +234,7 @@ Promise.all([
       if (isOutlined) {
         ctx.beginPath();
         ctx.lineWidth = 10;
-        ctx.strokeStyle = "green";
+        ctx.strokeStyle = "purple";
         ctx.rect(...pos, sceneW, sceneH);
         ctx.stroke();
       }
@@ -337,6 +337,7 @@ Promise.all([
       // draw background
       const pattern = ctx.createPattern(img2, "repeat")!;
       ctx.fillStyle = pattern;
+      pattern.setTransform(new DOMMatrix().translate(...pan, 0));
       ctx.fillRect(0, 0, c.width, c.height);
 
       ctx.save();
