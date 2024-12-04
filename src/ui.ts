@@ -1,5 +1,6 @@
 import seedrandom from "seedrandom";
 import { dominoFlowchart } from "./dominoes.ex";
+import { appendFrameAfter } from "./edits";
 import {
   Action,
   Flowchart,
@@ -44,31 +45,24 @@ const initialValue = {
   height: 2,
   dominoes: [],
 };
+const starterFlowchart = {
+  id: "fc-outer",
+  initialFrameId: "1",
+  frames: indexById([
+    {
+      id: "1",
+    },
+    {
+      id: "2",
+    },
+  ]),
+  arrows: [{ from: "1", to: "2" }],
+};
+
 const { traceTree, defs } = runHelper(
   [
-    {
-      id: "fc-outer",
-      initialFrameId: "1",
-      frames: indexById([
-        {
-          id: "1",
-        },
-        {
-          id: "2",
-          action: {
-            type: "call",
-            flowchartId: "fc1",
-            lens: {
-              type: "domino-grid",
-              dx: 0,
-              dy: 0,
-            },
-          },
-        },
-      ]),
-      arrows: [{ from: "1", to: "2" }],
-    },
-    myFlowchart,
+    starterFlowchart,
+    //myFlowchart,
   ],
   initialValue,
 );
@@ -108,6 +102,11 @@ Promise.all([
       renderOutlinedText,
     );
 
+    let clickables: {
+      xywh: readonly [number, number, number, number];
+      callback: Function;
+    }[] = [];
+
     // start ambient audio
     audAmbient.loop = true;
     audAmbient.start();
@@ -126,10 +125,26 @@ Promise.all([
         shiftHeld = false;
       }
     });
+
+    let mouseX = 0;
+    let mouseY = 0;
     let mouseDown = false;
+    c.addEventListener("mousemove", (e) => {
+      // add "feel good" numbers for the shape of the cursor
+      mouseX = e.offsetX + 5;
+      mouseY = e.offsetY + 6;
+    });
     c.addEventListener("mousedown", (e) => {
       mouseDown = true;
       if (e.offsetX > 550 && e.offsetY > 550) audVocal.start();
+      for (const {
+        xywh: [x, y, w, h],
+        callback,
+      } of clickables) {
+        const isXGood = x < mouseX && mouseX < x + w;
+        const isYGood = y < mouseY && mouseY < y + h;
+        if (isXGood && isYGood) callback();
+      }
     });
     c.addEventListener("mouseup", () => {
       mouseDown = false;
@@ -249,6 +264,7 @@ Promise.all([
     requestAnimationFrame(drawLoop);
 
     function drawLoop() {
+      clickables = [];
       requestAnimationFrame(drawLoop);
 
       c.style.cursor = mouseDown
@@ -490,6 +506,20 @@ Promise.all([
               let label = getActionText(flowchart.frames[step.frameId].action);
               renderOutlinedText(label, [curX, myY], "left");
             }
+            const buttonSize = 20;
+            const xywh = [
+              curX + sceneW + 10,
+              myY + sceneH / 2 - buttonSize / 2,
+              buttonSize,
+              buttonSize,
+            ] as const;
+            ctx.fillRect(...xywh);
+            clickables.push({
+              xywh,
+              callback: () => {
+                appendFrameAfter(starterFlowchart, frameId);
+              },
+            });
           });
         }
 
@@ -543,7 +573,6 @@ Promise.all([
       // );
 
       renderCandle();
-
       (window as any).DEBUG = false;
     }
   },
