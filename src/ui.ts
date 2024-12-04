@@ -1,17 +1,19 @@
-import seedrandom from "seedrandom";
-import { dominoFlowchart } from "./dominoes.ex";
+import * as seedrandom from "seedrandom";
 import { appendFrameAfter } from "./edits";
 import {
   Action,
+  Definitions,
   Flowchart,
   Stack,
   StackPath,
   Step,
+  TraceTree,
   Viewchart,
   getNextStacksInLevel,
   getPrevStacksInLevel,
+  makeTraceTree,
   putStepsInStacks,
-  runHelper,
+  runAll,
   stackPathForStep,
   stepsInStacksToViewchart,
   topLevelValueForStep,
@@ -27,6 +29,61 @@ function DEBUG() {
   return (window as any).DEBUG;
 }
 
+type UIState = {
+  defs: Definitions;
+};
+
+let undoStack: UIState[] = [
+  {
+    defs: {
+      flowcharts: indexById<Flowchart>([
+        {
+          id: "fc-main",
+          initialFrameId: "1",
+          frames: indexById([
+            {
+              id: "1",
+            },
+            {
+              id: "2",
+              action: {
+                type: "call",
+                flowchartId: "fc-sub",
+                lens: {
+                  type: "domino-grid",
+                  dx: 0,
+                  dy: 0,
+                },
+              },
+            },
+            {
+              id: "3",
+            },
+          ]),
+          arrows: [
+            { from: "1", to: "2" },
+            { from: "2", to: "3" },
+          ],
+        },
+        {
+          id: "fc-sub",
+          initialFrameId: "1",
+          frames: indexById([
+            {
+              id: "1",
+            },
+          ]),
+          arrows: [],
+        },
+      ]),
+    },
+  },
+];
+
+// globals for communication are the best
+let state: UIState;
+let traceTree: TraceTree;
+
 const c = document.getElementById("c") as HTMLCanvasElement;
 const cContainer = document.getElementById("c-container") as HTMLDivElement;
 const resizeObserver = new ResizeObserver((entries) => {
@@ -39,34 +96,11 @@ const resizeObserver = new ResizeObserver((entries) => {
 resizeObserver.observe(cContainer);
 const ctx = c.getContext("2d")!;
 
-const myFlowchart: Flowchart = dominoFlowchart;
 const initialValue = {
   width: 4,
   height: 2,
   dominoes: [],
 };
-const starterFlowchart = {
-  id: "fc-outer",
-  initialFrameId: "1",
-  frames: indexById([
-    {
-      id: "1",
-    },
-    {
-      id: "2",
-    },
-  ]),
-  arrows: [{ from: "1", to: "2" }],
-};
-
-const { traceTree, defs } = runHelper(
-  [
-    starterFlowchart,
-    //myFlowchart,
-  ],
-  initialValue,
-);
-console.log("traceTree", traceTree);
 
 const getActionText = (action?: Action) =>
   !action
@@ -131,8 +165,8 @@ Promise.all([
     let mouseDown = false;
     c.addEventListener("mousemove", (e) => {
       // add "feel good" numbers for the shape of the cursor
-      mouseX = e.offsetX + 5;
-      mouseY = e.offsetY + 6;
+      mouseX = e.offsetX + 7;
+      mouseY = e.offsetY;
     });
     c.addEventListener("mousedown", (e) => {
       mouseDown = true;
@@ -162,6 +196,8 @@ Promise.all([
     const sceneH = 100;
 
     const renderDominoes = (value: any, path: StackPath, pos: Vec2) => {
+      const { defs } = state;
+
       const cellSize = 20;
 
       function gridToXY([x, y]: [number, number]): [number, number] {
@@ -229,6 +265,8 @@ Promise.all([
       step: Step,
       pos: [number, number], // TODO: rename: is this the top left corner?
     ) => {
+      const { defs } = state;
+
       const isOutlined = traceTree.finalStepIds.includes(step.id);
 
       if (isOutlined) {
@@ -264,8 +302,26 @@ Promise.all([
     requestAnimationFrame(drawLoop);
 
     function drawLoop() {
-      clickables = [];
       requestAnimationFrame(drawLoop);
+
+      state = undoStack.at(-1)!;
+      const { defs } = state;
+
+      // run program on every frame lol
+      traceTree = makeTraceTree();
+      // TODO: hardcoding the first flowchart
+      const flowchart = Object.values(defs.flowcharts)[0];
+      const initStep = {
+        id: "*",
+        prevStepId: undefined,
+        flowchartId: flowchart.id,
+        frameId: flowchart.initialFrameId,
+        scene: { value: initialValue },
+        caller: undefined,
+      };
+      runAll(initStep, defs, traceTree);
+
+      clickables = [];
 
       c.style.cursor = mouseDown
         ? "url('./assets/glove2.png'), pointer"
@@ -517,7 +573,12 @@ Promise.all([
             clickables.push({
               xywh,
               callback: () => {
-                appendFrameAfter(starterFlowchart, frameId);
+                const newState = structuredClone(state);
+                newState.defs.flowcharts[flowchartId] = appendFrameAfter(
+                  flowchart,
+                  frameId,
+                );
+                undoStack.push(newState);
               },
             });
           });
@@ -574,6 +635,13 @@ Promise.all([
 
       renderCandle();
       (window as any).DEBUG = false;
+
+      // mouse position debug
+      if (false) {
+        ctx.fillStyle = "white";
+        ctx.fillRect(mouseX - 100, mouseY, 200, 1);
+        ctx.fillRect(mouseX, mouseY - 100, 1, 200);
+      }
     }
   },
 );

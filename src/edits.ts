@@ -28,4 +28,5 @@ export const appendFrameAfter = (fc: Flowchart, frameId: string) => {
   };
   newFc.arrows.push({ from: frameId, to: id });
   newFc.frames[id] = newFrame;
+  return newFc;
 };
