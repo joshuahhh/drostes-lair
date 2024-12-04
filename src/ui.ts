@@ -314,7 +314,7 @@ Promise.all([
       const scenePadY = 40;
       const xFromStack = new Map<Stack, number>();
       /**
-       * returns... something?
+       * returns vertical space used
        */
       const renderStackAndDownstream = (
         stack: Stack,
@@ -349,34 +349,23 @@ Promise.all([
         }
 
         // render downstream
-        let rowIdx = 0;
+        let y = 0;
         const nextStacks = getNextStacks(stack, stepsInStacks, traceTree);
         for (const nextStack of nextStacks) {
           if (nextStacks.length > 1) {
             // draw connector line
             ctx.beginPath();
             ctx.moveTo(myX + sceneW, myY + sceneH / 2);
-            ctx.lineTo(
-              myX + sceneW + scenePadX,
-              myY + rowIdx * (sceneH + scenePadY) + sceneH / 2,
-            );
+            ctx.lineTo(myX + sceneW + scenePadX, myY + y + sceneH / 2);
             ctx.strokeStyle = "yellow";
             ctx.lineWidth = 2;
             ctx.stroke();
           }
-          const v = renderStackAndDownstream(
-            nextStack,
-            initX,
-            myY + rowIdx * (sceneH + scenePadY),
-          );
-          // renderOutlinedText(v + "", [
-          //   myX + sceneW + scenePad,
-          //   myY + j * (sceneH + scenePad),
-          // ]);
-          rowIdx += v;
+          y += renderStackAndDownstream(nextStack, initX, myY + y);
         }
 
-        return Math.max(rowIdx, 1);
+        // consider space taken up by stack & space taken up by downstream
+        return Math.max(sceneH + scenePadY, y);
       };
       const stepsInStacks = putStepsInStacks(traceTree);
       const { stackByStepId } = stepsInStacks;
