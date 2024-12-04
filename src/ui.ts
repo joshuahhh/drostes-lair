@@ -20,7 +20,14 @@ import {
 } from "./interpreter";
 import { makeCandleRenderer } from "./ui_candle";
 import { makeOutlinedTextRenderer } from "./ui_text";
-import { fillRect, fillRectGradient, loadAudio, loadImg } from "./ui_util";
+import {
+  XYWH,
+  fillRect,
+  fillRectGradient,
+  inXYWH,
+  loadAudio,
+  loadImg,
+} from "./ui_util";
 import { indexById } from "./util";
 import { Vec2, add, v } from "./vec2";
 
@@ -121,14 +128,17 @@ Promise.all([
   loadAudio("./assets/ambient.wav"),
 ]).then(
   ([
-    img,
-    img2,
+    imgParchment,
+    imgAsfault,
     imgCandleSheet,
     imgGlovePoint,
     imgGloveGrab,
     audVocal,
     audAmbient,
   ]) => {
+    const patternParchment = ctx.createPattern(imgParchment, "repeat")!;
+    const patternAsfault = ctx.createPattern(imgAsfault, "repeat")!;
+
     const renderOutlinedText = makeOutlinedTextRenderer(ctx);
     const renderCandle = makeCandleRenderer(
       ctx,
@@ -137,7 +147,7 @@ Promise.all([
     );
 
     let clickables: {
-      xywh: readonly [number, number, number, number];
+      xywh: XYWH;
       callback: Function;
     }[] = [];
 
@@ -169,18 +179,13 @@ Promise.all([
     c.addEventListener("mousemove", (e) => {
       // add "feel good" numbers for the shape of the cursor
       mouseX = e.offsetX + 7;
-      mouseY = e.offsetY;
+      mouseY = e.offsetY + 3;
     });
     c.addEventListener("mousedown", (e) => {
       mouseDown = true;
       if (e.offsetX > 550 && e.offsetY > 550) audVocal.start();
-      for (const {
-        xywh: [x, y, w, h],
-        callback,
-      } of clickables) {
-        const isXGood = x < mouseX && mouseX < x + w;
-        const isYGood = y < mouseY && mouseY < y + h;
-        if (isXGood && isYGood) callback();
+      for (const { xywh, callback } of clickables) {
+        if (inXYWH(mouseX, mouseY, xywh)) callback();
       }
     });
     c.addEventListener("mouseup", () => {
@@ -192,7 +197,17 @@ Promise.all([
       ctx.shadowColor = "rgba(0,0,0,1)";
       ctx.shadowOffsetY = 4;
       ctx.shadowBlur = 15;
-      ctx.drawImage(img, Math.random(), Math.random(), w, h, x, y, w, h);
+      ctx.drawImage(
+        imgParchment,
+        Math.random(),
+        Math.random(),
+        w,
+        h,
+        x,
+        y,
+        w,
+        h,
+      );
       ctx.restore();
     };
     const sceneW = 100;
@@ -365,9 +380,8 @@ Promise.all([
           : "url('./assets/glove3.png'), pointer";
 
       // draw background
-      const pattern = ctx.createPattern(img2, "repeat")!;
-      ctx.fillStyle = pattern;
-      pattern.setTransform(new DOMMatrix().translate(...pan, 0));
+      ctx.fillStyle = patternAsfault;
+      patternAsfault.setTransform(new DOMMatrix().translate(...pan, 0));
       ctx.fillRect(0, 0, c.width, c.height);
 
       const renderConnectorLine = (start: Vec2, end: Vec2) => {
@@ -433,10 +447,9 @@ Promise.all([
         maxX: number,
         maxY: number,
       ) => {
-        const pattern = ctx.createPattern(img2, "repeat")!;
-        ctx.fillStyle = pattern;
+        ctx.fillStyle = patternAsfault;
         const rng = seedrandom(randomSeed);
-        pattern.setTransform(
+        patternAsfault.setTransform(
           new DOMMatrix().translate(
             ...add(pan, [rng() * 1000, rng() * 1000]),
             100,
@@ -599,25 +612,41 @@ Promise.all([
               let label = getActionText(flowchart.frames[step.frameId].action);
               renderOutlinedText(label, [curX, myY], "left");
             }
-            const buttonSize = 20;
-            const xywh = [
-              curX + sceneW + 10,
-              myY + sceneH / 2 - buttonSize / 2,
-              buttonSize,
-              buttonSize,
-            ] as const;
-            ctx.fillRect(...xywh);
-            clickables.push({
-              xywh,
-              callback: () => {
-                const newState = structuredClone(state);
-                newState.defs.flowcharts[flowchartId] = appendFrameAfter(
-                  flowchart,
-                  frameId,
-                );
-                undoStack.push(newState);
-              },
-            });
+
+            const buttonRadius = 10;
+
+            if (
+              inXYWH(mouseX, mouseY, [curX, myY, sceneW + buttonRadius, sceneH])
+            ) {
+              // draw semi-circle on the right
+              ctx.beginPath();
+              ctx.arc(
+                curX + sceneW,
+                myY + sceneH / 2,
+                buttonRadius,
+                (3 * Math.PI) / 2,
+                Math.PI / 2,
+              );
+              ctx.fillStyle = patternParchment;
+              ctx.fill();
+
+              clickables.push({
+                xywh: [
+                  curX + sceneW - buttonRadius,
+                  myY + sceneH / 2 - buttonRadius,
+                  buttonRadius * 2,
+                  buttonRadius * 2,
+                ],
+                callback: () => {
+                  const newState = structuredClone(state);
+                  newState.defs.flowcharts[flowchartId] = appendFrameAfter(
+                    flowchart,
+                    frameId,
+                  );
+                  undoStack.push(newState);
+                },
+              });
+            }
           });
         }
 

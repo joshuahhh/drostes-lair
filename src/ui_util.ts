@@ -55,3 +55,9 @@ export const fillRectGradient = (
   ctx.fillStyle = gradient;
   ctx.fillRect(x, y, width, height);
 };
+
+export type XYWH = readonly [number, number, number, number];
+
+export const inXYWH = (tx: number, ty: number, [x, y, w, h]: XYWH) => {
+  return x <= tx && tx <= x + w && y <= ty && ty <= y + h;
+};
