@@ -33,7 +33,7 @@ export const appendFrameAfter = (fc: Flowchart, frameId: string) => {
 
 export const setAction = (fc: Flowchart, frameId: string, action: Action) => {
   const newFc = structuredClone(fc);
-  const frame = fc.frames[frameId];
+  const frame = newFc.frames[frameId];
   if (frame.action) throw "tried to setAction on a frame that has an action!";
   frame.action = action;
   return newFc;

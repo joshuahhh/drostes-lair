@@ -153,6 +153,9 @@ Promise.all([
       if (e.key === "Shift") {
         shiftHeld = true;
       }
+      if (e.key === "z" && (e.ctrlKey || e.metaKey)) {
+        undoStack.pop();
+      }
     });
     window.addEventListener("keyup", (e) => {
       if (e.key === "Shift") {
@@ -226,14 +229,20 @@ Promise.all([
                 dy += lens.dy;
               }
               const { flowchartId, frameId } = path.final;
-              setAction(state.defs.flowcharts[flowchartId], frameId, {
-                type: "place-domino",
-                domino: [
-                  [c - dx, r - dy],
-                  [c - dx, r - dy + 1],
-                ],
-                failureFrameId: "base-case",
-              });
+              const newState = structuredClone(state);
+              newState.defs.flowcharts[flowchartId] = setAction(
+                state.defs.flowcharts[flowchartId],
+                frameId,
+                {
+                  type: "place-domino",
+                  domino: [
+                    [c - dx, r - dy],
+                    [c - dx, r - dy + 1],
+                  ],
+                  failureFrameId: "base-case",
+                },
+              );
+              undoStack.push(newState);
             },
           });
         }
