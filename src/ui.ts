@@ -330,7 +330,7 @@ Promise.all([
 
         xFromStack.set(stack, myX);
 
-        let rowIdx = 0;
+        // render stack
         for (const [stepIdx, stepId] of stack.stepIds.entries()) {
           const step = traceTree.steps[stepId];
           ctx.save();
@@ -346,37 +346,36 @@ Promise.all([
                 ? `call ${action.flowchartId}`
                 : `[${action.type}]`;
           renderOutlinedText(label + "", [myX, myY], "left");
-
-          const myRowIdx = rowIdx;
-          const nextStacks = getNextStacks(stack, stepsInStacks, traceTree);
-          for (const nextStack of nextStacks) {
-            if (nextStacks.length > 1) {
-              // draw connector line
-              ctx.beginPath();
-              ctx.moveTo(
-                myX + sceneW,
-                myY + myRowIdx * (sceneH + scenePadY) + sceneH / 2,
-              );
-              ctx.lineTo(
-                myX + sceneW + scenePadX,
-                myY + rowIdx * (sceneH + scenePadY) + sceneH / 2,
-              );
-              ctx.strokeStyle = "yellow";
-              ctx.lineWidth = 2;
-              ctx.stroke();
-            }
-            const v = renderStackAndDownstream(
-              nextStack,
-              initX,
-              myY + rowIdx * (sceneH + scenePadY),
-            );
-            // renderOutlinedText(v + "", [
-            //   myX + sceneW + scenePad,
-            //   myY + j * (sceneH + scenePad),
-            // ]);
-            rowIdx += v;
-          }
         }
+
+        // render downstream
+        let rowIdx = 0;
+        const nextStacks = getNextStacks(stack, stepsInStacks, traceTree);
+        for (const nextStack of nextStacks) {
+          if (nextStacks.length > 1) {
+            // draw connector line
+            ctx.beginPath();
+            ctx.moveTo(myX + sceneW, myY + sceneH / 2);
+            ctx.lineTo(
+              myX + sceneW + scenePadX,
+              myY + rowIdx * (sceneH + scenePadY) + sceneH / 2,
+            );
+            ctx.strokeStyle = "yellow";
+            ctx.lineWidth = 2;
+            ctx.stroke();
+          }
+          const v = renderStackAndDownstream(
+            nextStack,
+            initX,
+            myY + rowIdx * (sceneH + scenePadY),
+          );
+          // renderOutlinedText(v + "", [
+          //   myX + sceneW + scenePad,
+          //   myY + j * (sceneH + scenePad),
+          // ]);
+          rowIdx += v;
+        }
+
         return Math.max(rowIdx, 1);
       };
       const stepsInStacks = putStepsInStacks(traceTree);
