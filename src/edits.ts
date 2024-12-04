@@ -18,7 +18,7 @@
 //     initialValue,
 //   );
 
-import { Flowchart } from "./interpreter";
+import { Action, Flowchart } from "./interpreter";
 
 export const appendFrameAfter = (fc: Flowchart, frameId: string) => {
   const newFc = structuredClone(fc);
@@ -28,5 +28,13 @@ export const appendFrameAfter = (fc: Flowchart, frameId: string) => {
   };
   newFc.arrows.push({ from: frameId, to: id });
   newFc.frames[id] = newFrame;
+  return newFc;
+};
+
+export const setAction = (fc: Flowchart, frameId: string, action: Action) => {
+  const newFc = structuredClone(fc);
+  const frame = fc.frames[frameId];
+  if (frame.action) throw "tried to setAction on a frame that has an action!";
+  frame.action = action;
   return newFc;
 };

@@ -24,6 +24,11 @@ export type Action =
       failureFrameId?: string;
     }
   | {
+      type: "place-domino";
+      domino: [[number, number], [number, number]];
+      failureFrameId?: string;
+    }
+  | {
       type: "call";
       flowchartId: string;
       lens?: Lens;
@@ -250,6 +255,33 @@ function performAction(
       };
       runAll(nextStep, defs, traceTreeOut);
     }
+    return;
+  }
+  if (action.type === "place-domino") {
+    performAction(
+      step,
+      frameId,
+      {
+        type: "test-func",
+        label: "place domino",
+        func: ({ value }) => {
+          if (value.width < 1) {
+            throw new Error("width must be at least 1");
+          }
+          return [
+            {
+              value: {
+                ...value,
+                dominoes: [...value.dominoes, action.domino],
+              },
+            },
+          ];
+        },
+        failureFrameId: action.failureFrameId,
+      },
+      defs,
+      traceTreeOut,
+    );
     return;
   }
   if (action.type === "call") {

@@ -1,5 +1,5 @@
 import seedrandom from "seedrandom";
-import { appendFrameAfter } from "./edits";
+import { appendFrameAfter, setAction } from "./edits";
 import {
   Action,
   Definitions,
@@ -210,9 +210,35 @@ Promise.all([
       ctx.strokeStyle = "#70665a";
       for (let c = 0; c < value.width; c++) {
         for (let r = 0; r < value.height; r++) {
-          ctx.rect(...gridToXY([c, r]), cellSize, cellSize);
+          const xywh = [...gridToXY([c, r]), cellSize, cellSize] as const;
+          ctx.rect(...xywh);
+          clickables.push({
+            xywh,
+            callback: () => {
+              let dx = 0;
+              let dy = 0;
+              for (const segment of path.callPath) {
+                const frame =
+                  defs.flowcharts[segment.flowchartId].frames[segment.frameId];
+                const action = frame.action as Action & { type: "call" };
+                const lens = action.lens!; // TODO: what if not here
+                dx += lens.dx;
+                dy += lens.dy;
+              }
+              const { flowchartId, frameId } = path.final;
+              setAction(state.defs.flowcharts[flowchartId], frameId, {
+                type: "place-domino",
+                domino: [
+                  [c - dx, r - dy],
+                  [c - dx, r - dy + 1],
+                ],
+                failureFrameId: "base-case",
+              });
+            },
+          });
         }
       }
+
       ctx.moveTo(...gridToXY([0, 0]));
       ctx.lineTo(...gridToXY([value.width, 0]));
       ctx.moveTo(...gridToXY([0, 0]));
@@ -231,7 +257,7 @@ Promise.all([
       }
       ctx.fill();
 
-      // layers
+      // lens layers
       let x = 0;
       let y = 0;
       let width = value.width;
