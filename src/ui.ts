@@ -324,6 +324,7 @@ Promise.all([
       const renderViewchart = (
         viewchart: Viewchart,
         topLeft: [number, number],
+        actuallyDraw: boolean,
       ): {
         maxX: number;
         maxY: number;
@@ -334,7 +335,12 @@ Promise.all([
         const initialStack = viewchart.stackByFrameId[flowchart.initialFrameId];
         if (DEBUG())
           console.log("initialStack", JSON.stringify(initialStack.stackPath));
-        return renderStackAndDownstream(initialStack, ...topLeft, viewchart);
+        return renderStackAndDownstream(
+          initialStack,
+          ...topLeft,
+          viewchart,
+          actuallyDraw,
+        );
       };
 
       /**
@@ -346,6 +352,7 @@ Promise.all([
         initX: number,
         myY: number,
         viewchart: Viewchart,
+        actuallyDraw: boolean,
       ): {
         maxX: number;
         maxY: number;
@@ -383,128 +390,125 @@ Promise.all([
             );
           if (childViewchart) {
             // measure child (will be overdrawn)
-            const child = renderViewchart(childViewchart, [
-              curX + callPad,
-              curY + callPad + callTopPad,
-            ]);
-            // stroked border
-            // ctx.beginPath();
-            // ctx.rect(
-            //   curX,
-            //   curY,
-            //   child.maxX + callPad - curX,
-            //   child.maxY + callPad - curY,
-            // );
-            // ctx.fillStyle = "rgba(0,0,0,0.4)";
-            // ctx.strokeStyle = "black";
-            // ctx.lineWidth = 2;
-            // ctx.stroke();
-            // patterned fill
-            const pattern = ctx.createPattern(img2, "repeat")!;
-            ctx.fillStyle = pattern;
-            const rng = seedrandom(JSON.stringify(childViewchart.callPath));
-            pattern.setTransform(
-              new DOMMatrix().translate(
-                ...add(pan, [rng() * 1000, rng() * 1000]),
-                100,
-              ),
-            );
-            ctx.fillRect(
-              curX,
-              curY + callTopPad,
-              child.maxX + callPad - curX,
-              child.maxY + callPad - curY - callTopPad,
-            );
-            // shadows (via gradients inset from the edges)
-            // left
-            fillRectGradient(
-              ctx,
-              curX,
-              curY + 10,
-              15,
-              child.maxY + callPad - curY - 10,
-              "rgba(0,0,0,0.7)",
-              "rgba(0,0,0,0)",
-              "H",
-            );
-            // right
-            fillRectGradient(
-              ctx,
-              child.maxX + callPad,
-              curY + 10,
-              -15,
-              child.maxY + callPad - curY - 10,
-              "rgba(0,0,0,0.7)",
-              "rgba(0,0,0,0)",
-              "H",
-            );
-            // bottom
-            fillRectGradient(
-              ctx,
-              curX,
-              child.maxY + callPad,
-              child.maxX + callPad - curX,
-              -15,
-              "rgba(0,0,0,0.7)",
-              "rgba(0,0,0,0)",
-              "V",
-            );
-            // top
-            fillRect(
-              ctx,
-              curX,
-              curY,
-              child.maxX + callPad - curX,
-              20,
-              "rgba(0,0,0,0.4)",
-            );
-            fillRectGradient(
-              ctx,
-              curX,
-              curY + 20,
-              child.maxX + callPad - curX,
-              -10,
-              "rgba(0,0,0,0.7)",
-              "rgba(0,0,0,0)",
-              "V",
-            );
-            fillRectGradient(
-              ctx,
-              curX,
-              curY + 20,
-              child.maxX + callPad - curX,
-              10,
-              "rgba(0,0,0,0.8)",
-              "rgba(0,0,0,0)",
-              "V",
+            const child = renderViewchart(
+              childViewchart,
+              [curX + callPad, curY + callPad + callTopPad],
+              false,
             );
 
+            if (actuallyDraw) {
+              // patterned fill
+              const pattern = ctx.createPattern(img2, "repeat")!;
+              ctx.fillStyle = pattern;
+              const rng = seedrandom(JSON.stringify(childViewchart.callPath));
+              pattern.setTransform(
+                new DOMMatrix().translate(
+                  ...add(pan, [rng() * 1000, rng() * 1000]),
+                  100,
+                ),
+              );
+              ctx.fillRect(
+                curX,
+                curY + callTopPad,
+                child.maxX + callPad - curX,
+                child.maxY + callPad - curY - callTopPad,
+              );
+              // shadows (via gradients inset from the edges)
+              // left
+              fillRectGradient(
+                ctx,
+                curX,
+                curY + 10,
+                15,
+                child.maxY + callPad - curY - 10,
+                "rgba(0,0,0,0.7)",
+                "rgba(0,0,0,0)",
+                "H",
+              );
+              // right
+              fillRectGradient(
+                ctx,
+                child.maxX + callPad,
+                curY + 10,
+                -15,
+                child.maxY + callPad - curY - 10,
+                "rgba(0,0,0,0.7)",
+                "rgba(0,0,0,0)",
+                "H",
+              );
+              // bottom
+              fillRectGradient(
+                ctx,
+                curX,
+                child.maxY + callPad,
+                child.maxX + callPad - curX,
+                -15,
+                "rgba(0,0,0,0.7)",
+                "rgba(0,0,0,0)",
+                "V",
+              );
+              // top
+              fillRect(
+                ctx,
+                curX,
+                curY,
+                child.maxX + callPad - curX,
+                20,
+                "rgba(0,0,0,0.4)",
+              );
+              fillRectGradient(
+                ctx,
+                curX,
+                curY + 20,
+                child.maxX + callPad - curX,
+                -10,
+                "rgba(0,0,0,0.7)",
+                "rgba(0,0,0,0)",
+                "V",
+              );
+              fillRectGradient(
+                ctx,
+                curX,
+                curY + 20,
+                child.maxX + callPad - curX,
+                10,
+                "rgba(0,0,0,0.8)",
+                "rgba(0,0,0,0)",
+                "V",
+              );
+            }
+
             // draw child for real
-            renderViewchart(childViewchart, [
-              curX + callPad,
-              curY + callPad + callTopPad,
-            ]);
+            if (actuallyDraw) {
+              renderViewchart(
+                childViewchart,
+                [curX + callPad, curY + callPad + callTopPad],
+                actuallyDraw,
+              );
+            }
             curX = child.maxX + callPad;
             curY = child.maxY + callPad;
           }
         }
 
         // render stack
-        for (const [stepIdx, stepId] of stack.stepIds.entries()) {
-          const step = traceTree.steps[stepId];
-          ctx.save();
-          if (stepIdx > 0) ctx.globalAlpha = 0.6;
-          renderScene(step, add([curX, myY], v(stepIdx * 10)));
-          ctx.restore();
-          let action = flowchart.frames[step.frameId].action;
-          let label = !action
-            ? ""
-            : action.type === "test-func"
-              ? (action.label ?? "some action")
-              : action.type === "call"
-                ? `call ${action.flowchartId}`
-                : `[${action.type}]`;
-          renderOutlinedText(label + "", [curX, myY], "left");
+        if (actuallyDraw) {
+          for (const [stepIdx, stepId] of stack.stepIds.entries()) {
+            const step = traceTree.steps[stepId];
+            ctx.save();
+            if (stepIdx > 0) ctx.globalAlpha = 0.6;
+            renderScene(step, add([curX, myY], v(stepIdx * 10)));
+            ctx.restore();
+            let action = flowchart.frames[step.frameId].action;
+            let label = !action
+              ? ""
+              : action.type === "test-func"
+                ? (action.label ?? "some action")
+                : action.type === "call"
+                  ? `call ${action.flowchartId}`
+                  : `[${action.type}]`;
+            renderOutlinedText(label + "", [curX, myY], "left");
+          }
         }
         curX += sceneW + scenePadX;
 
@@ -528,6 +532,7 @@ Promise.all([
             initX,
             curY,
             viewchart,
+            actuallyDraw,
           );
 
           maxX = Math.max(maxX, child.maxX);
@@ -548,7 +553,7 @@ Promise.all([
       const stepsInStacks = putStepsInStacks(traceTree);
       const viewchart = stepsInStacksToViewchart(stepsInStacks);
       if (DEBUG()) console.log(viewchart);
-      renderViewchart(viewchart, add(pan, v(100)));
+      renderViewchart(viewchart, add(pan, v(100)), true);
 
       // renderStackAndDownstream(
       //   stepsInStacks.stackByStepId[initStepId],
@@ -566,6 +571,7 @@ Promise.all([
         [300, 300],
       );
       //render candle glow
+      // TODO: PERF this takes 10ms?
       const radialFlickerAmt = Math.random() * 12;
       const radialCenter = [c.width - 100, c.height - 150] as [number, number];
       const gradient = ctx.createRadialGradient(
