@@ -543,6 +543,8 @@ Promise.all([
         let curX = myX;
         let curY = myY;
 
+        let maxY = myY + sceneH;
+
         // render call, if any
         const { flowchartId, frameId } = stack.stackPath.final;
         const flowchart = defs.flowcharts[flowchartId];
@@ -558,6 +560,7 @@ Promise.all([
               [curX + callPad, curY + callPad + callTopPad],
               false,
             );
+            maxY = Math.max(maxY, child.maxY);
 
             if (actuallyDraw)
               renderInset(
@@ -646,6 +649,7 @@ Promise.all([
           maxX = Math.max(maxX, child.maxX);
           curY = child.maxY;
         }
+        maxY = Math.max(maxY, curY);
 
         // debug box
         if (false) {
@@ -656,7 +660,7 @@ Promise.all([
           ctx.fill();
         }
 
-        return { maxX, maxY: Math.max(curY, myY + sceneH), final };
+        return { maxX, maxY, final };
       };
       const stepsInStacks = putStepsInStacks(traceTree);
       const viewchart = stepsInStacksToViewchart(stepsInStacks);
