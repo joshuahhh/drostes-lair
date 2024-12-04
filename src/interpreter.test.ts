@@ -1,5 +1,12 @@
 import { expect, test } from "vitest";
-import { Flowchart, runHelper, scenesByFrame } from "./interpreter";
+import {
+  Flowchart,
+  Viewchart,
+  runHelper,
+  scenesByFrame,
+  traceTreeToViewchart,
+} from "./interpreter";
+import { twoCallsInARowFlowcharts } from "./interpreter.ex";
 import { indexById } from "./util";
 
 test("runAll works with a simple flowchart", () => {
@@ -466,55 +473,7 @@ test("runAll works with a single call", () => {
 });
 
 test("runAll works with two calls in a row", () => {
-  const { traceTree, flowchart } = runHelper(
-    [
-      {
-        id: "fc1",
-        initialFrameId: "1",
-        frames: indexById([
-          { id: "1" },
-          {
-            id: "2",
-            action: {
-              type: "call",
-              flowchartId: "fc2",
-            },
-          },
-          {
-            id: "3",
-            action: {
-              type: "call",
-              flowchartId: "fc2",
-            },
-          },
-        ]),
-        arrows: [
-          { from: "1", to: "2" },
-          { from: "2", to: "3" },
-        ],
-      },
-      {
-        id: "fc2",
-        initialFrameId: "1",
-        frames: indexById([
-          { id: "1" },
-          {
-            id: "2",
-            action: {
-              type: "test-func",
-              func: ({ value: x }) => [
-                {
-                  value: x + 10,
-                },
-              ],
-            },
-          },
-        ]),
-        arrows: [{ from: "1", to: "2" }],
-      },
-    ],
-    3,
-  );
+  const { traceTree, flowchart } = runHelper(twoCallsInARowFlowcharts, 3);
   expect(traceTree).toMatchInlineSnapshot(`
     {
       "finalStepIds": [
@@ -719,4 +678,86 @@ test("runAll works with test-cond", () => {
       },
     }
   `);
+});
+
+test("traceTreeToViewchart works with two calls in a row", () => {
+  const { traceTree } = runHelper(twoCallsInARowFlowcharts, 3);
+  const viewchart = traceTreeToViewchart(traceTree);
+  expect(viewchart).toEqual({
+    flowchartId: "fc1",
+    stackByFrameId: {
+      "1": {
+        stackPath: {
+          callPath: [],
+          final: { flowchartId: "fc1", frameId: "1" },
+        },
+        stepIds: ["*"],
+      },
+      "2": {
+        stackPath: {
+          callPath: [],
+          final: { flowchartId: "fc1", frameId: "2" },
+        },
+        stepIds: ["*→2↓fc2→2↑fc1→2"],
+      },
+      "3": {
+        stackPath: {
+          callPath: [],
+          final: { flowchartId: "fc1", frameId: "3" },
+        },
+        stepIds: ["*→2↓fc2→2↑fc1→2→3↓fc2→2↑fc1→3"],
+      },
+    },
+    callViewchartsByFrameId: {
+      "2": {
+        flowchartId: "fc2",
+        stackByFrameId: {
+          "1": {
+            stackPath: {
+              callPath: [{ flowchartId: "fc1", frameId: "2" }],
+              final: { flowchartId: "fc2", frameId: "1" },
+            },
+            stepIds: ["*→2↓fc2"],
+          },
+          "2": {
+            stackPath: {
+              callPath: [{ flowchartId: "fc1", frameId: "2" }],
+              final: { flowchartId: "fc2", frameId: "2" },
+            },
+            stepIds: ["*→2↓fc2→2"],
+          },
+        },
+        callViewchartsByFrameId: {},
+      },
+      "3": {
+        flowchartId: "fc2",
+        stackByFrameId: {
+          "1": {
+            stackPath: {
+              callPath: [{ flowchartId: "fc1", frameId: "3" }],
+              final: { flowchartId: "fc2", frameId: "1" },
+            },
+            stepIds: ["*→2↓fc2→2↑fc1→2→3↓fc2"],
+          },
+          "2": {
+            stackPath: {
+              callPath: [{ flowchartId: "fc1", frameId: "3" }],
+              final: { flowchartId: "fc2", frameId: "2" },
+            },
+            stepIds: ["*→2↓fc2→2↑fc1→2→3↓fc2→2"],
+          },
+        },
+        callViewchartsByFrameId: {},
+      },
+    },
+  });
+  function countStacks(viewchart: Viewchart) {
+    let count = Object.values(viewchart.stackByFrameId).length;
+    for (const frameId in viewchart.callViewchartsByFrameId) {
+      count += countStacks(viewchart.callViewchartsByFrameId[frameId]);
+    }
+    return count;
+  }
+  // this works cuz there's no ambing
+  expect(countStacks(viewchart)).toBe(Object.values(traceTree.steps).length);
 });

@@ -394,30 +394,27 @@ export function scenesByFrame(
 }
 
 /**
- * A frame in the UI is identified by a "frame path" – describing in
- * static terms the sequence of calls that led to it, from top to
- * bottom. It's expected that every frame here besides the last is a
- * call.
+ * A StackPath corresponds to a stack in the UI. `callPath` is a
+ * containment path thru nested call boxes, and `final` identifies
+ * where the stack is within the innermost call box.
  */
-export type Segment = {
+export type StackPath = {
+  callPath: StackPathSegment[];
+  final: StackPathSegment;
+};
+export type StackPathSegment = {
   flowchartId: string;
   frameId: string;
-};
-// from the UI perspective, callPath is a containment path thru nested call boxes,
-// along with a segment that identifies where the stack is within the call
-export type StackPath = {
-  callPath: Segment[];
-  final: Segment;
 };
 
 export function stackPathToString(stackPath: StackPath) {
   return JSON.stringify(stackPath);
 }
-export function callPathToString(callPath: Segment[]) {
+export function callPathToString(callPath: StackPathSegment[]) {
   return JSON.stringify(callPath);
 }
 export function stackPathForStep(step: Step, traceTree: TraceTree): StackPath {
-  let callPath: Segment[];
+  let callPath: StackPathSegment[];
   if (step.caller) {
     const fakeCallerStep = {
       ...traceTree.steps[step.caller.prevStepId],
@@ -585,26 +582,22 @@ export function getNextStacks(
   );
 }
 
-type Viewchart = {
-  flowchart: Flowchart;
+export type Viewchart = {
+  flowchartId: string;
   stackByFrameId: Record<string, Stack>;
   callViewchartsByFrameId: Record<string, Viewchart>;
 };
 
-export function nestifyTraceTree(traceTree: TraceTree): Viewchart {
+export function traceTreeToViewchart(traceTree: TraceTree): Viewchart {
   const stacks = putStepsInStacks(traceTree);
-
-  const stackByFrameId: Record<string, Stack> = {};
-  for (const stack of Object.values(stacks.stackByStepId))
-    if (stack.stackPath.length === 1)
-      stackByFrameId[stack.stackPath.final.frameId] = stack;
-
-  nestifyTraceTreeHelper;
+  return traceTreeToViewchartHelper([], stacks);
 }
-function nestifyTraceTreeHelper(
-  callPath: Segment[],
+
+function traceTreeToViewchartHelper(
+  callPath: StackPathSegment[],
   stacks: StepsInStacks,
 ): Viewchart {
+  let flowchartId: string | undefined = undefined;
   const stackByFrameId: Record<string, Stack> = {};
   const callViewchartsByFrameId: Record<string, Viewchart> = {};
   const callFrameIds = new Set<string>();
@@ -612,8 +605,11 @@ function nestifyTraceTreeHelper(
     const isStackAtCallPath =
       callPathToString(stack.stackPath.callPath) === callPathToString(callPath);
 
-    if (isStackAtCallPath)
+    if (isStackAtCallPath) {
       stackByFrameId[stack.stackPath.final.frameId] = stack;
+      // TODO hacky
+      flowchartId = stack.stackPath.final.flowchartId;
+    }
 
     // callPath is a prefix of stack.stackPath.callPath
     const isStackDeeperThanCallPath = callPath.every(
@@ -624,7 +620,16 @@ function nestifyTraceTreeHelper(
       callFrameIds.add(stack.stackPath.callPath[callPath.length].frameId);
     }
   }
-  for (const frameIds of callFrameIds) {
-    //nestifyTraceTreeHelper()
+  if (!flowchartId) {
+    throw new Error("No flowchartId?");
   }
+  for (const frameId of callFrameIds) {
+    const nextCallPath = [...callPath, { flowchartId, frameId }];
+    callViewchartsByFrameId[frameId] = traceTreeToViewchartHelper(
+      nextCallPath,
+      stacks,
+    );
+  }
+
+  return { flowchartId, stackByFrameId, callViewchartsByFrameId };
 }
