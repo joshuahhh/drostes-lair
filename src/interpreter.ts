@@ -519,7 +519,7 @@ export function getNextSteps(step: Step, traceTree: TraceTree) {
  */
 export type Stack = {
   stackPath: StackPath;
-  steps: Step[];
+  stepIds: string[];
 };
 export type StepsInStacks = {
   stackByStepId: {
@@ -536,9 +536,9 @@ export function putStepsInStacks(tree: TraceTree): StepsInStacks {
     const stackPathStr = stackPathToString(stackPath);
     let stack = stacks[stackPathStr];
     if (!stack) {
-      stack = stacks[stackPathStr] = { stackPath, steps: [] };
+      stack = stacks[stackPathStr] = { stackPath, stepIds: [] };
     }
-    stack.steps.push(step);
+    stack.stepIds.push(step.id);
     stackByStepId[step.id] = stack;
   }
 
@@ -548,14 +548,16 @@ export function putStepsInStacks(tree: TraceTree): StepsInStacks {
 export function getPrevStacks(
   stack: Stack,
   stepsInStacks: StepsInStacks,
+  traceTree: TraceTree,
 ): Stack[] {
   const { stackByStepId } = stepsInStacks;
 
   return Array.from(
     new Set(
-      stack.steps.flatMap((step) =>
-        step.prevStepId ? [stackByStepId[step.prevStepId]] : [],
-      ),
+      stack.stepIds.flatMap((step) => {
+        const prevStep = traceTree.steps[step].prevStepId;
+        return prevStep ? [stackByStepId[prevStep]] : [];
+      }),
     ),
   );
 }
@@ -567,12 +569,13 @@ export function getNextStacks(
 ): Stack[] {
   const { stackByStepId } = stepsInStacks;
 
-  const nextStacks: Set<Stack> = new Set();
-  stack.steps.forEach((step) => {
-    for (const nextStep of getNextSteps(step, traceTree)) {
-      nextStacks.add(stackByStepId[nextStep.id]);
-    }
-  });
-
-  return Array.from(nextStacks);
+  return Array.from(
+    new Set(
+      stack.stepIds.flatMap((stepId) =>
+        getNextSteps(traceTree.steps[stepId], traceTree).map(
+          (nextStep) => stackByStepId[nextStep.id],
+        ),
+      ),
+    ),
+  );
 }

@@ -321,7 +321,7 @@ Promise.all([
         myY: number,
         xFromStack: Map<Stack, number> = new Map(),
       ): number => {
-        const prevStacks = getPrevStacks(stack, stepsInStacks);
+        const prevStacks = getPrevStacks(stack, stepsInStacks, traceTree);
         const prevStackXs = prevStacks.map((stack) => xFromStack.get(stack));
         if (!prevStackXs.every((x) => x !== undefined)) return 0;
 
@@ -331,7 +331,8 @@ Promise.all([
         xFromStack.set(stack, myX);
 
         let rowIdx = 0;
-        for (const [stepIdx, step] of stack.steps.entries()) {
+        for (const [stepIdx, stepId] of stack.stepIds.entries()) {
+          const step = traceTree.steps[stepId];
           ctx.save();
           if (stepIdx > 0) ctx.globalAlpha = 0.6;
           renderScene(step, add(myPos, v(stepIdx * 10)));
