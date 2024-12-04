@@ -217,9 +217,11 @@ Promise.all([
       const isOutlined = traceTree.finalStepIds.includes(step.id);
 
       if (isOutlined) {
+        ctx.shadowColor = "white";
+        ctx.shadowBlur = 10;
         ctx.beginPath();
-        ctx.lineWidth = 10;
-        ctx.strokeStyle = "purple";
+        ctx.lineWidth = 4;
+        ctx.strokeStyle = "white";
         ctx.rect(...pos, sceneW, sceneH);
         ctx.stroke();
       }
