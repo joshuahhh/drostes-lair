@@ -312,14 +312,14 @@ Promise.all([
       // render trace
       const scenePadX = 20;
       const scenePadY = 40;
+      const xFromStack = new Map<Stack, number>();
       /**
        * returns... something?
        */
-      const renderTrace = (
+      const renderStackAndDownstream = (
         stack: Stack,
         initX: number,
         myY: number,
-        xFromStack: Map<Stack, number> = new Map(),
       ): number => {
         const prevStacks = getPrevStacks(stack, stepsInStacks, traceTree);
         const prevStackXs = prevStacks.map((stack) => xFromStack.get(stack));
@@ -365,11 +365,10 @@ Promise.all([
               ctx.lineWidth = 2;
               ctx.stroke();
             }
-            const v = renderTrace(
+            const v = renderStackAndDownstream(
               nextStack,
               initX,
               myY + rowIdx * (sceneH + scenePadY),
-              xFromStack,
             );
             // renderOutlinedText(v + "", [
             //   myX + sceneW + scenePad,
@@ -382,7 +381,7 @@ Promise.all([
       };
       const stepsInStacks = putStepsInStacks(traceTree);
       const { stackByStepId } = stepsInStacks;
-      renderTrace(stackByStepId[initStepId], ...add(pan, v(100)));
+      renderStackAndDownstream(stackByStepId[initStepId], ...add(pan, v(100)));
 
       // render candle
       renderSpriteSheet(
