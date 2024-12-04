@@ -419,6 +419,11 @@
   dependencies:
     undici-types "~6.20.0"
 
+"@types/seedrandom@^3.0.8":
+  version "3.0.8"
+  resolved "https://registry.yarnpkg.com/@types/seedrandom/-/seedrandom-3.0.8.tgz#61cc8ed88f93a3c31289c295e6df8ca40be42bdf"
+  integrity sha512-TY1eezMU2zH2ozQoAFAQFOPpvP15g+ZgSfTZt31AUUH/Rxtnz3H+A/Sv1Snw2/amp//omibc+AEkTaA8KUeOLQ==
+
 "@vitest/expect@2.1.6":
   version "2.1.6"
   resolved "https://registry.yarnpkg.com/@vitest/expect/-/expect-2.1.6.tgz#5a334eb9ee9287292fbe961955cafb06f7af7da6"
@@ -890,6 +895,11 @@ rollup@^4.23.0:
     "@rollup/rollup-win32-ia32-msvc" "4.27.4"
     "@rollup/rollup-win32-x64-msvc" "4.27.4"
     fsevents "~2.3.2"
+
+seedrandom@^3.0.5:
+  version "3.0.5"
+  resolved "https://registry.yarnpkg.com/seedrandom/-/seedrandom-3.0.5.tgz#54edc85c95222525b0c7a6f6b3543d8e0b3aa0a7"
+  integrity sha512-8OwmbklUNzwezjGInmZ+2clQmExQPvomqjL7LFqOYqtmuxRgQYqOD3mHaU+MvZn5FLUeVxVfQjwLZW/n/JFuqg==
 
 set-function-length@^1.2.1:
   version "1.2.2"

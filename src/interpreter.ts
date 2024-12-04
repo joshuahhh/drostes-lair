@@ -360,7 +360,7 @@ export function runHelper(flowcharts: Flowchart[], value: any) {
     }
     throw e;
   }
-  return { traceTree, flowchart, initStepId: initStep.id, defs };
+  return { traceTree, initStepId: initStep.id, defs };
 }
 
 export function getFinalValues(traceTree: TraceTree): any[] {
@@ -509,6 +509,24 @@ function topLevelValueForCall(
   }
 }
 
+export function getNextFrameIds(frameId: string, flowchart: Flowchart) {
+  // TODO: what about special arrows?
+  return flowchart.arrows
+    .filter(({ from }) => from === frameId)
+    .map(({ to }) => to);
+}
+
+export function getPrevFrameIds(frameId: string, flowchart: Flowchart) {
+  // TODO: what about special arrows?
+  return flowchart.arrows
+    .filter(({ to }) => to === frameId)
+    .map(({ from }) => from);
+}
+
+export function stringifyEqual<T>(a: T, b: T) {
+  return JSON.stringify(a) === JSON.stringify(b);
+}
+
 export function getNextSteps(step: Step, traceTree: TraceTree) {
   return Object.values(traceTree.steps).filter(
     ({ prevStepId }) => prevStepId === step.id,
@@ -524,6 +542,9 @@ export type Stack = {
   stepIds: string[];
 };
 export type StepsInStacks = {
+  stacks: {
+    [stackPathStr: string]: Stack;
+  };
   stackByStepId: {
     [stepId: string]: Stack;
   };
@@ -544,7 +565,14 @@ export function putStepsInStacks(tree: TraceTree): StepsInStacks {
     stackByStepId[step.id] = stack;
   }
 
-  return { stackByStepId };
+  return { stacks, stackByStepId };
+}
+
+export function getStackByPath(
+  stackPath: StackPath,
+  stepsInStacks: StepsInStacks,
+): Stack {
+  return stepsInStacks.stacks[stackPathToString(stackPath)];
 }
 
 export function getPrevStacks(
@@ -556,9 +584,9 @@ export function getPrevStacks(
 
   return Array.from(
     new Set(
-      stack.stepIds.flatMap((step) => {
-        const prevStep = traceTree.steps[step].prevStepId;
-        return prevStep ? [stackByStepId[prevStep]] : [];
+      stack.stepIds.flatMap((stepId) => {
+        const prevStepId = traceTree.steps[stepId].prevStepId;
+        return prevStepId ? [stackByStepId[prevStepId]] : [];
       }),
     ),
   );
@@ -582,15 +610,60 @@ export function getNextStacks(
   );
 }
 
+export function getNextStacksInLevel(
+  stack: Stack,
+  stepsInStacks: StepsInStacks,
+  defs: Definitions,
+): Stack[] {
+  const { frameId, flowchartId } = stack.stackPath.final;
+  const nextFrameIds = getNextFrameIds(frameId, defs.flowcharts[flowchartId]);
+  return nextFrameIds.flatMap((nextFrameId) => {
+    const nextStackPath = {
+      callPath: stack.stackPath.callPath,
+      final: { flowchartId, frameId: nextFrameId },
+    };
+    return getStackByPath(nextStackPath, stepsInStacks) ?? [];
+  });
+}
+
+export function getPrevStacksInLevel(
+  stack: Stack,
+  stepsInStacks: StepsInStacks,
+  defs: Definitions,
+): Stack[] {
+  const { frameId, flowchartId } = stack.stackPath.final;
+  const prevFrameIds = getPrevFrameIds(frameId, defs.flowcharts[flowchartId]);
+  return prevFrameIds.map((prevFrameId) => {
+    const prevStackPath = {
+      callPath: stack.stackPath.callPath,
+      final: { flowchartId, frameId: prevFrameId },
+    };
+    return getStackByPath(prevStackPath, stepsInStacks);
+  });
+}
+
 export type Viewchart = {
   flowchartId: string;
   stackByFrameId: Record<string, Stack>;
   callViewchartsByFrameId: Record<string, Viewchart>;
+  /* just for debugging, I think */
+  callPath: StackPathSegment[];
 };
 
-export function traceTreeToViewchart(traceTree: TraceTree): Viewchart {
-  const stacks = putStepsInStacks(traceTree);
-  return traceTreeToViewchartHelper([], stacks);
+// in the UI, we use reference equality on stacks, so we don't want
+// to run putStepsInStacks every time. for that reason, this is a
+// dangerous function. (ideally, I guess we wouldn't use reference
+// equality in the UI)
+
+// export function traceTreeToViewchart(traceTree: TraceTree): Viewchart {
+//   const stacks = putStepsInStacks(traceTree);
+//   return traceTreeToViewchartHelper([], stacks);
+// }
+
+export function stepsInStacksToViewchart(
+  stepsInStacks: StepsInStacks,
+): Viewchart {
+  return traceTreeToViewchartHelper([], stepsInStacks);
 }
 
 function traceTreeToViewchartHelper(
@@ -631,5 +704,5 @@ function traceTreeToViewchartHelper(
     );
   }
 
-  return { flowchartId, stackByFrameId, callViewchartsByFrameId };
+  return { flowchartId, stackByFrameId, callViewchartsByFrameId, callPath };
 }

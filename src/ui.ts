@@ -1,18 +1,26 @@
+import seedrandom from "seedrandom";
 import { dominoFlowchart } from "./dominoes.ex";
 import {
   Action,
   Flowchart,
   Stack,
   Step,
-  getNextStacks,
-  getPrevStacks,
+  Viewchart,
+  getNextStacksInLevel,
+  getPrevStacksInLevel,
   putStepsInStacks,
   runHelper,
   stackPathForStep,
+  stepsInStacksToViewchart,
   topLevelValueForStep,
 } from "./interpreter";
-import { loadImg } from "./ui_util";
+import { fillRect, fillRectGradient, loadImg } from "./ui_util";
 import { add, v } from "./vec2";
+
+(window as any).DEBUG = true;
+function DEBUG() {
+  return (window as any).DEBUG;
+}
 
 const c = document.getElementById("c") as HTMLCanvasElement;
 const cContainer = document.getElementById("c-container") as HTMLDivElement;
@@ -45,11 +53,8 @@ const initialValue = {
   height: 2,
   dominoes: [],
 };
-const { traceTree, flowchart, initStepId, defs } = runHelper(
-  [myFlowchart],
-  initialValue,
-);
-console.log(traceTree);
+const { traceTree, defs } = runHelper([myFlowchart], initialValue);
+console.log("traceTree", traceTree);
 
 const strokeMultiline = (
   txt: string,
@@ -312,30 +317,184 @@ Promise.all([
       // render trace
       const scenePadX = 20;
       const scenePadY = 40;
+      const callPad = 20;
+      const callTopPad = 20;
       const xFromStack = new Map<Stack, number>();
+
+      const renderViewchart = (
+        viewchart: Viewchart,
+        topLeft: [number, number],
+      ): {
+        maxX: number;
+        maxY: number;
+      } => {
+        if (DEBUG())
+          console.log("renderViewchart", JSON.stringify(viewchart.callPath));
+        const flowchart = defs.flowcharts[viewchart.flowchartId];
+        const initialStack = viewchart.stackByFrameId[flowchart.initialFrameId];
+        if (DEBUG())
+          console.log("initialStack", JSON.stringify(initialStack.stackPath));
+        return renderStackAndDownstream(initialStack, ...topLeft, viewchart);
+      };
+
       /**
-       * returns vertical space used
+       * returns maximum X & Y values reached
        */
       const renderStackAndDownstream = (
         stack: Stack,
+        /* initial x-position – only used for the starting stack. other fellas consult xFromStack */
         initX: number,
         myY: number,
-      ): number => {
-        const prevStacks = getPrevStacks(stack, stepsInStacks, traceTree);
+        viewchart: Viewchart,
+      ): {
+        maxX: number;
+        maxY: number;
+      } => {
+        if (DEBUG()) console.log("renderStackAndDownstream", stack.stackPath);
+
+        // const prevStacks = getPrevStacks(stack, stepsInStacks, traceTree);
+        const prevStacks = getPrevStacksInLevel(stack, stepsInStacks, defs);
         const prevStackXs = prevStacks.map((stack) => xFromStack.get(stack));
-        if (!prevStackXs.every((x) => x !== undefined)) return 0;
+        if (!prevStackXs.every((x) => x !== undefined))
+          return { maxX: -Infinity, maxY: -Infinity };
 
-        const myX = Math.max(initX, ...prevStackXs) + sceneW + scenePadX;
-        const myPos = [myX, myY] as [number, number];
-
+        const myX = Math.max(
+          initX,
+          Math.max(...prevStackXs) + sceneW + scenePadX,
+        );
         xFromStack.set(stack, myX);
+
+        let curX = myX;
+        let curY = myY;
+
+        // render call, if any
+        const { flowchartId, frameId } = stack.stackPath.final;
+        const flowchart = defs.flowcharts[flowchartId];
+        const frame = flowchart.frames[frameId];
+        if (frame.action?.type === "call") {
+          const childViewchart = viewchart.callViewchartsByFrameId[frameId] as
+            | Viewchart
+            | undefined;
+          if (DEBUG())
+            console.log(
+              "childViewchart",
+              JSON.stringify(childViewchart?.callPath),
+              JSON.stringify(viewchart.callPath),
+            );
+          if (childViewchart) {
+            // measure child (will be overdrawn)
+            const child = renderViewchart(childViewchart, [
+              curX + callPad,
+              curY + callPad + callTopPad,
+            ]);
+            // stroked border
+            // ctx.beginPath();
+            // ctx.rect(
+            //   curX,
+            //   curY,
+            //   child.maxX + callPad - curX,
+            //   child.maxY + callPad - curY,
+            // );
+            // ctx.fillStyle = "rgba(0,0,0,0.4)";
+            // ctx.strokeStyle = "black";
+            // ctx.lineWidth = 2;
+            // ctx.stroke();
+            // patterned fill
+            const pattern = ctx.createPattern(img2, "repeat")!;
+            ctx.fillStyle = pattern;
+            const rng = seedrandom(JSON.stringify(childViewchart.callPath));
+            pattern.setTransform(
+              new DOMMatrix().translate(
+                ...add(pan, [rng() * 1000, rng() * 1000]),
+                100,
+              ),
+            );
+            ctx.fillRect(
+              curX,
+              curY + callTopPad,
+              child.maxX + callPad - curX,
+              child.maxY + callPad - curY - callTopPad,
+            );
+            // shadows (via gradients inset from the edges)
+            // left
+            fillRectGradient(
+              ctx,
+              curX,
+              curY + 10,
+              15,
+              child.maxY + callPad - curY - 10,
+              "rgba(0,0,0,0.7)",
+              "rgba(0,0,0,0)",
+              "H",
+            );
+            // right
+            fillRectGradient(
+              ctx,
+              child.maxX + callPad,
+              curY + 10,
+              -15,
+              child.maxY + callPad - curY - 10,
+              "rgba(0,0,0,0.7)",
+              "rgba(0,0,0,0)",
+              "H",
+            );
+            // bottom
+            fillRectGradient(
+              ctx,
+              curX,
+              child.maxY + callPad,
+              child.maxX + callPad - curX,
+              -15,
+              "rgba(0,0,0,0.7)",
+              "rgba(0,0,0,0)",
+              "V",
+            );
+            // top
+            fillRect(
+              ctx,
+              curX,
+              curY,
+              child.maxX + callPad - curX,
+              20,
+              "rgba(0,0,0,0.4)",
+            );
+            fillRectGradient(
+              ctx,
+              curX,
+              curY + 20,
+              child.maxX + callPad - curX,
+              -10,
+              "rgba(0,0,0,0.7)",
+              "rgba(0,0,0,0)",
+              "V",
+            );
+            fillRectGradient(
+              ctx,
+              curX,
+              curY + 20,
+              child.maxX + callPad - curX,
+              10,
+              "rgba(0,0,0,0.8)",
+              "rgba(0,0,0,0)",
+              "V",
+            );
+
+            // draw child for real
+            renderViewchart(childViewchart, [
+              curX + callPad,
+              curY + callPad + callTopPad,
+            ]);
+            curX = child.maxX + callPad;
+            curY = child.maxY + callPad;
+          }
+        }
 
         // render stack
         for (const [stepIdx, stepId] of stack.stepIds.entries()) {
           const step = traceTree.steps[stepId];
           ctx.save();
           if (stepIdx > 0) ctx.globalAlpha = 0.6;
-          renderScene(step, add(myPos, v(stepIdx * 10)));
+          renderScene(step, add([curX, myY], v(stepIdx * 10)));
           ctx.restore();
           let action = flowchart.frames[step.frameId].action;
           let label = !action
@@ -345,31 +504,56 @@ Promise.all([
               : action.type === "call"
                 ? `call ${action.flowchartId}`
                 : `[${action.type}]`;
-          renderOutlinedText(label + "", [myX, myY], "left");
+          renderOutlinedText(label + "", [curX, myY], "left");
         }
+        curX += sceneW + scenePadX;
 
         // render downstream
-        let y = 0;
-        const nextStacks = getNextStacks(stack, stepsInStacks, traceTree);
-        for (const nextStack of nextStacks) {
+        let maxX = curX;
+        const nextStacks = getNextStacksInLevel(stack, stepsInStacks, defs);
+        for (const [i, nextStack] of nextStacks.entries()) {
+          if (i > 0) curY += scenePadY;
+
           if (nextStacks.length > 1) {
             // draw connector line
             ctx.beginPath();
             ctx.moveTo(myX + sceneW, myY + sceneH / 2);
-            ctx.lineTo(myX + sceneW + scenePadX, myY + y + sceneH / 2);
+            ctx.lineTo(myX + sceneW + scenePadX, curY + sceneH / 2);
             ctx.strokeStyle = "yellow";
             ctx.lineWidth = 2;
             ctx.stroke();
           }
-          y += renderStackAndDownstream(nextStack, initX, myY + y);
+          const child = renderStackAndDownstream(
+            nextStack,
+            initX,
+            curY,
+            viewchart,
+          );
+
+          maxX = Math.max(maxX, child.maxX);
+          curY = child.maxY;
         }
 
-        // consider space taken up by stack & space taken up by downstream
-        return Math.max(sceneH + scenePadY, y);
+        // debug box
+        if (false) {
+          ctx.beginPath();
+          ctx.rect(myX, myY, maxX - myX, curY - myY);
+          ctx.fillStyle = "rgba(255,0,0,0.2)";
+          // ctx.lineWidth = 2;
+          ctx.fill();
+        }
+
+        return { maxX, maxY: Math.max(curY, myY + sceneH) };
       };
       const stepsInStacks = putStepsInStacks(traceTree);
-      const { stackByStepId } = stepsInStacks;
-      renderStackAndDownstream(stackByStepId[initStepId], ...add(pan, v(100)));
+      const viewchart = stepsInStacksToViewchart(stepsInStacks);
+      if (DEBUG()) console.log(viewchart);
+      renderViewchart(viewchart, add(pan, v(100)));
+
+      // renderStackAndDownstream(
+      //   stepsInStacks.stackByStepId[initStepId],
+      //   ...add(pan, v(100)),
+      // );
 
       // render candle
       renderSpriteSheet(
@@ -405,6 +589,8 @@ Promise.all([
       }
 
       t = incCandleTime(t);
+
+      (window as any).DEBUG = false;
     }
   },
 );
