@@ -1,4 +1,4 @@
-import * as seedrandom from "seedrandom";
+import seedrandom from "seedrandom";
 import { appendFrameAfter } from "./edits";
 import {
   Action,
@@ -504,7 +504,6 @@ Promise.all([
           initX,
           Math.max(...prevStackXs) + sceneW + scenePadX,
         );
-        xFromStack.set(stack, myX);
 
         let curX = myX;
         let curY = myY;
@@ -547,11 +546,11 @@ Promise.all([
               );
             }
             curX = child.maxX + callPad;
-            curY = child.maxY + callPad;
           }
         }
 
         // render stack
+        xFromStack.set(stack, curX);
         if (actuallyDraw) {
           drawQueue.push(() => {
             for (const [stepIdx, stepId] of stack.stepIds.entries()) {
@@ -596,8 +595,8 @@ Promise.all([
 
           // draw connector line
 
-          const start = [myX + sceneW, myY + sceneH / 2] as Vec2;
-          const end = [myX + sceneW + scenePadX, curY + sceneH / 2] as Vec2;
+          const start = [curX + sceneW, myY + sceneH / 2] as Vec2;
+          const end = [curX + sceneW + scenePadX, curY + sceneH / 2] as Vec2;
           renderConnectorLine(start, end);
 
           const child = renderStackAndDownstream(
