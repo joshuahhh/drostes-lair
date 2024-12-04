@@ -7,6 +7,21 @@ export const loadImg = (url: string): Promise<HTMLImageElement> =>
     img.onerror = reject;
   });
 
+export const loadAudio = async (
+  url: string,
+): Promise<AudioBufferSourceNode> => {
+  const context = new AudioContext();
+  const source = context.createBufferSource();
+  const audioBuffer = await fetch(url)
+    .then((res) => res.arrayBuffer())
+    .then((ArrayBuffer) => context.decodeAudioData(ArrayBuffer));
+
+  source.buffer = audioBuffer;
+  source.connect(context.destination);
+
+  return source;
+};
+
 export const fillRect = (
   ctx: CanvasRenderingContext2D,
   x: number,
