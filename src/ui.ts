@@ -265,17 +265,18 @@ Promise.all([
 
       const renderConnectorLine = (start: Vec2, end: Vec2) => {
         const middleX = start[0] + (end[0] - start[0]) / 2;
-        const paddedEndX = end[0] - sceneW / 2;
+        const paddedEndX = end[0] - 25;
         const jointX = Math.max(middleX, paddedEndX);
         ctx.save();
         ctx.beginPath();
-        ctx.globalCompositeOperation = "darken";
+        ctx.globalAlpha = 0.3;
+        ctx.globalCompositeOperation = "multiply";
         ctx.moveTo(...start);
         ctx.lineTo(...[jointX, start[1]]);
         ctx.lineTo(...[jointX, end[1]]);
         ctx.lineTo(...end);
-        ctx.strokeStyle = "rgb(170, 33, 37)";
-        ctx.lineWidth = 70;
+        ctx.strokeStyle = "rgb(170, 3, 37)";
+        ctx.lineWidth = 50;
         ctx.stroke();
         ctx.restore();
       };
@@ -304,7 +305,6 @@ Promise.all([
           actuallyDraw,
         );
 
-        ctx.fillStyle = "blue";
         for (const v of r.final) {
           renderConnectorLine(add(v, [sceneW, sceneH / 2]), [
             r.maxX,
