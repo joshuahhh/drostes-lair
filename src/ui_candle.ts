@@ -58,16 +58,22 @@ export const makeCandleRenderer = (
     //render candle glow
 
     // render spooky text
-    ctx.save();
-    ctx.rotate(Math.random() / 500);
-    ctx.globalAlpha = 0.12 + Math.random() / 40;
-    renderOutlinedText(
-      `I've asked the device to do a terrible thing...`,
-      [400, 30],
-    );
-    renderOutlinedText(`Oh God, what have I computed?`, [590, 230]);
-    renderOutlinedText(`Neither God nor Computer can save me now`, [300, 770]);
-    ctx.restore();
+    // TODO: it's gotta be attached to something, right?
+    if (false) {
+      ctx.save();
+      ctx.rotate(Math.random() / 500);
+      ctx.globalAlpha = 0.12 + Math.random() / 40;
+      renderOutlinedText(
+        `I've asked the device to do a terrible thing...`,
+        [400, 30],
+      );
+      renderOutlinedText(`Oh God, what have I computed?`, [590, 230]);
+      renderOutlinedText(
+        `Neither God nor Computer can save me now`,
+        [300, 770],
+      );
+      ctx.restore();
+    }
 
     // TODO: PERF this takes 10ms?
     const radialFlickerAmt = Math.random() * 12;

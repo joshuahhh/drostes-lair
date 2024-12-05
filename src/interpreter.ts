@@ -16,6 +16,9 @@ export type Frame = {
 
 export type Action =
   | {
+      type: "start";
+    }
+  | {
       // this one won't be used in the real deal; we'll want to have
       // better ways than opaque functions to specify & show actions
       type: "test-func";
@@ -221,10 +224,27 @@ function performAction(
 ): void {
   const { flowchartId, scene, caller } = step;
 
-  if (!action || action.type === "test-func") {
-    let nextScenes;
+  function proceedWith(nextScenes: Scene[]) {
+    let i = 0;
+    for (const nextScene of nextScenes) {
+      const nextStep: Step = {
+        id: `${step.id}→${frameId}${nextScenes.length > 1 ? `[${i++}]` : ""}`,
+        prevStepId: step.id,
+        flowchartId,
+        frameId,
+        scene: nextScene,
+        caller,
+      };
+      runAll(nextStep, defs, traceTreeOut);
+    }
+  }
+
+  if (!action || action.type === "start") {
+    proceedWith([scene]);
+  } else if (action.type === "test-func") {
+    let nextScenes: Scene[];
     try {
-      nextScenes = action ? action.func(scene) : [scene];
+      nextScenes = action.func(scene);
     } catch (e) {
       if (action && action.failureFrameId) {
         const nextStep: Step = {
@@ -243,21 +263,9 @@ function performAction(
         return;
       }
     }
-    let i = 0;
-    for (const nextScene of nextScenes) {
-      const nextStep: Step = {
-        id: `${step.id}→${frameId}${nextScenes.length > 1 ? `[${i++}]` : ""}`,
-        prevStepId: step.id,
-        flowchartId,
-        frameId,
-        scene: nextScene,
-        caller,
-      };
-      runAll(nextStep, defs, traceTreeOut);
-    }
-    return;
-  }
-  if (action.type === "place-domino") {
+    proceedWith(nextScenes);
+  } else if (action.type === "place-domino") {
+    const { domino } = action;
     performAction(
       step,
       frameId,
@@ -265,8 +273,17 @@ function performAction(
         type: "test-func",
         label: "place domino",
         func: ({ value }) => {
-          if (value.width < 1) {
-            throw new Error("width must be at least 1");
+          if (
+            domino[0][0] < 0 ||
+            domino[0][1] < 0 ||
+            domino[1][0] < 0 ||
+            domino[1][1] < 0 ||
+            domino[0][0] >= value.width ||
+            domino[0][1] >= value.height ||
+            domino[1][0] >= value.width ||
+            domino[1][1] >= value.height
+          ) {
+            throw new Error("domino out of bounds");
           }
           return [
             {
@@ -282,9 +299,7 @@ function performAction(
       defs,
       traceTreeOut,
     );
-    return;
-  }
-  if (action.type === "call") {
+  } else if (action.type === "call") {
     // time to step into the call
     const nextFlowchart = defs.flowcharts[action.flowchartId];
     if (!nextFlowchart) {
@@ -313,14 +328,12 @@ function performAction(
       },
     };
     runAll(nextStep, defs, traceTreeOut);
-    return;
-  }
-  if (action.type === "test-cond") {
+  } else if (action.type === "test-cond") {
     const nextAction = action.func(scene) ? action.then : action.else;
     performAction(step, frameId, nextAction, defs, traceTreeOut);
-    return;
+  } else {
+    assertNever(action);
   }
-  assertNever(action);
 }
 
 const lenses: Record<string, LensImpl> = {
@@ -329,7 +342,9 @@ const lenses: Record<string, LensImpl> = {
       const width = value.width - lens.dx;
       const height = value.height - lens.dy;
       if (width < 0 || height < 0) {
-        throw new Error("Lens out of bounds");
+        throw new Error(
+          `domino lens out of bounds: asked for (${lens.dx}, ${lens.dy}) in ${value.width}x${value.height}`,
+        );
       }
       return {
         width,
@@ -737,4 +752,22 @@ function traceTreeToViewchartHelper(
   }
 
   return { flowchartId, stackByFrameId, callViewchartsByFrameId, callPath };
+}
+
+export function getActionText(action?: Action): string {
+  if (!action) {
+    return "";
+  } else if (action.type === "test-func") {
+    return action.label ?? "some action";
+  } else if (action.type === "call") {
+    // TODO: lens?
+    return `call ${action.flowchartId}`;
+  } else if (action.type === "place-domino") {
+    return "place domino";
+  } else if (action.type === "test-cond") {
+    return "if";
+  } else if (action.type === "start") {
+    return "start";
+  }
+  assertNever(action);
 }

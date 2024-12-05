@@ -5,32 +5,16 @@ export const dominoFlowchart: Flowchart = {
   id: "fc1",
   initialFrameId: "1",
   frames: indexById([
-    { id: "1" },
+    { id: "1", action: { type: "start" } },
     // we can place a vertical domino...
     {
       id: "one-domino-1",
       action: {
-        type: "test-func",
-        label: "place vert. domino",
-        func: ({ value }) => {
-          if (value.width < 1) {
-            throw new Error("width must be at least 1");
-          }
-          return [
-            {
-              value: {
-                ...value,
-                dominoes: [
-                  ...value.dominoes,
-                  [
-                    [0, 0],
-                    [0, 1],
-                  ],
-                ],
-              },
-            },
-          ];
-        },
+        type: "place-domino",
+        domino: [
+          [0, 0],
+          [0, 1],
+        ],
         failureFrameId: "base-case",
       },
     },
@@ -51,31 +35,21 @@ export const dominoFlowchart: Flowchart = {
     {
       id: "two-dominoes-1",
       action: {
-        type: "test-func",
-        label: "place 2 hor. dominos",
-        func: ({ value }) => {
-          if (value.width < 2) {
-            throw new Error("width must be at least 2");
-          }
-          return [
-            {
-              value: {
-                ...value,
-                dominoes: [
-                  ...value.dominoes,
-                  [
-                    [0, 0],
-                    [1, 0],
-                  ],
-                  [
-                    [0, 1],
-                    [1, 1],
-                  ],
-                ],
-              },
-            },
-          ];
-        },
+        type: "place-domino",
+        domino: [
+          [0, 0],
+          [1, 0],
+        ],
+      },
+    },
+    {
+      id: "two-dominoes-1b",
+      action: {
+        type: "place-domino",
+        domino: [
+          [0, 1],
+          [1, 1],
+        ],
       },
     },
     // ...and recurse
@@ -100,6 +74,7 @@ export const dominoFlowchart: Flowchart = {
     { from: "1", to: "one-domino-1" },
     { from: "one-domino-1", to: "one-domino-2" },
     { from: "1", to: "two-dominoes-1" },
-    { from: "two-dominoes-1", to: "two-dominoes-2" },
+    { from: "two-dominoes-1", to: "two-dominoes-1b" },
+    { from: "two-dominoes-1b", to: "two-dominoes-2" },
   ],
 };

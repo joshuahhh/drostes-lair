@@ -1,4 +1,5 @@
 import seedrandom from "seedrandom";
+import { dominoFlowchart } from "./dominoes.ex";
 import { appendFrameAfter, setAction } from "./edits";
 import {
   Action,
@@ -6,9 +7,11 @@ import {
   Flowchart,
   Stack,
   StackPath,
+  StackPathSegment,
   Step,
   TraceTree,
   Viewchart,
+  getActionText,
   getNextStacksInLevel,
   getPrevStacksInLevel,
   makeTraceTree,
@@ -27,6 +30,7 @@ import {
   inXYWH,
   loadAudio,
   loadImg,
+  saveFile,
 } from "./ui_util";
 import { indexById } from "./util";
 import { Vec2, add, v } from "./vec2";
@@ -37,55 +41,44 @@ function DEBUG() {
 }
 
 type UIState = {
+  initialValue: unknown;
+  initialFlowchartId: string;
   defs: Definitions;
 };
 
-let undoStack: UIState[] = [
-  {
+const examples: Record<string, UIState> = {
+  dominoesBlank: {
+    initialValue: {
+      width: 4,
+      height: 2,
+      dominoes: [],
+    },
+    initialFlowchartId: "fc1",
     defs: {
       flowcharts: indexById<Flowchart>([
         {
-          id: "fc-main",
+          id: "fc1",
           initialFrameId: "1",
-          frames: indexById([
-            {
-              id: "1",
-            },
-            {
-              id: "2",
-              action: {
-                type: "call",
-                flowchartId: "fc-sub",
-                lens: {
-                  type: "domino-grid",
-                  dx: 0,
-                  dy: 0,
-                },
-              },
-            },
-            {
-              id: "3",
-            },
-          ]),
-          arrows: [
-            { from: "1", to: "2" },
-            { from: "2", to: "3" },
-          ],
-        },
-        {
-          id: "fc-sub",
-          initialFrameId: "1",
-          frames: indexById([
-            {
-              id: "1",
-            },
-          ]),
+          frames: indexById([{ id: "1", action: { type: "start" } }]),
           arrows: [],
         },
       ]),
     },
   },
-];
+  dominoesComplete: {
+    initialValue: {
+      width: 4,
+      height: 2,
+      dominoes: [],
+    },
+    initialFlowchartId: "fc1",
+    defs: {
+      flowcharts: indexById<Flowchart>([dominoFlowchart]),
+    },
+  },
+};
+
+let undoStack: UIState[] = [examples.dominoesBlank];
 
 // globals for communication are the best
 let state: UIState;
@@ -102,21 +95,6 @@ const resizeObserver = new ResizeObserver((entries) => {
 });
 resizeObserver.observe(cContainer);
 const ctx = c.getContext("2d")!;
-
-const initialValue = {
-  width: 4,
-  height: 2,
-  dominoes: [],
-};
-
-const getActionText = (action?: Action) =>
-  !action
-    ? ""
-    : action.type === "test-func"
-      ? (action.label ?? "some action")
-      : action.type === "call"
-        ? `call ${action.flowchartId}`
-        : `[${action.type}]`;
 
 Promise.all([
   loadImg("./assets/parchment.png"),
@@ -166,6 +144,32 @@ Promise.all([
       if (e.key === "z" && (e.ctrlKey || e.metaKey)) {
         undoStack.pop();
       }
+      if (e.key === "s" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        saveFile(
+          new Blob([JSON.stringify(state, null, 2)], {
+            type: "application/json;charset=utf-8",
+          }),
+          "state.json",
+        );
+      }
+      if (e.key === "o" && (e.ctrlKey || e.metaKey)) {
+        e.preventDefault();
+        let prompt = "Select # or key of example to load:\n";
+        for (const [i, key] of Object.keys(examples).entries()) {
+          prompt += `${i + 1}. ${key}\n`;
+        }
+        prompt += "(To load a file, drop it onto the canvas.)";
+        const result = window.prompt(prompt);
+        if (!result) return;
+        for (const [i, key] of Object.keys(examples).entries()) {
+          if (result === key || result === `${i + 1}`) {
+            undoStack.push(examples[key]);
+            return;
+          }
+        }
+        window.alert("Can't find that, sorry.");
+      }
     });
     window.addEventListener("keyup", (e) => {
       if (e.key === "Shift") {
@@ -190,6 +194,25 @@ Promise.all([
     });
     c.addEventListener("mouseup", () => {
       mouseDown = false;
+    });
+    let draggedOver = false;
+    c.addEventListener("dragover", (e) => {
+      draggedOver = true;
+      e.preventDefault(); // important for drop?
+    });
+    c.addEventListener("dragleave", (e) => {
+      draggedOver = false;
+    });
+    c.addEventListener("drop", (e) => {
+      e.preventDefault();
+      const file = e.dataTransfer!.files[0];
+      const reader = new FileReader();
+      reader.onload = () => {
+        state = JSON.parse(reader.result as string);
+        undoStack.push(state);
+      };
+      reader.readAsText(file);
+      draggedOver = false;
     });
 
     const renderParchmentBox = (x: number, y: number, w: number, h: number) => {
@@ -299,13 +322,21 @@ Promise.all([
         ctx.beginPath();
         ctx.rect(...pos, sceneW, sceneH);
         ctx.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
-        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        // use parchment fade or darkness fade?
+        if (true) {
+          ctx.fillStyle = patternParchment;
+          patternParchment.setTransform(new DOMMatrix().translate(...pan, 0));
+          ctx.globalAlpha = 0.4;
+        } else {
+          ctx.fillStyle = "rgba(0,0,0,0.4)";
+        }
         ctx.fill("evenodd");
+        ctx.globalAlpha = 1;
         // outline
         ctx.lineWidth = 2;
         ctx.beginPath();
         ctx.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
-        ctx.setLineDash([2, 2]);
+        // ctx.setLineDash([2, 2]);
         ctx.strokeStyle = "rgba(255,200,0,0.8)";
         ctx.stroke();
       }
@@ -360,13 +391,13 @@ Promise.all([
       // run program on every frame lol
       traceTree = makeTraceTree();
       // TODO: hardcoding the first flowchart
-      const flowchart = Object.values(defs.flowcharts)[0];
+      const flowchart = state.defs.flowcharts[state.initialFlowchartId];
       const initStep = {
         id: "*",
         prevStepId: undefined,
         flowchartId: flowchart.id,
         frameId: flowchart.initialFrameId,
-        scene: { value: initialValue },
+        scene: { value: state.initialValue },
         caller: undefined,
       };
       runAll(initStep, defs, traceTree);
@@ -383,6 +414,8 @@ Promise.all([
       ctx.fillStyle = patternAsfault;
       patternAsfault.setTransform(new DOMMatrix().translate(...pan, 0));
       ctx.fillRect(0, 0, c.width, c.height);
+      ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+      ctx.fillRect(0, 0, c.width, c.height);
 
       const renderConnectorLine = (start: Vec2, end: Vec2) => {
         const middleX = start[0] + (end[0] - start[0]) / 2;
@@ -390,14 +423,14 @@ Promise.all([
         const jointX = Math.max(middleX, paddedEndX);
         ctx.save();
         ctx.beginPath();
-        ctx.globalAlpha = 0.3;
+        ctx.globalAlpha = 0.9;
         ctx.globalCompositeOperation = "multiply";
         ctx.moveTo(...start);
         ctx.lineTo(...[jointX, start[1]]);
         ctx.lineTo(...[jointX, end[1]]);
         ctx.lineTo(...end);
         ctx.strokeStyle = "rgb(170, 3, 37)";
-        ctx.lineWidth = 50;
+        ctx.lineWidth = 5;
         ctx.stroke();
         ctx.restore();
       };
@@ -441,14 +474,14 @@ Promise.all([
       };
 
       const renderInset = (
-        randomSeed: any,
+        callPath: StackPathSegment[],
         curX: number,
         curY: number,
         maxX: number,
         maxY: number,
       ) => {
         ctx.fillStyle = patternAsfault;
-        const rng = seedrandom(randomSeed);
+        const rng = seedrandom(JSON.stringify(callPath));
         patternAsfault.setTransform(
           new DOMMatrix().translate(
             ...add(pan, [rng() * 1000, rng() * 1000]),
@@ -461,6 +494,14 @@ Promise.all([
           maxX + callPad - curX,
           maxY + callPad - curY - callTopPad,
         );
+        ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+        ctx.fillRect(
+          curX,
+          curY + callTopPad,
+          maxX + callPad - curX,
+          maxY + callPad - curY - callTopPad,
+        );
+        ctx.fillStyle = `rgba(0, 0, 0, ${0.1 * callPath.length})`;
         ctx.fillRect(
           curX,
           curY + callTopPad,
@@ -496,8 +537,8 @@ Promise.all([
           curX,
           maxY + callPad,
           maxX + callPad - curX,
-          -10,
-          "rgba(0,0,0,0.4)",
+          -5,
+          "rgba(0,0,0,0.2)",
           "rgba(0,0,0,0)",
           "V",
         );
@@ -573,15 +614,15 @@ Promise.all([
               [curX + callPad, curY + callPad + callTopPad],
               false,
             );
-            maxY = Math.max(maxY, child.maxY);
+            maxY = Math.max(maxY, child.maxY + callPad);
 
             if (actuallyDraw)
               renderInset(
-                JSON.stringify(childViewchart.callPath),
+                childViewchart.callPath,
                 curX,
                 curY,
                 child.maxX - callPad,
-                child.maxY,
+                child.maxY + callPad,
               );
 
             // draw child for real
@@ -702,6 +743,14 @@ Promise.all([
 
       renderCandle();
       (window as any).DEBUG = false;
+
+      if (draggedOver) {
+        ctx.fillStyle = "rgba(128, 255, 128, 0.5)";
+        ctx.fillRect(0, 0, c.width, c.height);
+        ctx.fillStyle = "black";
+        ctx.textAlign = "center";
+        ctx.font = "24px sans-serif";
+      }
 
       // mouse position debug
       if (false) {
