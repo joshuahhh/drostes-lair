@@ -1,4 +1,3 @@
-import seedrandom from "seedrandom";
 import { dominoFlowchart } from "./dominoes.ex";
 import { addEscapeRoute, appendFrameAfter, setAction } from "./edits";
 import {
@@ -676,7 +675,7 @@ Promise.all([
       height -= lens.dy;
       // shaded background
       ctx.beginPath();
-      ctx.rect(...pos, sceneW, sceneH);
+      ctx.rect(...pos, sceneW, 70);
       ctx.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
       // use parchment fade or darkness fade?
       if (true) {
@@ -913,6 +912,8 @@ Promise.all([
   };
 
   const renderScene = (step: Step, topleft: Vec2) => {
+    const h = 70;
+    const w = 70;
     const { defs } = state;
 
     const isOutlined = traceTree.finalStepIds.includes(step.id);
@@ -924,11 +925,11 @@ Promise.all([
       ctx.beginPath();
       ctx.lineWidth = 4;
       ctx.strokeStyle = "white";
-      ctx.rect(...topleft, sceneW, sceneH);
+      ctx.rect(...topleft, sceneW, h);
       ctx.stroke();
       ctx.restore();
     }
-    renderParchmentBox(...topleft, sceneW, sceneH);
+    renderParchmentBox(...topleft, sceneW, h);
     const value = step.scene.value;
     if ("dominoes" in value) {
       const value = topLevelValueForStep(step, traceTree, defs) as any;
@@ -949,6 +950,7 @@ Promise.all([
         { textAlign: "left", textBaseline: "top" },
       );
     }
+    return [sceneW, h] as const;
   };
 
   // panning
@@ -1063,30 +1065,31 @@ Promise.all([
       maxX: number,
       maxY: number,
     ) => {
-      ctx.fillStyle = patternAsfault;
-      const rng = seedrandom(JSON.stringify(callPath));
-      patternAsfault.setTransform(
-        new DOMMatrix().translate(
-          ...add(pan, [rng() * 1000, rng() * 1000]),
-          100,
-        ),
-      );
-      ctx.fillRect(
-        curX,
-        curY + callTopPad,
-        maxX + callPad - curX,
-        maxY + callPad - curY - callTopPad,
-      );
-      // lighten
-      ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
-      ctx.fillRect(
-        curX,
-        curY + callTopPad,
-        maxX + callPad - curX,
-        maxY + callPad - curY - callTopPad,
-      );
+      // el note: comment out because it is slow (large textures being drawn)
+      // ctx.fillStyle = patternAsfault;
+      // const rng = seedrandom(JSON.stringify(callPath));
+      // patternAsfault.setTransform(
+      //   new DOMMatrix().translate(
+      //     ...add(pan, [rng() * 1000, rng() * 1000]),
+      //     100,
+      //   ),
+      // );
+      // ctx.fillRect(
+      //   curX,
+      //   curY + callTopPad,
+      //   maxX + callPad - curX,
+      //   maxY + callPad - curY - callTopPad,
+      // );
+      // // lighten
+      // ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+      // ctx.fillRect(
+      //   curX,
+      //   curY + callTopPad,
+      //   maxX + callPad - curX,
+      //   maxY + callPad - curY - callTopPad,
+      // );
       // darken
-      ctx.fillStyle = `rgba(0, 0, 0, ${0.15 * callPath.length})`;
+      ctx.fillStyle = `rgba(0, 0, 0, ${0.1 * callPath.length})`;
       ctx.fillRect(
         curX,
         curY + callTopPad,
@@ -1184,7 +1187,7 @@ Promise.all([
       let curX = myX;
       let curY = myY;
 
-      let maxY = myY + sceneH;
+      let maxY = myY;
 
       // render call, if any
       const { flowchartId, frameId } = stack.stackPath.final;
@@ -1229,142 +1232,147 @@ Promise.all([
         }
       }
 
+      let mySceneH: null | number = 5;
       const stackPathString = stackPathToString(stack.stackPath);
       // render stack
       xFromStack[stackPathString] = curX;
       if (actuallyDraw) {
         const steps = stack.stepIds.map((stepId) => traceTree.steps[stepId]);
-        drawQueue.push(() => {
-          let stackFanTarget = inXYWH(mouseX, mouseY, [
-            curX,
-            myY,
-            sceneW,
-            sceneH,
-          ])
-            ? 1
-            : 0;
+        let stackFanTarget = inXYWH(mouseX, mouseY, [curX, myY, sceneW, sceneH])
+          ? 1
+          : 0;
 
-          const sv = interpTo(stackPathString, stackFanTarget, 0);
-          const stackFan = sv * (84 - 14) + 14;
+        const sv = interpTo(stackPathString, stackFanTarget, 0);
+        const stackFan = sv * (84 - 14) + 14;
 
-          for (const [stepIdx, step] of steps.entries()) {
-            const defaultX = curX;
-            const defaultY = myY + stepIdx * stackFan;
-            if (inXYWH(mouseX, mouseY, [curX, myY, sceneW, sceneH])) {
-              const modArgs = [
-                myY + stepIdx * stackFan,
-                c.height - sceneH,
-                myY,
-              ] as const;
-              drawQueue.push(() => {
-                renderScene(step, [
-                  interpTo(
-                    stackPathString + stepIdx + "x",
-                    curX +
-                      Math.floor(howManyTimesDidModWrap(...modArgs)) * sceneW,
-                  ),
-                  interpTo(stackPathString + stepIdx + "y", mod(...modArgs)),
-                ]);
-              });
-            } else {
+        let i = 0;
+        for (const [stepIdx, step] of steps.entries()) {
+          const defaultX = curX;
+          const defaultY = myY + stepIdx * stackFan;
+          if (i === 0) {
+            // pre render scene to get measurement (it will be over-rendered)
+            const [w, h] = renderScene(step, [defaultX, defaultY]);
+            mySceneH = h;
+          }
+          if (inXYWH(mouseX, mouseY, [curX, myY, sceneW, sceneH])) {
+            const modArgs = [
+              myY + stepIdx * stackFan,
+              c.height - sceneH,
+              myY,
+            ] as const;
+
+            drawQueue.push(() =>
+              renderScene(step, [
+                interpTo(
+                  stackPathString + stepIdx + "x",
+                  curX +
+                    Math.floor(howManyTimesDidModWrap(...modArgs)) * sceneW,
+                ),
+                interpTo(stackPathString + stepIdx + "y", mod(...modArgs)),
+              ]),
+            );
+          } else {
+            drawQueue.push(() =>
               renderScene(step, [
                 set(stackPathString + stepIdx + "x", defaultX),
                 set(stackPathString + stepIdx + "y", defaultY),
-              ]);
-            }
-          }
-          if (stack.stepIds.length === 0) {
-            renderParchmentBox(curX, myY, sceneW, sceneH, { empty: true });
-          }
-          let label = getActionText(flowchart.frames[frameId].action);
-          drawQueue.push(() =>
-            renderOutlinedText(ctx, label, [curX, myY], { textAlign: "left" }),
-          );
-          if (frame.action?.type === "workspace-pick") {
-            const action = frame.action;
-            const index = action.index;
-            clickables.push({
-              xywh: [curX, myY - 6, sceneW, 12],
-              callback: () => {
-                modifyFlowchart(flowchartId, (old) =>
-                  setAction(
-                    old,
-                    frameId,
-                    {
-                      ...action,
-                      index:
-                        typeof index === "number"
-                          ? "first"
-                          : index === "first"
-                            ? "last"
-                            : index === "last"
-                              ? "any"
-                              : "first",
-                    },
-                    true,
-                  ),
-                );
-              },
-            });
-          }
-
-          const buttonRadius = 20;
-
-          if (
-            inXYWH(mouseX, mouseY, [curX + sceneW, myY, buttonRadius, sceneH])
-          ) {
-            // draw semi-circle on the right
-            ctx.beginPath();
-            ctx.arc(curX + sceneW + 10, myY + sceneH / 2, 5, 0, Math.PI * 2);
-            ctx.fillStyle = patternParchment;
-            ctx.fill();
-
-            clickables.push({
-              xywh: [
-                curX + sceneW - buttonRadius,
-                myY + sceneH / 2 - buttonRadius,
-                buttonRadius * 2,
-                buttonRadius * 2,
-              ],
-              callback: () => {
-                modifyFlowchart(flowchartId, (old) =>
-                  appendFrameAfter(old, frameId),
-                );
-              },
-            });
-          }
-
-          if (steps.some((step) => step.isStuck)) {
-            ctx.beginPath();
-            ctx.arc(
-              curX + sceneW / 2,
-              myY + sceneH,
-              buttonRadius,
-              0,
-              2 * Math.PI,
+              ]),
             );
-            ctx.fillStyle = patternParchment;
-            ctx.fill();
-            ctx.fillStyle = "rgba(255,0,0,0.4)";
-            ctx.fill();
-            clickables.push({
-              xywh: [
-                curX + sceneW / 2 - buttonRadius,
-                myY + sceneH - buttonRadius,
-                buttonRadius * 2,
-                buttonRadius * 2,
-              ],
-              callback: () => {
-                if (!frame.escapeRouteFrameId) {
-                  console.log("no escape route");
-                  modifyFlowchart(flowchartId, (old) =>
-                    addEscapeRoute(old, frameId),
-                  );
-                }
-              },
-            });
           }
-        });
+          i++;
+        }
+        if (stack.stepIds.length === 0) {
+          renderParchmentBox(curX, myY, sceneW, 70, { empty: true });
+          mySceneH = 70;
+        }
+        let label = getActionText(flowchart.frames[frameId].action);
+        drawQueue.push(() =>
+          renderOutlinedText(ctx, label, [curX, myY], { textAlign: "left" }),
+        );
+        if (frame.action?.type === "workspace-pick") {
+          const action = frame.action;
+          const index = action.index;
+          clickables.push({
+            xywh: [curX, myY - 6, sceneW, 12],
+            callback: () => {
+              modifyFlowchart(flowchartId, (old) =>
+                setAction(
+                  old,
+                  frameId,
+                  {
+                    ...action,
+                    index:
+                      typeof index === "number"
+                        ? "first"
+                        : index === "first"
+                          ? "last"
+                          : index === "last"
+                            ? "any"
+                            : "first",
+                  },
+                  true,
+                ),
+              );
+            },
+          });
+        }
+
+        const buttonRadius = 20;
+
+        if (
+          inXYWH(mouseX, mouseY, [curX + sceneW, myY, buttonRadius, sceneH])
+        ) {
+          // draw semi-circle on the right
+          ctx.beginPath();
+          ctx.arc(curX + sceneW + 10, myY + sceneH / 2, 5, 0, Math.PI * 2);
+          ctx.fillStyle = patternParchment;
+          ctx.fill();
+
+          clickables.push({
+            xywh: [
+              curX + sceneW - buttonRadius,
+              myY + sceneH / 2 - buttonRadius,
+              buttonRadius * 2,
+              buttonRadius * 2,
+            ],
+            callback: () => {
+              modifyFlowchart(flowchartId, (old) =>
+                appendFrameAfter(old, frameId),
+              );
+            },
+          });
+        }
+
+        if (steps.some((step) => step.isStuck)) {
+          ctx.beginPath();
+          ctx.arc(
+            curX + sceneW / 2,
+            myY + sceneH,
+            buttonRadius,
+            0,
+            2 * Math.PI,
+          );
+          ctx.fillStyle = patternParchment;
+          ctx.fill();
+          ctx.fillStyle = "rgba(255,0,0,0.4)";
+          ctx.fill();
+          clickables.push({
+            xywh: [
+              curX + sceneW / 2 - buttonRadius,
+              myY + sceneH - buttonRadius,
+              buttonRadius * 2,
+              buttonRadius * 2,
+            ],
+            callback: () => {
+              if (!frame.escapeRouteFrameId) {
+                console.log("no escape route");
+                modifyFlowchart(flowchartId, (old) =>
+                  addEscapeRoute(old, frameId),
+                );
+              }
+            },
+          });
+        }
       }
 
       // render downstream
@@ -1395,17 +1403,10 @@ Promise.all([
         maxX = Math.max(maxX, child.maxX);
         curY = child.maxY;
       }
-      maxY = Math.max(maxY, curY);
 
-      // debug box
-      if (false) {
-        ctx.beginPath();
-        ctx.rect(myX, myY, maxX - myX, curY - myY);
-        ctx.fillStyle = "rgba(255,0,0,0.2)";
-        // ctx.lineWidth = 2;
-        ctx.fill();
-      }
-
+      maxY = Math.max(maxY, curY, myY + mySceneH);
+      ctx.fillStyle = "pink";
+      ctx.fillRect(maxX, maxY, 20, 20);
       return { maxX, maxY, final };
     };
     const stepsInStacks = putStepsInStacks(traceTree);
