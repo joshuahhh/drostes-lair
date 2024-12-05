@@ -15,6 +15,7 @@ import {
   getActionText,
   getNextStacksInLevel,
   getPrevStacksInLevel,
+  isEscapeRoute,
   makeTraceTree,
   putStepsInStacks,
   runAll,
@@ -97,7 +98,7 @@ const examples: Record<string, UIState> = {
   },
   dominoesSimpleRecurse: {
     initialValue: {
-      width: 4,
+      width: 2,
       height: 2,
       dominoes: [],
     },
@@ -329,7 +330,7 @@ const set = (id: string, value: any) => {
   return value;
 };
 
-let undoStack: UIState[] = [examples.cardsBlank];
+let undoStack: UIState[] = [examples.dominoesSimpleRecurse];
 
 const modifyFlowchart = (
   flowchartId: string,
@@ -1151,6 +1152,46 @@ Promise.all([
       );
     };
 
+    const renderEscapeRouteMark = (centerPos: Vec2, onClick?: Function) => {
+      const markRadius = 10;
+
+      // ⛧
+
+      ctx.save();
+
+      ctx.save();
+      ctx.shadowColor = "rgba(0,0,0,1)";
+      ctx.shadowOffsetY = 4;
+      ctx.shadowBlur = 15;
+      ctx.beginPath();
+      ctx.arc(...centerPos, markRadius, 0, 2 * Math.PI);
+      ctx.fillStyle = patternParchment;
+      ctx.fill();
+      ctx.restore();
+      ctx.fillStyle = "rgba(128,0,0,0.6)";
+      ctx.fill();
+
+      ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+      ctx.font = "25px serif";
+      ctx.textAlign = "center";
+      ctx.textBaseline = "middle";
+      ctx.fillText("⛧", ...add(centerPos, v(0, 3)));
+      ctx.restore();
+
+      if (onClick) {
+        clickables.push({
+          xywh: [
+            centerPos[0] - markRadius,
+            centerPos[1] - markRadius,
+            markRadius * 2,
+            markRadius * 2,
+          ],
+          callback: onClick,
+        });
+      }
+    };
+    const escapeRouteDropY = sceneH;
+
     // saves things to draw for later,
     // so they are drawn on-top of other things
     const drawQueue: Function[] = [];
@@ -1186,11 +1227,12 @@ Promise.all([
 
       let maxY = myY + sceneH;
 
-      // render call, if any
       const { flowchartId, frameId } = stack.stackPath.final;
       const flowchart = defs.flowcharts[flowchartId];
       const frame = flowchart.frames[frameId];
+      const steps = stack.stepIds.map((stepId) => traceTree.steps[stepId]);
 
+      // render call, if any
       if (frame.action?.type === "call") {
         const childViewchart = viewchart.callViewchartsByFrameId[frameId] as
           | Viewchart
@@ -1233,7 +1275,6 @@ Promise.all([
       // render stack
       xFromStack[stackPathString] = curX;
       if (actuallyDraw) {
-        const steps = stack.stepIds.map((stepId) => traceTree.steps[stepId]);
         drawQueue.push(() => {
           let stackFanTarget = inXYWH(mouseX, mouseY, [
             curX,
@@ -1334,35 +1375,8 @@ Promise.all([
             });
           }
 
-          if (steps.some((step) => step.isStuck)) {
-            ctx.beginPath();
-            ctx.arc(
-              curX + sceneW / 2,
-              myY + sceneH,
-              buttonRadius,
-              0,
-              2 * Math.PI,
-            );
-            ctx.fillStyle = patternParchment;
-            ctx.fill();
-            ctx.fillStyle = "rgba(255,0,0,0.4)";
-            ctx.fill();
-            clickables.push({
-              xywh: [
-                curX + sceneW / 2 - buttonRadius,
-                myY + sceneH - buttonRadius,
-                buttonRadius * 2,
-                buttonRadius * 2,
-              ],
-              callback: () => {
-                if (!frame.escapeRouteFrameId) {
-                  console.log("no escape route");
-                  modifyFlowchart(flowchartId, (old) =>
-                    addEscapeRoute(old, frameId),
-                  );
-                }
-              },
-            });
+          if (isEscapeRoute(frameId, flowchart)) {
+            renderEscapeRouteMark([curX - scenePadX / 2, myY + sceneH / 2]);
           }
         });
       }
@@ -1371,10 +1385,40 @@ Promise.all([
       let maxX = curX + sceneW + scenePadX;
       const nextStacks = getNextStacksInLevel(stack, stepsInStacks, defs);
       const final: Vec2[] = [];
+      let lastConnectionJoint: Vec2 = [
+        curX + sceneW + scenePadX,
+        myY + sceneH / 2,
+      ]; // hacky thing to position unused escape routes or escape-route ghosts
       if (nextStacks.length === 0) {
         final.push([curX, myY]);
       }
       for (const [i, nextStack] of nextStacks.entries()) {
+        if (
+          isEscapeRoute(nextStack.stackPath.final.frameId, flowchart) &&
+          nextStack.stepIds.length === 0
+        ) {
+          // don't draw it for real; just draw a mark below lastConnectionJoint
+          const markPos = add(lastConnectionJoint, [0, escapeRouteDropY]);
+          renderConnectorLine(lastConnectionJoint, markPos);
+          renderEscapeRouteMark(markPos);
+          for (let i = 0; i < 3; i++) {
+            ctx.save();
+            ctx.beginPath();
+            ctx.arc(
+              markPos[0] + 10 + (i + 1) * 10,
+              markPos[1],
+              2,
+              0,
+              2 * Math.PI,
+            );
+            ctx.fillStyle = "black";
+            ctx.fill();
+            ctx.restore();
+          }
+          maxY = Math.max(maxY, markPos[1]);
+          continue;
+        }
+
         if (i > 0) curY += scenePadY;
 
         // draw connector line
@@ -1382,6 +1426,10 @@ Promise.all([
         const start = [curX + sceneW, myY + sceneH / 2] as Vec2;
         const end = [curX + sceneW + scenePadX, curY + sceneH / 2] as Vec2;
         renderConnectorLine(start, end);
+        lastConnectionJoint = [
+          curX + sceneW + scenePadX / 2,
+          curY + sceneH / 2,
+        ];
 
         const child = renderStackAndDownstream(
           nextStack,
@@ -1396,6 +1444,32 @@ Promise.all([
         curY = child.maxY;
       }
       maxY = Math.max(maxY, curY);
+
+      // do we need an escape route?
+      if (steps.some((step) => step.isStuck) && !frame.escapeRouteFrameId) {
+        const markPos = add(lastConnectionJoint, [0, escapeRouteDropY]);
+        renderConnectorLine(lastConnectionJoint, markPos);
+        renderEscapeRouteMark(markPos, () => {
+          if (!frame.escapeRouteFrameId) {
+            console.log("no escape route");
+            modifyFlowchart(flowchartId, (old) => addEscapeRoute(old, frameId));
+          }
+        });
+        // ctx.save();
+        // ctx.textAlign = "left";
+        // ctx.textBaseline = "middle";
+        // ctx.font = "30px serif";
+        // ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
+        // ctx.fillText("!?", ...add(markPos, v(10, 0)));
+        // ctx.restore();
+        renderOutlinedText(ctx, "!?", add(markPos, v(15, 0)), {
+          textAlign: "left",
+          textBaseline: "middle",
+          size: 20,
+        });
+
+        maxY = Math.max(maxY, markPos[1]);
+      }
 
       // debug box
       if (false) {
@@ -1422,6 +1496,7 @@ Promise.all([
       textAlign: "left",
       textBaseline: "top",
       size: 40,
+      family: "mono",
     });
     if (tool.type === "pointer") {
       clickables.push({

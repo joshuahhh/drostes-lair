@@ -865,3 +865,16 @@ export function getActionText(action?: Action): string {
   }
   assertNever(action);
 }
+
+/**
+ * are we the escape route of some other frame?
+ *
+ * TODO: simplifying assumption – every frame comes from at most one
+ * other frame, so if we're the escape route of some frame we are
+ * just generally an escape route
+ */
+export function isEscapeRoute(frameId: string, flowchart: Flowchart) {
+  return Object.values(flowchart.frames).some(
+    (frame) => frame.escapeRouteFrameId === frameId,
+  );
+}
