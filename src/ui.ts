@@ -432,7 +432,7 @@ Promise.all([
       let y = 0;
       let width = value.width;
       let height = value.height;
-      for (const segment of path.callPath) {
+      for (const [i, segment] of path.callPath.entries()) {
         const frame =
           defs.flowcharts[segment.flowchartId].frames[segment.frameId];
         const action = frame.action as Action & { type: "call" };
@@ -449,7 +449,7 @@ Promise.all([
         if (true) {
           ctx.fillStyle = patternParchment;
           patternParchment.setTransform(new DOMMatrix().translate(...pan, 0));
-          ctx.globalAlpha = 0.4;
+          ctx.globalAlpha = i === path.callPath.length - 1 ? 0.8 : 0.4;
         } else {
           ctx.fillStyle = "rgba(0,0,0,0.4)";
         }
