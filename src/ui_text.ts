@@ -1,4 +1,4 @@
-import { add } from "./vec2";
+import { add, Vec2 } from "./vec2";
 
 export const strokeMultiline = (
   ctx: CanvasRenderingContext2D,
@@ -28,7 +28,7 @@ export const fillMultiline = (
 export const renderOutlinedText = (
   ctx: CanvasRenderingContext2D,
   text: string,
-  pos: [number, number],
+  pos: Vec2,
   opts: {
     textAlign?: CanvasTextAlign;
     textBaseline?: CanvasTextBaseline;

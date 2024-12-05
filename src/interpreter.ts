@@ -1,6 +1,7 @@
 // STATIC WORLD
 
 import { assertNever, indexById, log, truthy } from "./util";
+import { Vec2 } from "./vec2";
 
 export type Flowchart = {
   id: string;
@@ -28,7 +29,7 @@ export type Action =
     }
   | {
       type: "place-domino";
-      domino: [[number, number], [number, number]];
+      domino: [Vec2, Vec2];
     }
   | {
       type: "call";
@@ -230,7 +231,7 @@ export function runAll(
         );
         continuedSuccessfully = true;
       } catch (e) {
-        console.log(e);
+        // console.log(e);
         // TODO: fail silently (aside from lack of
         // continuedSuccessfully); would be nice to surface this
         // somehow
@@ -309,7 +310,7 @@ function performAction(
       },
     ]);
   } else if (action.type === "call") {
-    console.log("callDepth", callDepth);
+    // console.log("callDepth", callDepth);
     if (callDepth > 10) {
       throw new RangeError("call depth overflow");
     }
