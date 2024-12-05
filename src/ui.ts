@@ -330,7 +330,7 @@ const set = (id: string, value: any) => {
   return value;
 };
 
-let undoStack: UIState[] = [examples.dominoesSimpleRecurse];
+let undoStack: UIState[] = [examples.dominoesComplete];
 
 const modifyFlowchart = (
   flowchartId: string,
@@ -494,6 +494,12 @@ Promise.all([
     };
     reader.readAsText(file);
     draggedOver = false;
+  });
+
+  c.addEventListener("wheel", (e) => {
+    e.preventDefault();
+    pan[0] += -e.deltaX;
+    pan[1] += -e.deltaY;
   });
 
   const renderParchmentBox = (
