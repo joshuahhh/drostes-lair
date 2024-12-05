@@ -32,13 +32,29 @@ import {
   loadImg,
   saveFile,
 } from "./ui_util";
-import { indexById } from "./util";
+import { assertNever, indexById } from "./util";
 import { Vec2, add, v } from "./vec2";
 
 (window as any).DEBUG = true;
 function DEBUG() {
   return (window as any).DEBUG;
 }
+
+// just fyi ;)
+const zodiac = [
+  "♈︎",
+  "♉︎",
+  "♊︎",
+  "♋︎",
+  "♌︎",
+  "♍︎",
+  "♎︎",
+  "♏︎",
+  "♐︎",
+  "♑︎",
+  "♒︎",
+  "♓︎",
+];
 
 type UIState = {
   initialValue: unknown;
@@ -53,11 +69,11 @@ const examples: Record<string, UIState> = {
       height: 2,
       dominoes: [],
     },
-    initialFlowchartId: "fc1",
+    initialFlowchartId: "♌︎",
     defs: {
       flowcharts: indexById<Flowchart>([
         {
-          id: "fc1",
+          id: "♌︎",
           initialFrameId: "1",
           frames: indexById([{ id: "1", action: { type: "start" } }]),
           arrows: [],
@@ -71,14 +87,14 @@ const examples: Record<string, UIState> = {
       height: 2,
       dominoes: [],
     },
-    initialFlowchartId: "fc1",
+    initialFlowchartId: "♌︎",
     defs: {
       flowcharts: indexById<Flowchart>([dominoFlowchart]),
     },
   },
 };
 
-let undoStack: UIState[] = [examples.dominoesBlank];
+let undoStack: UIState[] = [examples.dominoesComplete];
 
 // globals for communication are the best
 let state: UIState;
@@ -135,13 +151,20 @@ Promise.all([
 
     let pan = [0, 0] as [number, number];
 
-    let tool: "pointer" | "domino-h" | "domino-v" = "pointer";
+    let tool:
+      | { type: "pointer" }
+      | { type: "domino"; orientation: "h" | "v" }
+      | { type: "call"; flowchartId: string } = { type: "pointer" };
 
     // set up cursor stuff
     let shiftHeld = false;
+    let altHeld = false;
     window.addEventListener("keydown", (e) => {
       if (e.key === "Shift") {
         shiftHeld = true;
+      }
+      if (e.key === "Alt") {
+        altHeld = true;
       }
       if (e.key === "z" && (e.ctrlKey || e.metaKey)) {
         undoStack.pop();
@@ -173,18 +196,21 @@ Promise.all([
         window.alert("Can't find that, sorry.");
       }
       if (e.key === "h") {
-        tool = "domino-h";
+        tool = { type: "domino", orientation: "h" };
       }
       if (e.key === "v") {
-        tool = "domino-v";
+        tool = { type: "domino", orientation: "v" };
       }
       if (e.key === "Escape") {
-        tool = "pointer";
+        tool = { type: "pointer" };
       }
     });
     window.addEventListener("keyup", (e) => {
       if (e.key === "Shift") {
         shiftHeld = false;
+      }
+      if (e.key === "Alt") {
+        altHeld = false;
       }
     });
 
@@ -282,30 +308,35 @@ Promise.all([
         return [pos[0] + 10 + cellSize * x, pos[1] + 20 + cellSize * y];
       }
 
+      // precompute overall offset of the bottom call
+      let dx = 0;
+      let dy = 0;
+      for (const segment of path.callPath) {
+        const frame =
+          defs.flowcharts[segment.flowchartId].frames[segment.frameId];
+        const action = frame.action as Action & { type: "call" };
+        const lens = action.lens!; // TODO: what if not here
+        dx += lens.dx;
+        dy += lens.dy;
+      }
+
       // grid squares
       ctx.beginPath();
       ctx.lineWidth = 3;
       ctx.strokeStyle = "#70665a";
+      let hoveredCell: [number, number] | undefined = undefined;
       for (let c = 0; c < value.width; c++) {
         for (let r = 0; r < value.height; r++) {
           const xywh = [...gridToXY([c, r]), cellSize, cellSize] as const;
           ctx.rect(...xywh);
-          if (tool === "domino-h" || tool === "domino-v") {
+          if (inXYWH(mouseX, mouseY, xywh)) {
+            hoveredCell = [c, r];
+          }
+          if (tool.type === "domino") {
+            const { orientation } = tool;
             clickables.push({
               xywh,
               callback: () => {
-                let dx = 0;
-                let dy = 0;
-                for (const segment of path.callPath) {
-                  const frame =
-                    defs.flowcharts[segment.flowchartId].frames[
-                      segment.frameId
-                    ];
-                  const action = frame.action as Action & { type: "call" };
-                  const lens = action.lens!; // TODO: what if not here
-                  dx += lens.dx;
-                  dy += lens.dy;
-                }
                 const { flowchartId, frameId } = path.final;
                 const newState = structuredClone(state);
                 newState.defs.flowcharts[flowchartId] = setAction(
@@ -317,25 +348,57 @@ Promise.all([
                       [c - dx, r - dy],
                       add(
                         [c - dx, r - dy],
-                        tool === "domino-h" ? [1, 0] : [0, 1],
+                        orientation === "h" ? [1, 0] : [0, 1],
                       ),
                     ],
-                    failureFrameId: "base-case",
                   },
                 );
                 undoStack.push(newState);
-                tool = "pointer";
+                tool = { type: "pointer" };
+              },
+            });
+          }
+          if (tool.type === "call") {
+            const callFlowchartId = tool.flowchartId;
+            clickables.push({
+              xywh,
+              callback: () => {
+                const { flowchartId, frameId } = path.final;
+                const newState = structuredClone(state);
+                newState.defs.flowcharts[flowchartId] = setAction(
+                  state.defs.flowcharts[flowchartId],
+                  frameId,
+                  {
+                    type: "call",
+                    flowchartId: callFlowchartId,
+                    lens: {
+                      type: "domino-grid",
+                      dx: c - dx,
+                      dy: r - dy,
+                    },
+                  },
+                );
+                undoStack.push(newState);
+                tool = { type: "pointer" };
               },
             });
           }
         }
       }
-
       ctx.moveTo(...gridToXY([0, 0]));
       ctx.lineTo(...gridToXY([value.width, 0]));
       ctx.moveTo(...gridToXY([0, 0]));
       ctx.lineTo(...gridToXY([0, value.height]));
       ctx.stroke();
+
+      if (tool.type === "call" && hoveredCell) {
+        ctx.strokeStyle = "rgba(255,200,0,0.8)";
+        ctx.strokeRect(
+          ...gridToXY(hoveredCell),
+          cellSize * (value.width - hoveredCell[0]),
+          cellSize * (value.height - hoveredCell[1]),
+        );
+      }
 
       // dominoes
       for (const domino of value.dominoes) {
@@ -447,7 +510,7 @@ Promise.all([
       clickables = [];
 
       c.style.cursor =
-        tool === "pointer"
+        tool.type === "pointer"
           ? mouseDown
             ? "url('./assets/glove2.png'), pointer"
             : shiftHeld
@@ -539,6 +602,7 @@ Promise.all([
           maxX + callPad - curX,
           maxY + callPad - curY - callTopPad,
         );
+        // lighten
         ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
         ctx.fillRect(
           curX,
@@ -546,7 +610,8 @@ Promise.all([
           maxX + callPad - curX,
           maxY + callPad - curY - callTopPad,
         );
-        ctx.fillStyle = `rgba(0, 0, 0, ${0.1 * callPath.length})`;
+        // darken
+        ctx.fillStyle = `rgba(0, 0, 0, ${0.15 * callPath.length})`;
         ctx.fillRect(
           curX,
           curY + callTopPad,
@@ -696,13 +761,13 @@ Promise.all([
               renderScene(step, add([curX, myY], v(0, stepIdx * 14)));
               ctx.restore();
               let label = getActionText(flowchart.frames[step.frameId].action);
-              renderOutlinedText(label, [curX, myY], "left");
+              renderOutlinedText(label, [curX, myY], { textAlign: "left" });
             }
 
             const buttonRadius = 10;
 
             if (
-              tool === "pointer" &&
+              tool.type === "pointer" &&
               inXYWH(mouseX, mouseY, [curX, myY, sceneW + buttonRadius, sceneH])
             ) {
               // draw semi-circle on the right
@@ -787,8 +852,31 @@ Promise.all([
       //   ...add(pan, v(100)),
       // );
 
-      if (tool === "domino-h" || tool === "domino-v") {
-        renderDomino(mouseX, mouseY, tool === "domino-h" ? "h" : "v");
+      const labelPt = add(pan, v(100, 40));
+      renderOutlinedText(state.initialFlowchartId, labelPt, {
+        textAlign: "left",
+        textBaseline: "top",
+        size: 40,
+      });
+      if (tool.type === "pointer") {
+        clickables.push({
+          xywh: [...labelPt, 40, 40],
+          callback: () => {
+            tool = { type: "call", flowchartId: state.initialFlowchartId };
+          },
+        });
+      }
+
+      if (tool.type === "pointer") {
+        // handled by css cursor
+      } else if (tool.type === "domino") {
+        renderDomino(mouseX, mouseY, tool.orientation);
+      } else if (tool.type === "call") {
+        renderOutlinedText(state.initialFlowchartId, [mouseX, mouseY], {
+          size: 40,
+        });
+      } else {
+        assertNever(tool);
       }
 
       renderDomino(
@@ -796,7 +884,7 @@ Promise.all([
         c.height - 30 - (cellSize - dominoPadding * 2),
         "h",
         () => {
-          tool = "domino-h";
+          tool = { type: "domino", orientation: "h" };
         },
       );
       renderDomino(
@@ -804,7 +892,7 @@ Promise.all([
         c.height - 30 - (2 * cellSize - dominoPadding * 2),
         "v",
         () => {
-          tool = "domino-v";
+          tool = { type: "domino", orientation: "v" };
         },
       );
 
@@ -814,9 +902,6 @@ Promise.all([
       if (draggedOver) {
         ctx.fillStyle = "rgba(128, 255, 128, 0.5)";
         ctx.fillRect(0, 0, c.width, c.height);
-        ctx.fillStyle = "black";
-        ctx.textAlign = "center";
-        ctx.font = "24px sans-serif";
       }
 
       // mouse position debug
@@ -824,6 +909,14 @@ Promise.all([
         ctx.fillStyle = "white";
         ctx.fillRect(mouseX - 100, mouseY, 200, 1);
         ctx.fillRect(mouseX, mouseY - 100, 1, 200);
+      }
+
+      if (altHeld) {
+        ctx.strokeStyle = "rgba(255, 0, 255, 1)";
+        ctx.lineWidth = 4;
+        for (const clickable of clickables) {
+          ctx.strokeRect(...clickable.xywh);
+        }
       }
     }
   },

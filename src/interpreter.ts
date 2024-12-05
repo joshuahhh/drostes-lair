@@ -12,6 +12,7 @@ export type Flowchart = {
 export type Frame = {
   id: string;
   action?: Action;
+  failureFrameId?: string;
 };
 
 export type Action =
@@ -24,12 +25,10 @@ export type Action =
       type: "test-func";
       label?: string;
       func: (input: Scene) => Scene[];
-      failureFrameId?: string;
     }
   | {
       type: "place-domino";
       domino: [[number, number], [number, number]];
-      failureFrameId?: string;
     }
   | {
       type: "call";
@@ -208,7 +207,26 @@ export function runAll(
       if (!nextFrame) {
         throw new Error(`Frame ${nextFrameId} not found`);
       }
-      performAction(step, nextFrameId, nextFrame.action, defs, traceTreeOut);
+      try {
+        performAction(step, nextFrameId, nextFrame.action, defs, traceTreeOut);
+      } catch (e) {
+        if (nextFrame.failureFrameId) {
+          const nextStep: Step = {
+            id: `${step.id}→${frameId}↝${nextFrame.failureFrameId}`,
+            prevStepId: step.id,
+            flowchartId,
+            frameId: nextFrame.failureFrameId,
+            scene,
+            caller,
+          };
+          runAll(nextStep, defs, traceTreeOut);
+          return;
+        } else {
+          // TODO: if there's no failure path, we abort this branch of
+          // the trace (not as a final branch)
+          return;
+        }
+      }
     }
   } finally {
     RUN_ALL_DEPTH--;
@@ -242,28 +260,7 @@ function performAction(
   if (!action || action.type === "start") {
     proceedWith([scene]);
   } else if (action.type === "test-func") {
-    let nextScenes: Scene[];
-    try {
-      nextScenes = action.func(scene);
-    } catch (e) {
-      if (action && action.failureFrameId) {
-        const nextStep: Step = {
-          id: `${step.id}→${frameId}↝${action.failureFrameId}`,
-          prevStepId: step.id,
-          flowchartId,
-          frameId: action.failureFrameId,
-          scene,
-          caller,
-        };
-        runAll(nextStep, defs, traceTreeOut);
-        return;
-      } else {
-        // TODO: if there's no failure path, we abort this branch of
-        // the trace (not as a final branch)
-        return;
-      }
-    }
-    proceedWith(nextScenes);
+    proceedWith(action.func(scene));
   } else if (action.type === "place-domino") {
     const { domino } = action;
     performAction(
@@ -294,7 +291,6 @@ function performAction(
             },
           ];
         },
-        failureFrameId: action.failureFrameId,
       },
       defs,
       traceTreeOut,

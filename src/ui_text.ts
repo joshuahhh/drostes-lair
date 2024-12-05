@@ -27,12 +27,17 @@ export const makeOutlinedTextRenderer = (ctx: CanvasRenderingContext2D) => {
   const renderOutlinedText = (
     text: string,
     pos: [number, number],
-    textAlign: CanvasTextAlign = "center",
+    opts: {
+      textAlign?: CanvasTextAlign;
+      textBaseline?: CanvasTextBaseline;
+      size?: number;
+    } = {},
   ) => {
-    const size = 12;
+    const { textAlign = "center", textBaseline = "middle", size = 12 } = opts;
+
     ctx.font = size + "px serif";
     ctx.textAlign = textAlign;
-    ctx.textBaseline = "middle";
+    ctx.textBaseline = textBaseline;
 
     ctx.strokeStyle = "#2B2B29";
     ctx.lineWidth = 6;

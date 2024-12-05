@@ -1,10 +1,10 @@
-import { Flowchart } from "./interpreter";
+import { Flowchart, Frame } from "./interpreter";
 import { indexById } from "./util";
 
 export const dominoFlowchart: Flowchart = {
-  id: "fc1",
+  id: "♌︎",
   initialFrameId: "1",
-  frames: indexById([
+  frames: indexById<Frame>([
     { id: "1", action: { type: "start" } },
     // we can place a vertical domino...
     {
@@ -15,15 +15,15 @@ export const dominoFlowchart: Flowchart = {
           [0, 0],
           [0, 1],
         ],
-        failureFrameId: "base-case",
       },
+      failureFrameId: "base-case",
     },
     // ...and recurse
     {
       id: "one-domino-2",
       action: {
         type: "call",
-        flowchartId: "fc1",
+        flowchartId: "♌︎",
         lens: {
           type: "domino-grid",
           dx: 1,
@@ -57,7 +57,7 @@ export const dominoFlowchart: Flowchart = {
       id: "two-dominoes-2",
       action: {
         type: "call",
-        flowchartId: "fc1",
+        flowchartId: "♌︎",
         lens: {
           type: "domino-grid",
           dx: 2,
