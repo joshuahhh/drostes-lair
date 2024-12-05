@@ -1,6 +1,6 @@
 import seedrandom from "seedrandom";
 import { dominoFlowchart } from "./dominoes.ex";
-import { appendFrameAfter, setAction } from "./edits";
+import { addEscapeRoute, appendFrameAfter, setAction } from "./edits";
 import {
   Action,
   Definitions,
@@ -93,9 +93,76 @@ const examples: Record<string, UIState> = {
       flowcharts: indexById<Flowchart>([dominoFlowchart]),
     },
   },
+  dominoesSimpleRecurse: {
+    initialValue: {
+      width: 4,
+      height: 2,
+      dominoes: [],
+    },
+    initialFlowchartId: "♌︎",
+    defs: {
+      flowcharts: {
+        "♌︎": {
+          id: "♌︎",
+          initialFrameId: "1",
+          frames: {
+            "1": {
+              id: "1",
+              action: {
+                type: "start",
+              },
+            },
+            "0.8910228818433734": {
+              id: "0.8910228818433734",
+              action: {
+                type: "place-domino",
+                domino: [
+                  [0, 0],
+                  [0, 1],
+                ],
+              },
+            },
+            "0.9228344533853508": {
+              id: "0.9228344533853508",
+              action: {
+                type: "call",
+                flowchartId: "♌︎",
+                lens: {
+                  type: "domino-grid",
+                  dx: 1,
+                  dy: 0,
+                },
+              },
+            },
+          },
+          arrows: [
+            {
+              from: "1",
+              to: "0.8910228818433734",
+            },
+            {
+              from: "0.8910228818433734",
+              to: "0.9228344533853508",
+            },
+          ],
+        },
+      },
+    },
+  },
 };
 
-let undoStack: UIState[] = [examples.dominoesComplete];
+let undoStack: UIState[] = [examples.dominoesSimpleRecurse];
+
+const modifyFlowchart = (
+  flowchartId: string,
+  modification: (old: Flowchart) => Flowchart,
+) => {
+  const newState = structuredClone(state);
+  newState.defs.flowcharts[flowchartId] = modification(
+    newState.defs.flowcharts[flowchartId],
+  );
+  undoStack.push(newState);
+};
 
 // globals for communication are the best
 let state: UIState;
@@ -356,11 +423,8 @@ Promise.all([
               xywh,
               callback: () => {
                 const { flowchartId, frameId } = path.final;
-                const newState = structuredClone(state);
-                newState.defs.flowcharts[flowchartId] = setAction(
-                  state.defs.flowcharts[flowchartId],
-                  frameId,
-                  {
+                modifyFlowchart(flowchartId, (old) =>
+                  setAction(old, frameId, {
                     type: "place-domino",
                     domino: [
                       [c - dx, r - dy],
@@ -369,9 +433,8 @@ Promise.all([
                         orientation === "h" ? [1, 0] : [0, 1],
                       ),
                     ],
-                  },
+                  }),
                 );
-                undoStack.push(newState);
                 tool = { type: "pointer" };
               },
             });
@@ -382,11 +445,8 @@ Promise.all([
               xywh,
               callback: () => {
                 const { flowchartId, frameId } = path.final;
-                const newState = structuredClone(state);
-                newState.defs.flowcharts[flowchartId] = setAction(
-                  state.defs.flowcharts[flowchartId],
-                  frameId,
-                  {
+                modifyFlowchart(flowchartId, (old) =>
+                  setAction(old, frameId, {
                     type: "call",
                     flowchartId: callFlowchartId,
                     lens: {
@@ -394,9 +454,8 @@ Promise.all([
                       dx: c - dx,
                       dy: r - dy,
                     },
-                  },
+                  }),
                 );
-                undoStack.push(newState);
                 tool = { type: "pointer" };
               },
             });
@@ -775,9 +834,9 @@ Promise.all([
         // render stack
         xFromStack[stackPathToString(stack.stackPath)] = curX;
         if (actuallyDraw) {
+          const steps = stack.stepIds.map((stepId) => traceTree.steps[stepId]);
           drawQueue.push(() => {
-            for (const [stepIdx, stepId] of stack.stepIds.entries()) {
-              const step = traceTree.steps[stepId];
+            for (const [stepIdx, step] of steps.entries()) {
               ctx.save();
               renderScene(step, add([curX, myY], v(0, stepIdx * 14)));
               ctx.restore();
@@ -791,7 +850,6 @@ Promise.all([
             const buttonRadius = 10;
 
             if (
-              tool.type === "pointer" &&
               inXYWH(mouseX, mouseY, [curX, myY, sceneW + buttonRadius, sceneH])
             ) {
               // draw semi-circle on the right
@@ -814,12 +872,40 @@ Promise.all([
                   buttonRadius * 2,
                 ],
                 callback: () => {
-                  const newState = structuredClone(state);
-                  newState.defs.flowcharts[flowchartId] = appendFrameAfter(
-                    flowchart,
-                    frameId,
+                  modifyFlowchart(flowchartId, (old) =>
+                    appendFrameAfter(old, frameId),
                   );
-                  undoStack.push(newState);
+                },
+              });
+            }
+
+            if (steps.some((step) => step.isStuck)) {
+              ctx.beginPath();
+              ctx.arc(
+                curX + sceneW / 2,
+                myY + sceneH,
+                buttonRadius,
+                0,
+                2 * Math.PI,
+              );
+              ctx.fillStyle = patternParchment;
+              ctx.fill();
+              ctx.fillStyle = "rgba(255,0,0,0.4)";
+              ctx.fill();
+              clickables.push({
+                xywh: [
+                  curX + sceneW / 2 - buttonRadius,
+                  myY + sceneH - buttonRadius,
+                  buttonRadius * 2,
+                  buttonRadius * 2,
+                ],
+                callback: () => {
+                  if (!frame.escapeRouteFrameId) {
+                    console.log("no escape route");
+                    modifyFlowchart(flowchartId, (old) =>
+                      addEscapeRoute(old, frameId),
+                    );
+                  }
                 },
               });
             }

@@ -13,6 +13,7 @@ export type Frame = {
   id: string;
   action?: Action;
   failureFrameId?: string;
+  escapeRouteFrameId?: string;
 };
 
 export type Action =
@@ -96,6 +97,7 @@ export type Step = {
   flowchartId: string;
   scene: Scene;
   caller: Call | undefined;
+  isStuck?: boolean;
 };
 
 export type Call = {
@@ -151,6 +153,7 @@ export function runAll(
 
     const { flowchartId, frameId, scene, caller } = step;
     const flowchart = defs.flowcharts[flowchartId];
+    const frame = flowchart.frames[frameId];
     const nextArrows = flowchart.arrows.filter(({ from }) => from === frameId);
 
     // If there are no further arrows, we assume the current flowchart
@@ -201,6 +204,7 @@ export function runAll(
     }
 
     // Otherwise, we follow all arrows.
+    let continuedSuccessfully = false;
     for (const nextArrow of nextArrows) {
       const nextFrameId = nextArrow.to;
       const nextFrame = flowchart.frames[nextFrameId];
@@ -209,6 +213,7 @@ export function runAll(
       }
       try {
         performAction(step, nextFrameId, nextFrame.action, defs, traceTreeOut);
+        continuedSuccessfully = true;
       } catch (e) {
         if (nextFrame.failureFrameId) {
           const nextStep: Step = {
@@ -221,11 +226,22 @@ export function runAll(
           };
           runAll(nextStep, defs, traceTreeOut);
           return;
-        } else {
-          // TODO: if there's no failure path, we abort this branch of
-          // the trace (not as a final branch)
-          return;
         }
+      }
+    }
+    if (!continuedSuccessfully) {
+      // TODO: first time we've mutated a step after adding it? idk
+      step.isStuck = true;
+      if (frame.escapeRouteFrameId) {
+        const nextStep: Step = {
+          id: `${step.id}→${frameId}↝${frame.escapeRouteFrameId}`,
+          prevStepId: step.id,
+          flowchartId,
+          frameId: frame.escapeRouteFrameId,
+          scene,
+          caller,
+        };
+        runAll(nextStep, defs, traceTreeOut);
       }
     }
   } finally {
@@ -554,16 +570,24 @@ function topLevelValueForCall(
 
 export function getNextFrameIds(frameId: string, flowchart: Flowchart) {
   // TODO: what about special arrows?
-  return flowchart.arrows
-    .filter(({ from }) => from === frameId)
-    .map(({ to }) => to);
+  return [
+    ...flowchart.arrows
+      .filter(({ from }) => from === frameId)
+      .map(({ to }) => to),
+    flowchart.frames[frameId].escapeRouteFrameId,
+  ].filter(truthy);
 }
 
 export function getPrevFrameIds(frameId: string, flowchart: Flowchart) {
   // TODO: what about special arrows?
-  return flowchart.arrows
-    .filter(({ to }) => to === frameId)
-    .map(({ from }) => from);
+  return [
+    ...flowchart.arrows
+      .filter(({ to }) => to === frameId)
+      .map(({ from }) => from),
+    ...Object.values(flowchart.frames)
+      .filter((frame) => frame.escapeRouteFrameId === frameId)
+      .map((frame) => frame.id),
+  ];
 }
 
 export function stringifyEqual<T>(a: T, b: T) {

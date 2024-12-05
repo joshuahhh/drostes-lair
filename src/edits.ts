@@ -38,3 +38,14 @@ export const setAction = (fc: Flowchart, frameId: string, action: Action) => {
   frame.action = action;
   return newFc;
 };
+
+export const addEscapeRoute = (fc: Flowchart, frameId: string) => {
+  const newFc = structuredClone(fc);
+  const newFrame = {
+    id: Math.random() + "",
+  };
+  newFc.frames[frameId].escapeRouteFrameId = newFrame.id;
+  newFc.frames[newFrame.id] = newFrame;
+  console.log(newFc);
+  return newFc;
+};
