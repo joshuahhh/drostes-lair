@@ -37,7 +37,7 @@ export const renderOutlinedText = (
 ) => {
   const { textAlign = "center", textBaseline = "middle", size = 12 } = opts;
 
-  ctx.font = size + "px serif";
+  ctx.font = size + "px monospace";
   ctx.textAlign = textAlign;
   ctx.textBaseline = textBaseline;
 

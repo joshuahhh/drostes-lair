@@ -94,9 +94,9 @@ export const makeCandleRenderer = (
     gradient.addColorStop(0.1, "rgba(235, 120, 54,0.1)");
     gradient.addColorStop(0.5, "rgba(255, 217, 66, 0)");
     gradient.addColorStop(0.5, "rgba(0, 0, 0, 0)");
-    gradient.addColorStop(1, "rgba(0,0,0,0.6)");
+    gradient.addColorStop(1, "rgba(0,0,0,0.3)");
     ctx.fillStyle = gradient;
-    // ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
+    ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     // candle flicker dimming
     const dimFrames = [45, 48, 49, 50, 51, 52, 53];
     if (dimFrames.some((i) => i === t % 127)) {

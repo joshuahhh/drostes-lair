@@ -1277,7 +1277,9 @@ Promise.all([
             renderParchmentBox(curX, myY, sceneW, sceneH, { empty: true });
           }
           let label = getActionText(flowchart.frames[frameId].action);
-          renderOutlinedText(ctx, label, [curX, myY], { textAlign: "left" });
+          drawQueue.push(() =>
+            renderOutlinedText(ctx, label, [curX, myY], { textAlign: "left" }),
+          );
           if (frame.action?.type === "workspace-pick") {
             const action = frame.action;
             const index = action.index;
