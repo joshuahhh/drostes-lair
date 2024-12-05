@@ -253,11 +253,22 @@ Promise.all([
       draggedOver = false;
     });
 
-    const renderParchmentBox = (x: number, y: number, w: number, h: number) => {
+    const renderParchmentBox = (
+      x: number,
+      y: number,
+      w: number,
+      h: number,
+      opts: { empty?: boolean } = {},
+    ) => {
+      const { empty = false } = opts;
+
       ctx.save();
       ctx.shadowColor = "rgba(0,0,0,1)";
       ctx.shadowOffsetY = 4;
       ctx.shadowBlur = 15;
+      if (empty) {
+        ctx.globalAlpha = 0.3;
+      }
       ctx.drawImage(
         imgParchment,
         Math.random(),
@@ -269,6 +280,12 @@ Promise.all([
         w,
         h,
       );
+      if (empty) {
+        ctx.globalAlpha = 1;
+        ctx.strokeStyle = "rgba(183,167,148)";
+        ctx.lineWidth = 1;
+        ctx.strokeRect(x, y, w, h);
+      }
       ctx.restore();
     };
     const sceneW = 100;
@@ -716,6 +733,7 @@ Promise.all([
         const { flowchartId, frameId } = stack.stackPath.final;
         const flowchart = defs.flowcharts[flowchartId];
         const frame = flowchart.frames[frameId];
+
         if (frame.action?.type === "call") {
           const childViewchart = viewchart.callViewchartsByFrameId[frameId] as
             | Viewchart
@@ -763,9 +781,12 @@ Promise.all([
               ctx.save();
               renderScene(step, add([curX, myY], v(0, stepIdx * 14)));
               ctx.restore();
-              let label = getActionText(flowchart.frames[step.frameId].action);
-              renderOutlinedText(label, [curX, myY], { textAlign: "left" });
             }
+            if (stack.stepIds.length === 0) {
+              renderParchmentBox(curX, myY, sceneW, sceneH, { empty: true });
+            }
+            let label = getActionText(flowchart.frames[frameId].action);
+            renderOutlinedText(label, [curX, myY], { textAlign: "left" });
 
             const buttonRadius = 10;
 

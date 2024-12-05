@@ -660,12 +660,17 @@ export function getNextStacksInLevel(
 ): Stack[] {
   const { frameId, flowchartId } = stack.stackPath.final;
   const nextFrameIds = getNextFrameIds(frameId, defs.flowcharts[flowchartId]);
-  return nextFrameIds.flatMap((nextFrameId) => {
+  return nextFrameIds.map((nextFrameId) => {
     const nextStackPath = {
       callPath: stack.stackPath.callPath,
       final: { flowchartId, frameId: nextFrameId },
     };
-    return getStackByPath(nextStackPath, stepsInStacks) ?? [];
+    return (
+      getStackByPath(nextStackPath, stepsInStacks) ?? {
+        stackPath: nextStackPath,
+        stepIds: [],
+      }
+    );
   });
 }
 
@@ -681,7 +686,12 @@ export function getPrevStacksInLevel(
       callPath: stack.stackPath.callPath,
       final: { flowchartId, frameId: prevFrameId },
     };
-    return getStackByPath(prevStackPath, stepsInStacks);
+    return (
+      getStackByPath(prevStackPath, stepsInStacks) ?? {
+        stackPath: prevStackPath,
+        stepIds: [],
+      }
+    );
   });
 }
 
