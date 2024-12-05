@@ -46,7 +46,9 @@ export type Action =
       type: "workspace-pick";
       source: number; // index in the workspace
       index: number | "first" | "last" | "any";
-      target: { type: "at"; index: number } | { type: "after"; index: number };
+      target:
+        | { type: "at"; index: number; side: "before" | "after" | "replace" }
+        | { type: "after"; index: number };
     };
 
 export type Lens = {
@@ -369,9 +371,25 @@ function performAction(
       newWorkspace[source] = sourceValue.slice();
       newWorkspace[source].splice(pickedIndex, 1);
       if (target.type === "at") {
-        newWorkspace[target.index] = [pickedItem];
+        if (target.side === "replace") {
+          newWorkspace[target.index] = [pickedItem];
+        } else if (target.side === "before") {
+          newWorkspace[target.index] = [
+            pickedItem,
+            ...newWorkspace[target.index],
+          ];
+        } else if (target.side === "after") {
+          newWorkspace[target.index] = [
+            ...newWorkspace[target.index],
+            pickedItem,
+          ];
+        } else {
+          assertNever(target.side);
+        }
       } else if (target.type === "after") {
         newWorkspace.splice(target.index + 1, 0, [pickedItem]);
+      } else {
+        assertNever(target);
       }
       return {
         value: {

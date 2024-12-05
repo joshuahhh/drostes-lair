@@ -237,7 +237,16 @@ Promise.all([
     let tool:
       | { type: "pointer" }
       | { type: "domino"; orientation: "h" | "v" }
-      | { type: "call"; flowchartId: string } = { type: "pointer" };
+      | { type: "call"; flowchartId: string }
+      | {
+          type: "workspace-pick";
+          source: number;
+          index: number;
+          stackPath: StackPath;
+          value: unknown;
+        } = {
+      type: "pointer",
+    };
 
     // set up cursor stuff
     let shiftHeld = false;
@@ -546,16 +555,40 @@ Promise.all([
       path: StackPath,
       pos: Vec2,
     ) => {
-      let curY = pos[1];
+      const isDropTarget =
+        path &&
+        tool.type === "workspace-pick" &&
+        stackPathToString(tool.stackPath) === stackPathToString(path);
+
+      let curY = pos[1] + 10;
+
+      if (isDropTarget) {
+        renderDropTargetLine(
+          pos[0] + 10,
+          curY - 5,
+          pos[0] + sceneW - 20,
+          curY - 5,
+          { type: "after", index: -1 },
+        );
+      }
+
       for (let [idxInWorkspace, item] of contents.entries()) {
         if (idxInWorkspace > 0) {
           curY += 5;
         }
         const { maxY } = renderWorkspaceValue(item, idxInWorkspace, path, [
-          pos[0],
+          pos[0] + 10,
           curY,
         ]);
         curY = maxY;
+
+        if (isDropTarget) {
+          curY += 5;
+          renderDropTargetLine(pos[0] + 10, curY, pos[0] + sceneW - 20, curY, {
+            type: "after",
+            index: idxInWorkspace,
+          });
+        }
       }
 
       if (tool.type === "call") {
@@ -584,16 +617,27 @@ Promise.all([
     const renderWorkspaceValue = (
       value: any,
       idxInWorkspace: number,
-      path: StackPath,
+      path: StackPath | undefined,
       pos: Vec2,
     ): { maxY: number } => {
-      function gridToXY([x, y]: [number, number]): [number, number] {
-        return [pos[0] + 10 + cellSize * x, pos[1] + 20 + cellSize * y];
+      const isDropTarget =
+        path &&
+        tool.type === "workspace-pick" &&
+        stackPathToString(tool.stackPath) === stackPathToString(path);
+
+      let left = pos[0];
+
+      if (isDropTarget) {
+        renderDropTargetLine(left - 5, pos[1], left - 5, pos[1] + cellSize, {
+          type: "at",
+          index: idxInWorkspace,
+          side: "before",
+        });
       }
 
       // grid squares
       for (let [i, item] of value.entries()) {
-        const cellPos = gridToXY([i, 0]);
+        const cellPos = [left + cellSize * i, pos[1] + cellSize * 0] as const;
         const xywh = [...cellPos, cellSize, cellSize] as const;
 
         // the box
@@ -602,7 +646,7 @@ Promise.all([
         ctx.strokeStyle = "#70665a";
         ctx.rect(...xywh);
         ctx.stroke();
-        if (tool.type === "pointer") {
+        if (tool.type === "pointer" && path) {
           if (inXYWH(mouseX, mouseY, xywh)) {
             ctx.fillStyle = "rgba(255,200,0,0.4)";
             ctx.fill();
@@ -610,15 +654,22 @@ Promise.all([
           clickables.push({
             xywh,
             callback: () => {
-              const { flowchartId, frameId } = path.final;
-              modifyFlowchart(flowchartId, (old) =>
-                setAction(old, frameId, {
-                  type: "workspace-pick",
-                  source: idxInWorkspace,
-                  index: i,
-                  target: { type: "after", index: idxInWorkspace },
-                }),
-              );
+              tool = {
+                type: "workspace-pick",
+                source: idxInWorkspace,
+                index: i,
+                stackPath: path,
+                value: item,
+              };
+              // const { flowchartId, frameId } = path.final;
+              // modifyFlowchart(flowchartId, (old) =>
+              //   setAction(old, frameId, {
+              //     type: "workspace-pick",
+              //     source: idxInWorkspace,
+              //     index: i,
+              //     target: { type: "after", index: idxInWorkspace },
+              //   }),
+              // );
             },
           });
         }
@@ -632,9 +683,81 @@ Promise.all([
           typeof item === "string" ? item : JSON.stringify(item),
           ...add(cellPos, v(cellSize / 2)),
         );
+
+        if (
+          isDropTarget &&
+          tool.type === "workspace-pick" &&
+          tool.source === idxInWorkspace &&
+          tool.index === i
+        ) {
+          ctx.fillStyle = "rgba(200,200,200,1)";
+          ctx.fillRect(...xywh);
+        }
+      }
+      if (isDropTarget) {
+        renderDropTargetLine(
+          left + cellSize / 2,
+          pos[1] + cellSize / 2,
+          left + cellSize * value.length - cellSize / 2,
+          pos[1] + cellSize / 2,
+          {
+            type: "at",
+            index: idxInWorkspace,
+            side: "replace",
+          },
+        );
+      }
+
+      left += cellSize * value.length;
+      left += 5;
+
+      if (isDropTarget) {
+        renderDropTargetLine(left, pos[1], left, pos[1] + cellSize, {
+          type: "at",
+          index: idxInWorkspace,
+          side: "after",
+        });
       }
 
       return { maxY: pos[1] + cellSize };
+    };
+
+    const renderDropTargetLine = (
+      x1: number,
+      y1: number,
+      x2: number,
+      y2: number,
+      target: (Action & { type: "workspace-pick" })["target"],
+    ) => {
+      const xywh = [x1 - 3, y1 - 3, x2 - x1 + 6, y2 - y1 + 6] as const;
+      ctx.save();
+      ctx.strokeStyle = inXYWH(mouseX, mouseY, xywh)
+        ? "rgba(255,200,0,0.8)"
+        : "#70665a";
+      ctx.setLineDash([2, 2]);
+      ctx.beginPath();
+      ctx.moveTo(x1, y1);
+      ctx.lineTo(x2, y2);
+      ctx.stroke();
+      ctx.restore();
+      clickables.push({
+        xywh,
+        callback: () => {
+          if (tool.type === "workspace-pick") {
+            const { source, index, stackPath, value } = tool;
+            const { flowchartId, frameId } = stackPath.final;
+            modifyFlowchart(flowchartId, (old) =>
+              setAction(old, frameId, {
+                type: "workspace-pick",
+                source,
+                index,
+                target,
+              }),
+            );
+            tool = { type: "pointer" };
+          }
+        },
+      });
     };
 
     const renderScene = (
@@ -1130,6 +1253,13 @@ Promise.all([
         renderOutlinedText(ctx, state.initialFlowchartId, [mouseX, mouseY], {
           size: 40,
         });
+      } else if (tool.type === "workspace-pick") {
+        renderWorkspaceValue(
+          [tool.value],
+          0,
+          undefined,
+          add([mouseX, mouseY], v(-cellSize / 2)),
+        );
       } else {
         assertNever(tool);
       }
