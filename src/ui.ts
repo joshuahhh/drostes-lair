@@ -250,10 +250,15 @@ Promise.all([
     const cellSize = 20;
     const dominoPadding = 5;
 
-    const renderDomino = (x: number, y: number, orientation: "h" | "v") => {
+    const renderDomino = (
+      x: number,
+      y: number,
+      orientation: "h" | "v",
+      onClick?: () => void,
+    ) => {
       ctx.beginPath();
       ctx.fillStyle = "#4D2725";
-      ctx.rect(
+      const xywh = [
         x - cellSize / 2 + dominoPadding,
         y - cellSize / 2 + dominoPadding,
         orientation === "h"
@@ -262,7 +267,11 @@ Promise.all([
         orientation === "v"
           ? cellSize * 2 - dominoPadding * 2
           : cellSize - dominoPadding * 2,
-      );
+      ] as const;
+      ctx.rect(...xywh);
+      if (onClick) {
+        clickables.push({ xywh, callback: onClick });
+      }
       ctx.fill();
     };
 
@@ -781,6 +790,23 @@ Promise.all([
       if (tool === "domino-h" || tool === "domino-v") {
         renderDomino(mouseX, mouseY, tool === "domino-h" ? "h" : "v");
       }
+
+      renderDomino(
+        c.width - 250,
+        c.height - 30 - (cellSize - dominoPadding * 2),
+        "h",
+        () => {
+          tool = "domino-h";
+        },
+      );
+      renderDomino(
+        c.width - 200,
+        c.height - 30 - (2 * cellSize - dominoPadding * 2),
+        "v",
+        () => {
+          tool = "domino-v";
+        },
+      );
 
       renderCandle();
       (window as any).DEBUG = false;
