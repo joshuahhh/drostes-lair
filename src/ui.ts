@@ -135,6 +135,8 @@ Promise.all([
 
     let pan = [0, 0] as [number, number];
 
+    let tool: "pointer" | "domino-h" | "domino-v" = "pointer";
+
     // set up cursor stuff
     let shiftHeld = false;
     window.addEventListener("keydown", (e) => {
@@ -169,6 +171,15 @@ Promise.all([
           }
         }
         window.alert("Can't find that, sorry.");
+      }
+      if (e.key === "h") {
+        tool = "domino-h";
+      }
+      if (e.key === "v") {
+        tool = "domino-v";
+      }
+      if (e.key === "Escape") {
+        tool = "pointer";
       }
     });
     window.addEventListener("keyup", (e) => {
@@ -236,10 +247,27 @@ Promise.all([
     const sceneW = 100;
     const sceneH = 100;
 
+    const cellSize = 20;
+    const dominoPadding = 5;
+
+    const renderDomino = (x: number, y: number, orientation: "h" | "v") => {
+      ctx.beginPath();
+      ctx.fillStyle = "#4D2725";
+      ctx.rect(
+        x - cellSize / 2 + dominoPadding,
+        y - cellSize / 2 + dominoPadding,
+        orientation === "h"
+          ? cellSize * 2 - dominoPadding * 2
+          : cellSize - dominoPadding * 2,
+        orientation === "v"
+          ? cellSize * 2 - dominoPadding * 2
+          : cellSize - dominoPadding * 2,
+      );
+      ctx.fill();
+    };
+
     const renderDominoes = (value: any, path: StackPath, pos: Vec2) => {
       const { defs } = state;
-
-      const cellSize = 20;
 
       function gridToXY([x, y]: [number, number]): [number, number] {
         return [pos[0] + 10 + cellSize * x, pos[1] + 20 + cellSize * y];
@@ -253,36 +281,44 @@ Promise.all([
         for (let r = 0; r < value.height; r++) {
           const xywh = [...gridToXY([c, r]), cellSize, cellSize] as const;
           ctx.rect(...xywh);
-          clickables.push({
-            xywh,
-            callback: () => {
-              let dx = 0;
-              let dy = 0;
-              for (const segment of path.callPath) {
-                const frame =
-                  defs.flowcharts[segment.flowchartId].frames[segment.frameId];
-                const action = frame.action as Action & { type: "call" };
-                const lens = action.lens!; // TODO: what if not here
-                dx += lens.dx;
-                dy += lens.dy;
-              }
-              const { flowchartId, frameId } = path.final;
-              const newState = structuredClone(state);
-              newState.defs.flowcharts[flowchartId] = setAction(
-                state.defs.flowcharts[flowchartId],
-                frameId,
-                {
-                  type: "place-domino",
-                  domino: [
-                    [c - dx, r - dy],
-                    [c - dx, r - dy + 1],
-                  ],
-                  failureFrameId: "base-case",
-                },
-              );
-              undoStack.push(newState);
-            },
-          });
+          if (tool === "domino-h" || tool === "domino-v") {
+            clickables.push({
+              xywh,
+              callback: () => {
+                let dx = 0;
+                let dy = 0;
+                for (const segment of path.callPath) {
+                  const frame =
+                    defs.flowcharts[segment.flowchartId].frames[
+                      segment.frameId
+                    ];
+                  const action = frame.action as Action & { type: "call" };
+                  const lens = action.lens!; // TODO: what if not here
+                  dx += lens.dx;
+                  dy += lens.dy;
+                }
+                const { flowchartId, frameId } = path.final;
+                const newState = structuredClone(state);
+                newState.defs.flowcharts[flowchartId] = setAction(
+                  state.defs.flowcharts[flowchartId],
+                  frameId,
+                  {
+                    type: "place-domino",
+                    domino: [
+                      [c - dx, r - dy],
+                      add(
+                        [c - dx, r - dy],
+                        tool === "domino-h" ? [1, 0] : [0, 1],
+                      ),
+                    ],
+                    failureFrameId: "base-case",
+                  },
+                );
+                undoStack.push(newState);
+                tool = "pointer";
+              },
+            });
+          }
         }
       }
 
@@ -293,16 +329,13 @@ Promise.all([
       ctx.stroke();
 
       // dominoes
-      ctx.beginPath();
-      ctx.fillStyle = "#4D2725";
       for (const domino of value.dominoes) {
-        ctx.rect(
-          ...add(gridToXY(domino[0]), [5, 5]),
-          (domino[1][0] - domino[0][0] + 1) * cellSize - 10,
-          (domino[1][1] - domino[0][1] + 1) * cellSize - 10,
+        const orientation = domino[0][0] === domino[1][0] ? "v" : "h";
+        renderDomino(
+          ...add(gridToXY(domino[0]), [cellSize / 2, cellSize / 2]),
+          orientation,
         );
       }
-      ctx.fill();
 
       // lens layers
       let x = 0;
@@ -404,11 +437,14 @@ Promise.all([
 
       clickables = [];
 
-      c.style.cursor = mouseDown
-        ? "url('./assets/glove2.png'), pointer"
-        : shiftHeld
-          ? "url('./assets/glove1.png'), pointer"
-          : "url('./assets/glove3.png'), pointer";
+      c.style.cursor =
+        tool === "pointer"
+          ? mouseDown
+            ? "url('./assets/glove2.png'), pointer"
+            : shiftHeld
+              ? "url('./assets/glove1.png'), pointer"
+              : "url('./assets/glove3.png'), pointer"
+          : "none";
 
       // draw background
       ctx.fillStyle = patternAsfault;
@@ -657,6 +693,7 @@ Promise.all([
             const buttonRadius = 10;
 
             if (
+              tool === "pointer" &&
               inXYWH(mouseX, mouseY, [curX, myY, sceneW + buttonRadius, sceneH])
             ) {
               // draw semi-circle on the right
@@ -740,6 +777,10 @@ Promise.all([
       //   stepsInStacks.stackByStepId[initStepId],
       //   ...add(pan, v(100)),
       // );
+
+      if (tool === "domino-h" || tool === "domino-v") {
+        renderDomino(mouseX, mouseY, tool === "domino-h" ? "h" : "v");
+      }
 
       renderCandle();
       (window as any).DEBUG = false;
