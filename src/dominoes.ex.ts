@@ -5,7 +5,7 @@ export const dominoFlowchart: Flowchart = {
   id: "♌︎",
   initialFrameId: "1",
   frames: indexById<Frame>([
-    { id: "1", action: { type: "start" } },
+    { id: "1", action: { type: "start" }, escapeRouteFrameId: "base-case" },
     // we can place a vertical domino...
     {
       id: "one-domino-1",
@@ -16,7 +16,6 @@ export const dominoFlowchart: Flowchart = {
           [0, 1],
         ],
       },
-      failureFrameId: "base-case",
     },
     // ...and recurse
     {

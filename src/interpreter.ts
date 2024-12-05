@@ -12,7 +12,6 @@ export type Flowchart = {
 export type Frame = {
   id: string;
   action?: Action;
-  failureFrameId?: string;
   escapeRouteFrameId?: string;
 };
 
@@ -215,18 +214,9 @@ export function runAll(
         performAction(step, nextFrameId, nextFrame.action, defs, traceTreeOut);
         continuedSuccessfully = true;
       } catch (e) {
-        if (nextFrame.failureFrameId) {
-          const nextStep: Step = {
-            id: `${step.id}→${frameId}↝${nextFrame.failureFrameId}`,
-            prevStepId: step.id,
-            flowchartId,
-            frameId: nextFrame.failureFrameId,
-            scene,
-            caller,
-          };
-          runAll(nextStep, defs, traceTreeOut);
-          return;
-        }
+        // TODO: fail silently (aside from lack of
+        // continuedSuccessfully); would be nice to surface this
+        // somehow
       }
     }
     if (!continuedSuccessfully) {
