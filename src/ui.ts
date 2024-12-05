@@ -18,6 +18,7 @@ import {
   putStepsInStacks,
   runAll,
   stackPathForStep,
+  stackPathToString,
   stepsInStacksToViewchart,
   topLevelValueForStep,
 } from "./interpreter";
@@ -548,7 +549,7 @@ Promise.all([
       const scenePadY = 40;
       const callPad = 20;
       const callTopPad = 20;
-      const xFromStack = new Map<Stack, number>();
+      const xFromStack: Record<string, number> = {}; // keyed by stackPathToString
 
       const renderViewchart = (
         viewchart: Viewchart,
@@ -695,7 +696,9 @@ Promise.all([
         final: Vec2[];
       } => {
         const prevStacks = getPrevStacksInLevel(stack, stepsInStacks, defs);
-        const prevStackXs = prevStacks.map((stack) => xFromStack.get(stack));
+        const prevStackXs = prevStacks.map(
+          (stack) => xFromStack[stackPathToString(stack.stackPath)],
+        );
         if (!prevStackXs.every((x) => x !== undefined))
           return { maxX: -Infinity, maxY: -Infinity, final: [] };
 
@@ -752,7 +755,7 @@ Promise.all([
         }
 
         // render stack
-        xFromStack.set(stack, curX);
+        xFromStack[stackPathToString(stack.stackPath)] = curX;
         if (actuallyDraw) {
           drawQueue.push(() => {
             for (const [stepIdx, stepId] of stack.stepIds.entries()) {
