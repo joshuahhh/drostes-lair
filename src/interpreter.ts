@@ -41,6 +41,12 @@ export type Action =
       func: (input: Scene) => boolean;
       then: Action | undefined;
       else: Action | undefined;
+    }
+  | {
+      type: "workspace-pick";
+      source: number; // index in the workspace
+      index: number | "first" | "last" | "any";
+      target: { type: "at"; index: number } | { type: "after"; index: number };
     };
 
 export type Lens = {
@@ -136,6 +142,7 @@ export function runAll(
   step: Step,
   defs: Definitions,
   traceTreeOut: TraceTree,
+  callDepth: number,
 ): void {
   if (RUN_ALL_DEPTH > 100) {
     throw new RangeError("runAll depth overflow");
@@ -198,7 +205,7 @@ export function runAll(
         scene: returnScene,
         caller: callerInfo.prevStep.caller,
       };
-      runAll(nextStep, defs, traceTreeOut);
+      runAll(nextStep, defs, traceTreeOut, callDepth - 1);
       return;
     }
 
@@ -211,9 +218,17 @@ export function runAll(
         throw new Error(`Frame ${nextFrameId} not found`);
       }
       try {
-        performAction(step, nextFrameId, nextFrame.action, defs, traceTreeOut);
+        performAction(
+          step,
+          nextFrameId,
+          nextFrame.action,
+          defs,
+          traceTreeOut,
+          callDepth,
+        );
         continuedSuccessfully = true;
       } catch (e) {
+        console.log(e);
         // TODO: fail silently (aside from lack of
         // continuedSuccessfully); would be nice to surface this
         // somehow
@@ -231,7 +246,7 @@ export function runAll(
           scene,
           caller,
         };
-        runAll(nextStep, defs, traceTreeOut);
+        runAll(nextStep, defs, traceTreeOut, callDepth);
       }
     }
   } finally {
@@ -245,6 +260,7 @@ function performAction(
   action: Action | undefined,
   defs: Definitions,
   traceTreeOut: TraceTree,
+  callDepth: number,
 ): void {
   const { flowchartId, scene, caller } = step;
 
@@ -259,7 +275,7 @@ function performAction(
         scene: nextScene,
         caller,
       };
-      runAll(nextStep, defs, traceTreeOut);
+      runAll(nextStep, defs, traceTreeOut, callDepth);
     }
   }
 
@@ -269,39 +285,33 @@ function performAction(
     proceedWith(action.func(scene));
   } else if (action.type === "place-domino") {
     const { domino } = action;
-    performAction(
-      step,
-      frameId,
+    const { value } = scene;
+    if (
+      domino[0][0] < 0 ||
+      domino[0][1] < 0 ||
+      domino[1][0] < 0 ||
+      domino[1][1] < 0 ||
+      domino[0][0] >= value.width ||
+      domino[0][1] >= value.height ||
+      domino[1][0] >= value.width ||
+      domino[1][1] >= value.height
+    ) {
+      throw new Error("domino out of bounds");
+    }
+    proceedWith([
       {
-        type: "test-func",
-        label: "place domino",
-        func: ({ value }) => {
-          if (
-            domino[0][0] < 0 ||
-            domino[0][1] < 0 ||
-            domino[1][0] < 0 ||
-            domino[1][1] < 0 ||
-            domino[0][0] >= value.width ||
-            domino[0][1] >= value.height ||
-            domino[1][0] >= value.width ||
-            domino[1][1] >= value.height
-          ) {
-            throw new Error("domino out of bounds");
-          }
-          return [
-            {
-              value: {
-                ...value,
-                dominoes: [...value.dominoes, action.domino],
-              },
-            },
-          ];
+        value: {
+          ...value,
+          dominoes: [...value.dominoes, action.domino],
         },
       },
-      defs,
-      traceTreeOut,
-    );
+    ]);
   } else if (action.type === "call") {
+    console.log("callDepth", callDepth);
+    if (callDepth > 10) {
+      throw new RangeError("call depth overflow");
+    }
+
     // time to step into the call
     const nextFlowchart = defs.flowcharts[action.flowchartId];
     if (!nextFlowchart) {
@@ -329,10 +339,48 @@ function performAction(
         frameId,
       },
     };
-    runAll(nextStep, defs, traceTreeOut);
+    runAll(nextStep, defs, traceTreeOut, callDepth + 1);
   } else if (action.type === "test-cond") {
     const nextAction = action.func(scene) ? action.then : action.else;
-    performAction(step, frameId, nextAction, defs, traceTreeOut);
+    performAction(step, frameId, nextAction, defs, traceTreeOut, callDepth);
+  } else if (action.type === "workspace-pick") {
+    const { source, index, target } = action;
+    const { value } = scene;
+    const sourceValue: unknown[] = value.contents[source];
+    if (!sourceValue) {
+      throw new Error(`Item ${source} not found in workspace`);
+    }
+    let pickedIndices: number[];
+    if (index === "first") {
+      pickedIndices = [0];
+    } else if (index === "last") {
+      pickedIndices = [sourceValue.length - 1];
+    } else if (index === "any") {
+      pickedIndices = Array.from({ length: sourceValue.length }, (_, i) => i);
+    } else {
+      pickedIndices = [index];
+    }
+    const nextScenes = pickedIndices.map((pickedIndex) => {
+      if (pickedIndex < 0 || pickedIndex >= sourceValue.length) {
+        throw new Error(`Item ${pickedIndex} is out of bounds`);
+      }
+      let newWorkspace = value.contents.slice();
+      const pickedItem = sourceValue[pickedIndex];
+      newWorkspace[source] = sourceValue.slice();
+      newWorkspace[source].splice(pickedIndex, 1);
+      if (target.type === "at") {
+        newWorkspace[target.index] = [pickedItem];
+      } else if (target.type === "after") {
+        newWorkspace.splice(target.index + 1, 0, [pickedItem]);
+      }
+      return {
+        value: {
+          ...value,
+          contents: newWorkspace,
+        },
+      };
+    });
+    proceedWith(nextScenes);
   } else {
     assertNever(action);
   }
@@ -401,7 +449,7 @@ export function runHelper(flowcharts: Flowchart[], value: any) {
     caller: undefined,
   };
   try {
-    runAll(initStep, defs, traceTree);
+    runAll(initStep, defs, traceTree, 0);
   } catch (e) {
     if (e instanceof RangeError) {
       console.error("Infinite loop detected, dumping top of traceTree:");
@@ -788,6 +836,13 @@ export function getActionText(action?: Action): string {
     return "if";
   } else if (action.type === "start") {
     return "start";
+  } else if (action.type === "workspace-pick") {
+    return (
+      "pick " +
+      (typeof action.index === "number"
+        ? `item ${action.index + 1}`
+        : `${action.index} item`)
+    );
   }
   assertNever(action);
 }

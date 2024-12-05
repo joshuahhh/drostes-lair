@@ -31,10 +31,16 @@ export const appendFrameAfter = (fc: Flowchart, frameId: string) => {
   return newFc;
 };
 
-export const setAction = (fc: Flowchart, frameId: string, action: Action) => {
+export const setAction = (
+  fc: Flowchart,
+  frameId: string,
+  action: Action,
+  allowOverride = false,
+) => {
   const newFc = structuredClone(fc);
   const frame = newFc.frames[frameId];
-  if (frame.action) throw "tried to setAction on a frame that has an action!";
+  if (frame.action && !allowOverride)
+    throw "tried to setAction on a frame that has an action!";
   frame.action = action;
   return newFc;
 };

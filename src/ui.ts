@@ -23,7 +23,7 @@ import {
   topLevelValueForStep,
 } from "./interpreter";
 import { makeCandleRenderer } from "./ui_candle";
-import { makeOutlinedTextRenderer } from "./ui_text";
+import { renderOutlinedText } from "./ui_text";
 import {
   XYWH,
   fillRect,
@@ -149,9 +149,29 @@ const examples: Record<string, UIState> = {
       },
     },
   },
+  listBlank: {
+    initialValue: {
+      type: "workspace",
+      contents: [
+        ["K", "Q", "J", "A"],
+        ["♠", "♣", "♦", "♥"],
+      ],
+    },
+    initialFlowchartId: "♌︎",
+    defs: {
+      flowcharts: indexById<Flowchart>([
+        {
+          id: "♌︎",
+          initialFrameId: "1",
+          frames: indexById([{ id: "1", action: { type: "start" } }]),
+          arrows: [],
+        },
+      ]),
+    },
+  },
 };
 
-let undoStack: UIState[] = [examples.dominoesSimpleRecurse];
+let undoStack: UIState[] = [examples.listBlank];
 
 const modifyFlowchart = (
   flowchartId: string,
@@ -201,12 +221,7 @@ Promise.all([
     const patternParchment = ctx.createPattern(imgParchment, "repeat")!;
     const patternAsfault = ctx.createPattern(imgAsfault, "repeat")!;
 
-    const renderOutlinedText = makeOutlinedTextRenderer(ctx);
-    const renderCandle = makeCandleRenderer(
-      ctx,
-      imgCandleSheet,
-      renderOutlinedText,
-    );
+    const renderCandle = makeCandleRenderer(ctx, imgCandleSheet);
 
     let clickables: {
       xywh: XYWH;
@@ -235,7 +250,9 @@ Promise.all([
         altHeld = true;
       }
       if (e.key === "z" && (e.ctrlKey || e.metaKey)) {
-        undoStack.pop();
+        if (undoStack.length > 1) {
+          undoStack.pop();
+        }
       }
       if (e.key === "s" && (e.ctrlKey || e.metaKey)) {
         e.preventDefault();
@@ -524,6 +541,102 @@ Promise.all([
       }
     };
 
+    const renderWorkspace = (
+      contents: unknown[][],
+      path: StackPath,
+      pos: Vec2,
+    ) => {
+      let curY = pos[1];
+      for (let [idxInWorkspace, item] of contents.entries()) {
+        if (idxInWorkspace > 0) {
+          curY += 5;
+        }
+        const { maxY } = renderWorkspaceValue(item, idxInWorkspace, path, [
+          pos[0],
+          curY,
+        ]);
+        curY = maxY;
+      }
+
+      if (tool.type === "call") {
+        const xywh = [pos[0], pos[1], sceneW, sceneH] as const;
+        const callFlowchartId = tool.flowchartId;
+        if (inXYWH(mouseX, mouseY, xywh)) {
+          ctx.fillStyle = "rgba(255,200,0,0.4)";
+          ctx.fillRect(...xywh);
+        }
+        clickables.push({
+          xywh,
+          callback: () => {
+            const { flowchartId, frameId } = path.final;
+            modifyFlowchart(flowchartId, (old) =>
+              setAction(old, frameId, {
+                type: "call",
+                flowchartId: callFlowchartId,
+              }),
+            );
+            tool = { type: "pointer" };
+          },
+        });
+      }
+    };
+
+    const renderWorkspaceValue = (
+      value: any,
+      idxInWorkspace: number,
+      path: StackPath,
+      pos: Vec2,
+    ): { maxY: number } => {
+      function gridToXY([x, y]: [number, number]): [number, number] {
+        return [pos[0] + 10 + cellSize * x, pos[1] + 20 + cellSize * y];
+      }
+
+      // grid squares
+      for (let [i, item] of value.entries()) {
+        const cellPos = gridToXY([i, 0]);
+        const xywh = [...cellPos, cellSize, cellSize] as const;
+
+        // the box
+        ctx.beginPath();
+        ctx.lineWidth = 3;
+        ctx.strokeStyle = "#70665a";
+        ctx.rect(...xywh);
+        ctx.stroke();
+        if (tool.type === "pointer") {
+          if (inXYWH(mouseX, mouseY, xywh)) {
+            ctx.fillStyle = "rgba(255,200,0,0.4)";
+            ctx.fill();
+          }
+          clickables.push({
+            xywh,
+            callback: () => {
+              const { flowchartId, frameId } = path.final;
+              modifyFlowchart(flowchartId, (old) =>
+                setAction(old, frameId, {
+                  type: "workspace-pick",
+                  source: idxInWorkspace,
+                  index: i,
+                  target: { type: "after", index: idxInWorkspace },
+                }),
+              );
+            },
+          });
+        }
+
+        // the text
+        ctx.font = "14px serif";
+        ctx.textAlign = "center";
+        ctx.textBaseline = "middle";
+        ctx.fillStyle = "rgba(0,0,0,0.8)";
+        ctx.fillText(
+          typeof item === "string" ? item : JSON.stringify(item),
+          ...add(cellPos, v(cellSize / 2)),
+        );
+      }
+
+      return { maxY: pos[1] + cellSize };
+    };
+
     const renderScene = (
       step: Step,
       pos: [number, number], // TODO: rename: is this the top left corner?
@@ -546,11 +659,15 @@ Promise.all([
       if ("dominoes" in value) {
         const value = topLevelValueForStep(step, traceTree, defs) as any;
         renderDominoes(value, stackPathForStep(step, traceTree), pos);
+      } else if (value.type === "workspace") {
+        renderWorkspace(value.contents, stackPathForStep(step, traceTree), pos);
       } else {
-        renderOutlinedText(JSON.stringify(value, null, 2), [
-          pos[0] + sceneW / 2,
-          pos[1] + sceneH / 2,
-        ]);
+        renderOutlinedText(
+          ctx,
+          JSON.stringify(value, null, 2),
+          [pos[0] + 10, pos[1] + 10],
+          { textAlign: "left", textBaseline: "top" },
+        );
       }
     };
 
@@ -572,6 +689,7 @@ Promise.all([
 
       // run program on every frame lol
       traceTree = makeTraceTree();
+      (window as any).traceTree = traceTree;
       // TODO: hardcoding the first flowchart
       const flowchart = state.defs.flowcharts[state.initialFlowchartId];
       const initStep = {
@@ -582,7 +700,7 @@ Promise.all([
         scene: { value: state.initialValue },
         caller: undefined,
       };
-      runAll(initStep, defs, traceTree);
+      runAll(initStep, defs, traceTree, 0);
 
       clickables = [];
 
@@ -845,7 +963,34 @@ Promise.all([
               renderParchmentBox(curX, myY, sceneW, sceneH, { empty: true });
             }
             let label = getActionText(flowchart.frames[frameId].action);
-            renderOutlinedText(label, [curX, myY], { textAlign: "left" });
+            renderOutlinedText(ctx, label, [curX, myY], { textAlign: "left" });
+            if (frame.action?.type === "workspace-pick") {
+              const action = frame.action;
+              const index = action.index;
+              clickables.push({
+                xywh: [curX, myY - 6, sceneW, 12],
+                callback: () => {
+                  modifyFlowchart(flowchartId, (old) =>
+                    setAction(
+                      old,
+                      frameId,
+                      {
+                        ...action,
+                        index:
+                          typeof index === "number"
+                            ? "first"
+                            : index === "first"
+                              ? "last"
+                              : index === "last"
+                                ? "any"
+                                : "first",
+                      },
+                      true,
+                    ),
+                  );
+                },
+              });
+            }
 
             const buttonRadius = 10;
 
@@ -963,7 +1108,7 @@ Promise.all([
       // );
 
       const labelPt = add(pan, v(100, 40));
-      renderOutlinedText(state.initialFlowchartId, labelPt, {
+      renderOutlinedText(ctx, state.initialFlowchartId, labelPt, {
         textAlign: "left",
         textBaseline: "top",
         size: 40,
@@ -982,7 +1127,7 @@ Promise.all([
       } else if (tool.type === "domino") {
         renderDomino(mouseX, mouseY, tool.orientation);
       } else if (tool.type === "call") {
-        renderOutlinedText(state.initialFlowchartId, [mouseX, mouseY], {
+        renderOutlinedText(ctx, state.initialFlowchartId, [mouseX, mouseY], {
           size: 40,
         });
       } else {
