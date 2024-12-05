@@ -149,7 +149,7 @@ const examples: Record<string, UIState> = {
       },
     },
   },
-  listBlank: {
+  cardsBlank: {
     initialValue: {
       type: "workspace",
       contents: [
@@ -169,9 +169,144 @@ const examples: Record<string, UIState> = {
       ]),
     },
   },
+  cardsDone: {
+    initialValue: {
+      type: "workspace",
+      contents: [
+        ["K", "Q", "J", "A"],
+        ["♠", "♣", "♦", "♥"],
+      ],
+    },
+    initialFlowchartId: "♌︎",
+    defs: {
+      flowcharts: {
+        "♌︎": {
+          id: "♌︎",
+          initialFrameId: "1",
+          frames: {
+            "1": {
+              id: "1",
+              action: {
+                type: "start",
+              },
+            },
+            "0.24659405590061168": {
+              id: "0.24659405590061168",
+              action: {
+                type: "workspace-pick",
+                source: 0,
+                index: "any",
+                target: {
+                  type: "after",
+                  index: 1,
+                },
+              },
+            },
+            "0.013947261497014196": {
+              id: "0.013947261497014196",
+              action: {
+                type: "workspace-pick",
+                source: 1,
+                index: "any",
+                target: {
+                  type: "at",
+                  index: 2,
+                  side: "after",
+                },
+              },
+            },
+          },
+          arrows: [
+            {
+              from: "1",
+              to: "0.24659405590061168",
+            },
+            {
+              from: "0.24659405590061168",
+              to: "0.013947261497014196",
+            },
+          ],
+        },
+      },
+    },
+  },
+  reverseBlank: {
+    initialValue: {
+      type: "workspace",
+      contents: [["a", "b", "c", "d"], []],
+    },
+    initialFlowchartId: "♌︎",
+    defs: {
+      flowcharts: indexById<Flowchart>([
+        {
+          id: "♌︎",
+          initialFrameId: "1",
+          frames: indexById([{ id: "1", action: { type: "start" } }]),
+          arrows: [],
+        },
+      ]),
+    },
+  },
+  reverseDone: {
+    initialValue: {
+      type: "workspace",
+      contents: [["a", "b", "c", "d"], []],
+    },
+    initialFlowchartId: "♌︎",
+    defs: {
+      flowcharts: {
+        "♌︎": {
+          id: "♌︎",
+          initialFrameId: "1",
+          frames: {
+            "1": {
+              id: "1",
+              action: {
+                type: "start",
+              },
+              escapeRouteFrameId: "0.9120936509806226",
+            },
+            "0.06121677045049312": {
+              id: "0.06121677045049312",
+              action: {
+                type: "workspace-pick",
+                source: 0,
+                index: "last",
+                target: {
+                  type: "at",
+                  index: 1,
+                  side: "after",
+                },
+              },
+            },
+            "0.5121800283236944": {
+              id: "0.5121800283236944",
+              action: {
+                type: "call",
+                flowchartId: "♌︎",
+              },
+            },
+            "0.9120936509806226": {
+              id: "0.9120936509806226",
+            },
+          },
+          arrows: [
+            {
+              from: "1",
+              to: "0.06121677045049312",
+            },
+            {
+              from: "0.06121677045049312",
+              to: "0.5121800283236944",
+            },
+          ],
+        },
+      },
+    },
+  },
 };
 
-let undoStack: UIState[] = [examples.listBlank];
+let undoStack: UIState[] = [examples.cardsBlank];
 
 const modifyFlowchart = (
   flowchartId: string,
@@ -661,15 +796,6 @@ Promise.all([
                 stackPath: path,
                 value: item,
               };
-              // const { flowchartId, frameId } = path.final;
-              // modifyFlowchart(flowchartId, (old) =>
-              //   setAction(old, frameId, {
-              //     type: "workspace-pick",
-              //     source: idxInWorkspace,
-              //     index: i,
-              //     target: { type: "after", index: idxInWorkspace },
-              //   }),
-              // );
             },
           });
         }
@@ -694,6 +820,10 @@ Promise.all([
           ctx.fillRect(...xywh);
         }
       }
+      ctx.beginPath();
+      ctx.moveTo(left, pos[1]);
+      ctx.lineTo(left, pos[1] + cellSize);
+      ctx.stroke();
       if (isDropTarget) {
         renderDropTargetLine(
           left + cellSize / 2,
@@ -744,7 +874,8 @@ Promise.all([
         xywh,
         callback: () => {
           if (tool.type === "workspace-pick") {
-            const { source, index, stackPath, value } = tool;
+            console.log("applying", target);
+            const { source, index, stackPath } = tool;
             const { flowchartId, frameId } = stackPath.final;
             modifyFlowchart(flowchartId, (old) =>
               setAction(old, frameId, {
