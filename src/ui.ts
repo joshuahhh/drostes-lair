@@ -71,7 +71,7 @@ type UIState = {
   defs: Definitions;
 };
 
-const examples: Record<string, UIState> = {
+const examples = (<T extends Record<string, UIState>>(value: T) => value)({
   dominoesBlank: {
     initialValue: {
       width: 4,
@@ -151,6 +151,60 @@ const examples: Record<string, UIState> = {
             {
               from: "0.8910228818433734",
               to: "0.9228344533853508",
+            },
+          ],
+        },
+      },
+    },
+  },
+  dominoesUntakenPaths: {
+    initialValue: {
+      width: 4,
+      height: 2,
+      dominoes: [],
+    },
+    initialFlowchartId: "♌︎",
+    defs: {
+      flowcharts: {
+        "♌︎": {
+          id: "♌︎",
+          initialFrameId: "1",
+          frames: {
+            "1": {
+              id: "1",
+              action: {
+                type: "start",
+              },
+            },
+            "0.6747159926440511": {
+              id: "0.6747159926440511",
+              action: {
+                type: "place-domino",
+                domino: [
+                  [3, 0],
+                  [4, 0],
+                ],
+              },
+            },
+            "0.3405055595336326": {
+              id: "0.3405055595336326",
+              action: {
+                type: "place-domino",
+                domino: [
+                  [1, 1],
+                  [1, 2],
+                ],
+              },
+            },
+          },
+          arrows: [
+            {
+              from: "1",
+              to: "0.6747159926440511",
+            },
+            {
+              from: "1",
+              to: "0.3405055595336326",
             },
           ],
         },
@@ -238,7 +292,7 @@ const examples: Record<string, UIState> = {
       },
     },
   },
-  kingOrQueen: {
+  cardsKingOrQueen: {
     initialValue: {
       type: "workspace",
       contents: [
@@ -292,6 +346,57 @@ const examples: Record<string, UIState> = {
             {
               from: "1",
               to: "0.7527806732090643",
+            },
+          ],
+        },
+      },
+    },
+  },
+  cardsMakeRoomForStacks: {
+    initialValue: {
+      type: "workspace",
+      contents: [
+        ["K", "Q", "J", "A"],
+        ["♠", "♣", "♦", "♥"],
+      ],
+    },
+    initialFlowchartId: "♌︎",
+    defs: {
+      flowcharts: {
+        "♌︎": {
+          id: "♌︎",
+          initialFrameId: "1",
+          frames: {
+            "1": {
+              id: "1",
+              action: {
+                type: "start",
+              },
+            },
+            "0.39794335085601507": {
+              id: "0.39794335085601507",
+              action: {
+                type: "workspace-pick",
+                source: 0,
+                index: "any",
+                target: {
+                  type: "after",
+                  index: 1,
+                },
+              },
+            },
+            "0.5130787171417488": {
+              id: "0.5130787171417488",
+            },
+          },
+          arrows: [
+            {
+              from: "1",
+              to: "0.39794335085601507",
+            },
+            {
+              from: "1",
+              to: "0.5130787171417488",
             },
           ],
         },
@@ -372,6 +477,26 @@ const examples: Record<string, UIState> = {
       },
     },
   },
+});
+
+// DEFAULT FLOWCHART RIGHT HERE BUDDY
+let undoStack: UIState[] = [examples.cardsMakeRoomForStacks];
+let redoStack: UIState[] = [];
+
+const pushState = (newState: UIState) => {
+  undoStack.push(newState);
+  redoStack = [];
+};
+
+const modifyFlowchart = (
+  flowchartId: string,
+  modification: (old: Flowchart) => Flowchart,
+) => {
+  const newState = structuredClone(state);
+  newState.defs.flowcharts[flowchartId] = modification(
+    newState.defs.flowcharts[flowchartId],
+  );
+  pushState(newState);
 };
 
 const persistantValuesById = new Map();
@@ -393,25 +518,6 @@ const interpTo = (
 const set = (id: string, value: any) => {
   persistantValuesById.set(id, value);
   return value;
-};
-
-let undoStack: UIState[] = [examples.kingOrQueen];
-let redoStack: UIState[] = [];
-
-const pushState = (newState: UIState) => {
-  undoStack.push(newState);
-  redoStack = [];
-};
-
-const modifyFlowchart = (
-  flowchartId: string,
-  modification: (old: Flowchart) => Flowchart,
-) => {
-  const newState = structuredClone(state);
-  newState.defs.flowcharts[flowchartId] = modification(
-    newState.defs.flowcharts[flowchartId],
-  );
-  pushState(newState);
 };
 
 // globals for communication are the best
@@ -1293,7 +1399,12 @@ Promise.all([
     };
     const escapeRouteDropY = sceneH;
 
-    const renderStack = (stack: Stack, curX: number, myY: number) => {
+    const renderStack = (
+      stack: Stack,
+      curX: number,
+      myY: number,
+      actuallyDraw: boolean,
+    ): { maxY: number } => {
       const stackPathString = stackPathToString(stack.stackPath);
       const steps = stack.stepIds.map((stepId) => traceTree.steps[stepId]);
 
@@ -1304,6 +1415,8 @@ Promise.all([
       const sv = interpTo(stackPathString, stackFanTarget, 0);
       const stackFan = sv * (84 - 14) + 14;
 
+      let maxY = myY;
+
       for (const [stepIdx, step] of steps.entries()) {
         const defaultX = curX;
         const defaultY = myY + stepIdx * stackFan;
@@ -1313,25 +1426,37 @@ Promise.all([
             c.height - sceneH,
             myY,
           ] as const;
-          drawQueue.push(() => {
-            renderScene(step, [
-              interpTo(
-                stackPathString + stepIdx + "x",
-                curX + Math.floor(howManyTimesDidModWrap(...modArgs)) * sceneW,
-              ),
-              interpTo(stackPathString + stepIdx + "y", mod(...modArgs)),
-            ]);
-          });
+          if (actuallyDraw)
+            drawQueue.push(() => {
+              renderScene(step, [
+                interpTo(
+                  stackPathString + stepIdx + "x",
+                  curX +
+                    Math.floor(howManyTimesDidModWrap(...modArgs)) * sceneW,
+                ),
+                interpTo(stackPathString + stepIdx + "y", mod(...modArgs)),
+              ]);
+            });
         } else {
-          renderScene(step, [
-            set(stackPathString + stepIdx + "x", defaultX),
-            set(stackPathString + stepIdx + "y", defaultY),
-          ]);
+          if (actuallyDraw)
+            drawQueue.push(() => {
+              renderScene(step, [
+                set(stackPathString + stepIdx + "x", defaultX),
+                set(stackPathString + stepIdx + "y", defaultY),
+              ]);
+            });
         }
+        maxY = Math.max(maxY, defaultY + sceneH);
       }
       if (stack.stepIds.length === 0) {
-        renderParchmentBox(curX, myY, sceneW, sceneH, { empty: true });
+        if (actuallyDraw)
+          drawQueue.push(() => {
+            renderParchmentBox(curX, myY, sceneW, sceneH, { empty: true });
+          });
+        maxY = Math.max(maxY, myY + sceneH);
       }
+
+      return { maxY };
     };
 
     // saves things to draw for later,
@@ -1367,7 +1492,7 @@ Promise.all([
       let curX = myX;
       let curY = myY;
 
-      let maxY = myY + sceneH;
+      let maxY = myY;
 
       const { flowchartId, frameId } = stack.stackPath.final;
       const flowchart = defs.flowcharts[flowchartId];
@@ -1413,74 +1538,73 @@ Promise.all([
         }
       }
 
-      const stackPathString = stackPathToString(stack.stackPath);
       // render stack
+      const stackPathString = stackPathToString(stack.stackPath);
       xFromStack[stackPathString] = curX;
+      const stackSize = renderStack(stack, curX, myY, actuallyDraw);
+      maxY = Math.max(maxY, stackSize.maxY);
       if (actuallyDraw) {
-        drawQueue.push(() => {
-          renderStack(stack, curX, myY);
-          let label = getActionText(flowchart.frames[frameId].action);
-          drawQueue.push(() =>
-            renderOutlinedText(ctx, label, [curX, myY], { textAlign: "left" }),
-          );
-          if (frame.action?.type === "workspace-pick") {
-            const action = frame.action;
-            const index = action.index;
-            clickables.push({
-              xywh: [curX, myY - 6, sceneW, 12],
-              callback: () => {
-                modifyFlowchart(flowchartId, (old) =>
-                  setAction(
-                    old,
-                    frameId,
-                    {
-                      ...action,
-                      index:
-                        typeof index === "number"
-                          ? "first"
-                          : index === "first"
-                            ? "last"
-                            : index === "last"
-                              ? "any"
-                              : "first",
-                    },
-                    true,
-                  ),
-                );
-              },
-            });
-          }
+        let label = getActionText(flowchart.frames[frameId].action);
+        drawQueue.push(() =>
+          renderOutlinedText(ctx, label, [curX, myY], { textAlign: "left" }),
+        );
+        if (frame.action?.type === "workspace-pick") {
+          const action = frame.action;
+          const index = action.index;
+          clickables.push({
+            xywh: [curX, myY - 6, sceneW, 12],
+            callback: () => {
+              modifyFlowchart(flowchartId, (old) =>
+                setAction(
+                  old,
+                  frameId,
+                  {
+                    ...action,
+                    index:
+                      typeof index === "number"
+                        ? "first"
+                        : index === "first"
+                          ? "last"
+                          : index === "last"
+                            ? "any"
+                            : "first",
+                  },
+                  true,
+                ),
+              );
+            },
+          });
+        }
 
-          const buttonRadius = 20;
+        const buttonRadius = 20;
 
-          if (
-            inXYWH(mouseX, mouseY, [curX + sceneW, myY, buttonRadius, sceneH])
-          ) {
-            // draw semi-circle on the right
-            ctx.beginPath();
-            ctx.arc(curX + sceneW + 10, myY + sceneH / 2, 5, 0, Math.PI * 2);
-            ctx.fillStyle = patternParchment;
-            ctx.fill();
+        if (
+          inXYWH(mouseX, mouseY, [curX + sceneW, myY, buttonRadius, sceneH])
+        ) {
+          // draw semi-circle on the right
+          ctx.beginPath();
+          ctx.arc(curX + sceneW + 10, myY + sceneH / 2, 5, 0, Math.PI * 2);
+          ctx.fillStyle = patternParchment;
+          ctx.fill();
 
-            clickables.push({
-              xywh: [
-                curX + sceneW - buttonRadius,
-                myY + sceneH / 2 - buttonRadius,
-                buttonRadius * 2,
-                buttonRadius * 2,
-              ],
-              callback: () => {
-                modifyFlowchart(flowchartId, (old) =>
-                  appendFrameAfter(old, frameId),
-                );
-              },
-            });
-          }
+          clickables.push({
+            xywh: [
+              curX + sceneW - buttonRadius,
+              myY + sceneH / 2 - buttonRadius,
+              buttonRadius * 2,
+              buttonRadius * 2,
+            ],
+            callback: () => {
+              modifyFlowchart(flowchartId, (old) =>
+                appendFrameAfter(old, frameId),
+              );
+            },
+          });
+        }
 
-          if (isEscapeRoute(frameId, flowchart)) {
-            renderEscapeRouteMark([curX - scenePadX / 2, myY + sceneH / 2]);
-          }
-        });
+        if (isEscapeRoute(frameId, flowchart)) {
+          renderEscapeRouteMark([curX - scenePadX / 2, myY + sceneH / 2]);
+        }
       }
 
       // render downstream
@@ -1607,6 +1731,7 @@ Promise.all([
         },
         topLevel.maxX + extraX,
         pan[1] + 100,
+        true,
       );
     }
     for (const f of drawQueue) f();
