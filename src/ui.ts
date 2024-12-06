@@ -696,6 +696,20 @@ Promise.all([
     if (e.key === "Escape") {
       tool = { type: "pointer" };
     }
+    if (e.key === "i" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      const result = window.prompt(
+        "JSON for initial value:",
+        JSON.stringify(state.initialValue),
+      );
+      if (!result) return;
+      try {
+        const newState = { ...state, initialValue: JSON.parse(result) };
+        pushState(newState);
+      } catch (e) {
+        window.alert("Can't read that JSON, sorry.");
+      }
+    }
   });
   window.addEventListener("keyup", (e) => {
     if (e.key === "Shift") {
