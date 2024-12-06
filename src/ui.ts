@@ -573,10 +573,10 @@ resizeObserver.observe(cContainer);
 const ctxReal = c.getContext("2d")!;
 
 Promise.all([
-  loadImg("./assets/parchment.png"),
-  loadImg("./assets/asfault.jpg"),
-  loadImg("./assets/candle_sheet.png"),
-  loadAudio("./assets/ambient.wav"),
+  loadImg("./parchment.png"),
+  loadImg("./asfault.jpg"),
+  loadImg("./candle_sheet.png"),
+  loadAudio("./ambient.wav"),
 ]).then(([imgParchment, imgAsfault, imgCandleSheet, audAmbient]) => {
   const patternParchment = ctxReal.createPattern(imgParchment, "repeat")!;
   const patternAsfault = ctxReal.createPattern(imgAsfault, "repeat")!;
@@ -1295,10 +1295,10 @@ Promise.all([
     c.style.cursor =
       tool.type === "pointer"
         ? mouseDown
-          ? "url('./assets/glove2.png'), pointer"
+          ? "url('./glove2.png'), pointer"
           : shiftHeld
-            ? "url('./assets/glove1.png'), pointer"
-            : "url('./assets/glove3.png'), pointer"
+            ? "url('./glove1.png'), pointer"
+            : "url('./glove3.png'), pointer"
         : "none";
 
     // draw background
