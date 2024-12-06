@@ -1,5 +1,4 @@
 import { detect as detectBrowser } from "detect-browser";
-import seedrandom from "seedrandom";
 import { dominoFlowchart } from "./dominoes.ex";
 import {
   addEscapeRoute,
@@ -45,7 +44,7 @@ import {
   saveFile,
 } from "./ui_util";
 import { assertNever, indexById } from "./util";
-import { Vec2, add, v } from "./vec2";
+import { Vec2, add, mul, v } from "./vec2";
 
 const browser = detectBrowser();
 
@@ -89,6 +88,8 @@ const zodiac = [
   "♒︎",
   "♓︎",
 ];
+
+let callHueSaturation = "249deg 37%";
 
 type UIState = {
   initialValue: unknown;
@@ -564,8 +565,8 @@ const cContainer = document.getElementById("c-container") as HTMLDivElement;
 const resizeObserver = new ResizeObserver((entries) => {
   for (const entry of entries) {
     const { width, height } = entry.contentRect;
-    c.width = width - 56;
-    c.height = height - 56;
+    c.width = width;
+    c.height = height;
   }
 });
 resizeObserver.observe(cContainer);
@@ -602,7 +603,13 @@ Promise.all([
   audAmbient.loop = true;
   audAmbient.start();
 
-  let pan = [0, 0] as [number, number];
+  let pan =
+    JSON.parse(localStorage.getItem("pan") + "") ??
+    ([0, 0] as [number, number]);
+  const setPan = (v: Vec2) => {
+    localStorage.setItem("pan", JSON.stringify(v));
+    pan = v;
+  };
 
   let tool:
     | { type: "pointer" }
@@ -631,14 +638,17 @@ Promise.all([
     if (e.key === "Alt") {
       altHeld = true;
     }
-    if (e.key === "z" && (e.ctrlKey || e.metaKey)) {
+    if (e.key === "z" && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
       e.preventDefault();
       if (undoStack.length > 1) {
         redoStack.push(undoStack.pop()!);
         syncStacks();
       }
     }
-    if (e.key === "y" && (e.ctrlKey || e.metaKey)) {
+    if (
+      (e.key === "y" && (e.ctrlKey || e.metaKey)) ||
+      (e.key === "z" && (e.ctrlKey || e.metaKey) && e.shiftKey)
+    ) {
       e.preventDefault();
       if (redoStack.length > 0) {
         undoStack.push(redoStack.pop()!);
@@ -653,6 +663,10 @@ Promise.all([
         }),
         "state.json",
       );
+    }
+    if (e.key === "p" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      setPan([0, 0]);
     }
     if (e.key === "o" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
@@ -699,8 +713,8 @@ Promise.all([
     // clientX/Y works better than offsetX/Y for Chrome/Safari compatibility.
 
     // add "feel good" numbers for the shape of the cursor
-    mouseX = e.clientX - 56 / 2 + 7;
-    mouseY = e.clientY - 56 / 2 + 3;
+    mouseX = e.clientX + 7;
+    mouseY = e.clientY + 3;
   });
   c.addEventListener("mousedown", () => {
     mouseDown = true;
@@ -740,8 +754,7 @@ Promise.all([
 
   c.addEventListener("wheel", (e) => {
     e.preventDefault();
-    pan[0] += -e.deltaX;
-    pan[1] += -e.deltaY;
+    setPan(add(pan, [-e.deltaX, -e.deltaY]));
   });
 
   const renderParchmentBox = (
@@ -806,7 +819,11 @@ Promise.all([
     ] as const;
     ctx.rect(...xywh);
     if (onClick) {
-      addClickHandler(ctx, xywh, onClick);
+      addClickHandler(
+        ctx,
+        [xywh[0] - 10, xywh[1] - 10, xywh[2] + 20, xywh[3] + 20],
+        onClick,
+      );
     }
     ctx.fill();
     ctx.restore();
@@ -899,7 +916,8 @@ Promise.all([
     ctx.stroke();
 
     if (tool.type === "call" && hoveredCell) {
-      ctx.strokeStyle = "rgba(255,200,0,0.8)";
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = `hsla(${callHueSaturation} 45%)`;
       ctx.strokeRect(
         ...gridToXY(hoveredCell),
         cellSize * (value.width - hoveredCell[0]),
@@ -950,7 +968,7 @@ Promise.all([
       ctx.beginPath();
       ctx.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
       // ctx.setLineDash([2, 2]);
-      ctx.strokeStyle = "rgba(255,200,0,0.8)";
+      ctx.strokeStyle = `hsl(${callHueSaturation} 50%)`;
       ctx.stroke();
     }
   };
@@ -1016,8 +1034,11 @@ Promise.all([
       const xywh = [pos[0], pos[1], sceneW, sceneH] as const;
       const callFlowchartId = tool.flowchartId;
       if (inXYWH(mouseX, mouseY, xywh)) {
-        ctx.fillStyle = "rgba(255,200,0,0.4)";
+        ctx.save();
+        ctx.globalAlpha = 0.33;
+        ctx.fillStyle = `hsla(${callHueSaturation} 70%)`;
         ctx.fillRect(...xywh);
+        ctx.restore();
       }
       addClickHandler(ctx, xywh, () => {
         const { flowchartId, frameId } = path.final;
@@ -1227,8 +1248,7 @@ Promise.all([
   // panning
   c.addEventListener("mousemove", (e) => {
     if (e.shiftKey) {
-      pan[0] += e.movementX;
-      pan[1] += e.movementY;
+      setPan(add(pan, [e.movementX, e.movementY]));
     }
   });
 
@@ -1236,8 +1256,14 @@ Promise.all([
 
   requestAnimationFrame(drawLoop);
 
+  let t = 0;
   function drawLoop() {
     requestAnimationFrame(drawLoop);
+    t++;
+
+    // oscillate around violet
+    const hueRotation = 250 + Math.sin(t / 100) * 15;
+    callHueSaturation = `${hueRotation.toFixed(2)}deg 37%`;
 
     // console.log("draw");
 
@@ -1291,14 +1317,15 @@ Promise.all([
       const paddedEndX = end[0] - 10;
       const jointX = Math.max(middleX, paddedEndX);
       ctx.save();
+
       ctx.beginPath();
-      ctx.globalAlpha = 0.9;
-      ctx.globalCompositeOperation = "multiply";
+      ctx.globalAlpha = 0.2;
+      ctx.globalCompositeOperation = "screen";
       ctx.moveTo(...start);
       ctx.lineTo(...[jointX, start[1]]);
       ctx.lineTo(...[jointX, end[1]]);
       ctx.lineTo(...end);
-      ctx.strokeStyle = "rgb(170, 3, 37)";
+      ctx.strokeStyle = "rgb(170, 113, 37)";
       ctx.lineWidth = 5;
       ctx.stroke();
       ctx.restore();
@@ -1328,6 +1355,23 @@ Promise.all([
         viewchart,
       );
 
+      ctx.above.above.save();
+      ctx.above.above.globalAlpha =
+        Math.random() * 0.03 + 0.3 + (Math.random() > 0.99 ? 0.1 : 0);
+      renderOutlinedText(
+        ctx.above.above,
+        viewchart.flowchartId,
+        add(topLeft, [0, -60]),
+        {
+          textAlign: "left",
+          textBaseline: "top",
+          size: 40,
+          family: "monospace",
+          color: `hsla(${callHueSaturation} 70%)`,
+        },
+      );
+      ctx.above.above.restore();
+
       // final connector lines, out of viewchart
       for (const v of r.finalPosForConnector) {
         renderConnectorLine(ctx.below, v, [
@@ -1352,28 +1396,28 @@ Promise.all([
       maxX: number,
       maxY: number,
     ) => {
-      ctx.fillStyle = patternAsfault;
-      const rng = seedrandom(JSON.stringify(callPath));
-      patternAsfault.setTransform(
-        new DOMMatrix().translate(
-          ...add(pan, [rng() * 1000, rng() * 1000]),
-          100,
-        ),
-      );
-      ctx.fillRect(
-        curX,
-        curY + callTopPad,
-        maxX + callPad - curX,
-        maxY + callPad - curY - callTopPad,
-      );
-      // lighten
-      ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
-      ctx.fillRect(
-        curX,
-        curY + callTopPad,
-        maxX + callPad - curX,
-        maxY + callPad - curY - callTopPad,
-      );
+      // ctx.fillStyle = patternAsfault;
+      // const rng = seedrandom(JSON.stringify(callPath));
+      // patternAsfault.setTransform(
+      //   new DOMMatrix().translate(
+      //     ...add(pan, [rng() * 1000, rng() * 1000]),
+      //     100,
+      //   ),
+      // );
+      // ctx.fillRect(
+      //   curX,
+      //   curY + callTopPad,
+      //   maxX + callPad - curX,
+      //   maxY + callPad - curY - callTopPad,
+      // );
+      // // lighten
+      // ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
+      // ctx.fillRect(
+      //   curX,
+      //   curY + callTopPad,
+      //   maxX + callPad - curX,
+      //   maxY + callPad - curY - callTopPad,
+      // );
       // darken
       ctx.fillStyle = `rgba(0, 0, 0, ${0.15 * callPath.length})`;
       ctx.fillRect(
@@ -1445,22 +1489,31 @@ Promise.all([
       centerPos: Vec2,
       onClick?: Function,
     ) => {
-      const markRadius = 10;
+      const markRadius = 13;
 
+      // draw a circle with shadow before drawing
+      // the actual circle with texture because it caused perf issues
+      // to draw the actual circle with a shadow.
       ctx.save();
-
-      ctx.save();
-      // TODO: for some reason I don't understand, this line is
-      // EXTREMELY costly on Chrome. (fine on Safari.) disabling for now!
-      // ctx.shadowColor = "rgba(0,0,0,1)";
-      ctx.shadowOffsetY = 4;
+      ctx.shadowColor = `rgba(100,10,10,0.8)`;
+      // ctx.shadowOffsetY = 4;
       ctx.shadowBlur = 15;
+      ctx.beginPath();
+      ctx.arc(...centerPos, markRadius, 0, 2 * Math.PI);
+      ctx.fillStyle = "red";
+      ctx.fill();
+      ctx.restore();
+
+      // draw actual circle
+      ctx.save();
       ctx.beginPath();
       ctx.arc(...centerPos, markRadius, 0, 2 * Math.PI);
       ctx.fillStyle = patternParchment;
       ctx.fill();
       ctx.restore();
-      ctx.fillStyle = "rgba(128,0,0,0.6)";
+      const flickeringOpacity =
+        Math.sin(t / 20) / 30 + 0.5 + Math.random() * 0.05;
+      ctx.fillStyle = `rgba(128,0,0,${flickeringOpacity})`;
       ctx.fill();
 
       ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
@@ -1483,7 +1536,7 @@ Promise.all([
         );
       }
     };
-    const escapeRouteDropY = sceneH;
+    const escapeRouteDropY = sceneH + 14;
 
     const renderStack = (
       ctx: FancyCanvasContext,
@@ -1499,7 +1552,8 @@ Promise.all([
         : 0;
 
       const sv = interpTo(stackPathString, stackFanTarget, 0);
-      const stackFan = sv * (84 - 14) + 14;
+      // linear map from interval (0, 1) to (14, 84)
+      const stackFan = sv * (110 - 14) + 14;
 
       let maxX = curX;
       let maxY = myY;
@@ -1513,10 +1567,11 @@ Promise.all([
             c.height - sceneH,
             myY,
           ] as const;
-          renderScene(ctx, step, [
+          renderScene(ctx.above, step, [
             interpTo(
               stackPathString + stepIdx + "x",
-              curX + Math.floor(howManyTimesDidModWrap(...modArgs)) * sceneW,
+              curX +
+                Math.floor(howManyTimesDidModWrap(...modArgs)) * (sceneW + 10),
             ),
             interpTo(stackPathString + stepIdx + "y", mod(...modArgs)),
           ]);
@@ -1534,6 +1589,7 @@ Promise.all([
         }
       }
       if (stack.stepIds.length > 1) {
+        // render number of steps in stack
         renderOutlinedText(
           ctx.above.above,
           `${stack.stepIds.length}`,
@@ -1649,9 +1705,27 @@ Promise.all([
       }
       maxY = Math.max(maxY, stackSize.maxY);
       let label = getActionText(flowchart.frames[frameId].action);
-      renderOutlinedText(ctx.above.above, label, [curX, myY], {
-        textAlign: "left",
-      });
+      if (label.startsWith("call")) {
+        // special case to make call sigil look good for Elliot
+        renderOutlinedText(ctx.above.above, "call", [curX, myY], {
+          textAlign: "left",
+        });
+        renderOutlinedText(
+          ctx.above.above,
+          label.slice("call".length),
+          [curX + 10, myY],
+          {
+            textAlign: "left",
+            size: 19,
+            family: "monospace",
+            color: `hsl(${callHueSaturation} 70%)`,
+          },
+        );
+      } else {
+        renderOutlinedText(ctx.above.above, label, [curX, myY], {
+          textAlign: "left",
+        });
+      }
       if (frame.action?.type === "workspace-pick") {
         const action = frame.action;
         const index = action.index;
@@ -1677,7 +1751,10 @@ Promise.all([
         });
       }
       if (isEscapeRoute(frameId, flowchart)) {
-        renderEscapeRouteMark(ctx, [curX - scenePadX / 2, myY + sceneH / 2]);
+        renderEscapeRouteMark(ctx.above, [
+          curX - scenePadX / 2,
+          myY + sceneH / 2,
+        ]);
       }
       curX = stackSize.maxX;
 
@@ -1727,17 +1804,22 @@ Promise.all([
           const markPos = add(lastConnectionJoint, [0, escapeRouteDropY]);
           renderConnectorLine(ctx.below, lastConnectionJoint, markPos);
           renderEscapeRouteMark(ctx, markPos);
-          for (let i = 0; i < 3; i++) {
+
+          renderParchmentBox(ctx.below, ...add(markPos, [10, -7]), 24, 14, {
+            empty: true,
+          });
+
+          for (let i = 0; i < 1; i++) {
             ctx.save();
             ctx.beginPath();
             ctx.arc(
-              markPos[0] + 10 + (i + 1) * 10,
+              markPos[0] + 13 + (i + 1) * 10,
               markPos[1],
-              2,
+              1.8,
               0,
               2 * Math.PI,
             );
-            ctx.fillStyle = "black";
+            ctx.fillStyle = "#98433A";
             ctx.fill();
             ctx.restore();
           }
@@ -1783,11 +1865,18 @@ Promise.all([
             modifyFlowchart(flowchartId, (old) => addEscapeRoute(old, frameId));
           }
         });
+        ctx.save();
+        const pos = add(markPos, v(15, 0));
+        ctx.translate(...pos);
+        ctx.scale(1 + Math.sin(t / 10) * 0.1, 1 + Math.sin(t / 10) * 0.1);
+        ctx.translate(...mul(-1, pos));
         renderOutlinedText(ctx, "!?", add(markPos, v(15, 0)), {
           textAlign: "left",
           textBaseline: "middle",
           size: 20,
+          color: "#A25848",
         });
+        ctx.restore();
         maxY = Math.max(maxY, markPos[1]);
       }
 
@@ -1843,12 +1932,18 @@ Promise.all([
 
     const ctxToppest = fancyCanvasContext();
 
+    // render inventory drawer
+    renderParchmentBox(ctxToppest, c.width - 300, c.height - 80, 310, 110, {
+      empty: true,
+    });
+
     const labelPt = add(pan, v(100, 40));
     renderOutlinedText(ctxToppest, state.initialFlowchartId, labelPt, {
       textAlign: "left",
       textBaseline: "top",
       size: 40,
-      family: "mono",
+      family: "monospace",
+      color: `hsl(${callHueSaturation} 70%)`,
     });
     if (tool.type === "pointer") {
       addClickHandler(true, [...labelPt, 40, 40], () => {
@@ -1867,6 +1962,8 @@ Promise.all([
         [mouseX, mouseY],
         {
           size: 40,
+          color: `hsla(${callHueSaturation} 70%)`,
+          family: "monospace",
         },
       );
     } else if (tool.type === "workspace-pick") {
@@ -1894,8 +1991,8 @@ Promise.all([
 
     renderDomino(
       ctxToppest,
-      c.width - 250,
-      c.height - 30 - (cellSize - dominoPadding * 2),
+      c.width - 270,
+      c.height - 20 - (cellSize - dominoPadding * 2),
       "h",
       () => {
         tool = { type: "domino", orientation: "h" };
@@ -1903,8 +2000,8 @@ Promise.all([
     );
     renderDomino(
       ctxToppest,
-      c.width - 200,
-      c.height - 30 - (2 * cellSize - dominoPadding * 2),
+      c.width - 220,
+      c.height - 20 - (2 * cellSize - dominoPadding * 2),
       "v",
       () => {
         tool = { type: "domino", orientation: "v" };

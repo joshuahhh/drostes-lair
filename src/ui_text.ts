@@ -34,6 +34,7 @@ export const renderOutlinedText = (
     textBaseline?: CanvasTextBaseline;
     size?: number;
     family?: string;
+    color?: string;
   } = {},
 ) => {
   const {
@@ -41,6 +42,7 @@ export const renderOutlinedText = (
     textBaseline = "middle",
     size = 12,
     family = "serif",
+    color = "#D9BE67",
   } = opts;
 
   ctx.font = `${size}px ${family}`;
@@ -50,6 +52,6 @@ export const renderOutlinedText = (
   ctx.strokeStyle = "#2B2B29";
   ctx.lineWidth = 6;
   strokeMultiline(ctx, text, ...add(pos, [0, 1]), size);
-  ctx.fillStyle = "#D9BE67";
+  ctx.fillStyle = color;
   fillMultiline(ctx, text, ...pos, size);
 };

@@ -92,11 +92,11 @@ export const makeCandleRenderer = (
       ...radialCenter,
       ctx.canvas.width - radialFlickerAmt,
     );
-    gradient.addColorStop(0, "rgba(255, 181, 174,0.2)");
+    gradient.addColorStop(0, "rgba(255, 181, 174,0.22)");
     gradient.addColorStop(0.1, "rgba(235, 120, 54,0.1)");
     gradient.addColorStop(0.5, "rgba(255, 217, 66, 0)");
     gradient.addColorStop(0.5, "rgba(0, 0, 0, 0)");
-    gradient.addColorStop(1, "rgba(0,0,0,0.3)");
+    gradient.addColorStop(1, "rgba(0,0,0,0.4)");
     ctx.fillStyle = gradient;
     ctx.fillRect(0, 0, ctx.canvas.width, ctx.canvas.height);
     // candle flicker dimming
