@@ -480,7 +480,7 @@ const examples = (<T extends Record<string, UIState>>(value: T) => value)({
 });
 
 // DEFAULT FLOWCHART RIGHT HERE BUDDY
-let undoStack: UIState[] = [examples.cardsMakeRoomForStacks];
+let undoStack: UIState[] = [examples.dominoesSimpleRecurse];
 let redoStack: UIState[] = [];
 
 const pushState = (newState: UIState) => {
@@ -1362,8 +1362,6 @@ Promise.all([
     const renderEscapeRouteMark = (centerPos: Vec2, onClick?: Function) => {
       const markRadius = 10;
 
-      // ⛧
-
       ctx.save();
 
       ctx.save();
@@ -1674,26 +1672,22 @@ Promise.all([
       // do we need an escape route?
       if (steps.some((step) => step.isStuck) && !frame.escapeRouteFrameId) {
         const markPos = add(lastConnectionJoint, [0, escapeRouteDropY]);
-        renderConnectorLine(lastConnectionJoint, markPos);
-        renderEscapeRouteMark(markPos, () => {
-          if (!frame.escapeRouteFrameId) {
-            console.log("no escape route");
-            modifyFlowchart(flowchartId, (old) => addEscapeRoute(old, frameId));
-          }
-        });
-        // ctx.save();
-        // ctx.textAlign = "left";
-        // ctx.textBaseline = "middle";
-        // ctx.font = "30px serif";
-        // ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
-        // ctx.fillText("!?", ...add(markPos, v(10, 0)));
-        // ctx.restore();
-        renderOutlinedText(ctx, "!?", add(markPos, v(15, 0)), {
-          textAlign: "left",
-          textBaseline: "middle",
-          size: 20,
-        });
-
+        if (actuallyDraw) {
+          renderConnectorLine(lastConnectionJoint, markPos);
+          renderEscapeRouteMark(markPos, () => {
+            if (!frame.escapeRouteFrameId) {
+              console.log("no escape route");
+              modifyFlowchart(flowchartId, (old) =>
+                addEscapeRoute(old, frameId),
+              );
+            }
+          });
+          renderOutlinedText(ctx, "!?", add(markPos, v(15, 0)), {
+            textAlign: "left",
+            textBaseline: "middle",
+            size: 20,
+          });
+        }
         maxY = Math.max(maxY, markPos[1]);
       }
 
