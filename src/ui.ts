@@ -930,13 +930,16 @@ Promise.all([
     ctx.stroke();
 
     if (tool.type === "call" && hoveredCell) {
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = `hsla(${callHueSaturation} 45%)`;
-      ctx.strokeRect(
+      const xywh = [
         ...gridToXY(hoveredCell),
         cellSize * (value.width - hoveredCell[0]),
         cellSize * (value.height - hoveredCell[1]),
-      );
+      ] as const;
+      ctx.lineWidth = 2;
+      ctx.strokeStyle = `hsl(${callHueSaturation} 45%)`;
+      ctx.strokeRect(...xywh);
+      ctx.fillStyle = `hsl(${callHueSaturation} 30% / 30%)`;
+      ctx.fillRect(...xywh);
     }
 
     // dominoes
@@ -1050,7 +1053,7 @@ Promise.all([
       if (inXYWH(mouseX, mouseY, xywh)) {
         ctx.save();
         ctx.globalAlpha = 0.33;
-        ctx.fillStyle = `hsla(${callHueSaturation} 70%)`;
+        ctx.fillStyle = `hsl(${callHueSaturation} 70%)`;
         ctx.fillRect(...xywh);
         ctx.restore();
       }
@@ -1381,7 +1384,7 @@ Promise.all([
           textBaseline: "top",
           size: 40,
           family: "monospace",
-          color: `hsla(${callHueSaturation} 70%)`,
+          color: `hsl(${callHueSaturation} 70%)`,
         },
       );
       ctx.above.above.restore();
@@ -1976,7 +1979,7 @@ Promise.all([
         [mouseX, mouseY],
         {
           size: 40,
-          color: `hsla(${callHueSaturation} 70%)`,
+          color: `hsl(${callHueSaturation} 70%)`,
           family: "monospace",
         },
       );
