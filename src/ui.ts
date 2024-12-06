@@ -646,9 +646,11 @@ Promise.all([
   let mouseY = 0;
   let mouseDown = false;
   c.addEventListener("mousemove", (e) => {
+    // clientX/Y works better than offsetX/Y for Chrome/Safari compatibility.
+
     // add "feel good" numbers for the shape of the cursor
-    mouseX = e.offsetX + 7;
-    mouseY = e.offsetY + 3;
+    mouseX = e.clientX - 56 / 2 + 7;
+    mouseY = e.clientY - 56 / 2 + 3;
   });
   c.addEventListener("mousedown", () => {
     mouseDown = true;
