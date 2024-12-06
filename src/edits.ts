@@ -55,3 +55,18 @@ export const addEscapeRoute = (fc: Flowchart, frameId: string) => {
   console.log(newFc);
   return newFc;
 };
+
+export const deleteFrame = (fc: Flowchart, frameId: string) => {
+  // TODO: garbage-collect downstream frames?
+  const newFc = structuredClone(fc);
+  delete newFc.frames[frameId];
+  newFc.arrows = newFc.arrows.filter(
+    (arrow) => arrow.from !== frameId && arrow.to !== frameId,
+  );
+  Object.values(newFc.frames).forEach((frame) => {
+    if (frame.escapeRouteFrameId === frameId) {
+      delete frame.escapeRouteFrameId;
+    }
+  });
+  return newFc;
+};

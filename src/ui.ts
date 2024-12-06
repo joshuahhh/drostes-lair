@@ -1,6 +1,11 @@
 import seedrandom from "seedrandom";
 import { dominoFlowchart } from "./dominoes.ex";
-import { addEscapeRoute, appendFrameAfter, setAction } from "./edits";
+import {
+  addEscapeRoute,
+  appendFrameAfter,
+  deleteFrame,
+  setAction,
+} from "./edits";
 import {
   Action,
   Definitions,
@@ -25,7 +30,7 @@ import {
   topLevelValueForStep,
 } from "./interpreter";
 import { howManyTimesDidModWrap, mod } from "./number";
-import { makeCandleRenderer } from "./ui_candle";
+import { makeCandleRenderer, renderSpriteSheet } from "./ui_candle";
 import { renderOutlinedText } from "./ui_text";
 import {
   XYWH,
@@ -391,6 +396,9 @@ Promise.all([
         index: number;
         stackPath: StackPath;
         value: unknown;
+      }
+    | {
+        type: "purging-flame";
       } = {
     type: "pointer",
   };
@@ -955,6 +963,20 @@ Promise.all([
         [topleft[0] + 10, topleft[1] + 10],
         { textAlign: "left", textBaseline: "top" },
       );
+    }
+
+    if (tool.type === "purging-flame") {
+      clickables.push({
+        xywh: [topleft[0], topleft[1], sceneW, sceneH] as const,
+        callback: () => {
+          const { flowchartId, frameId } = stackPathForStep(
+            step,
+            traceTree,
+          ).final;
+          modifyFlowchart(flowchartId, (old) => deleteFrame(old, frameId));
+          tool = { type: "pointer" };
+        },
+      });
     }
   };
 
@@ -1528,6 +1550,17 @@ Promise.all([
         undefined,
         add([mouseX, mouseY], v(-cellSize / 2)),
       );
+    } else if (tool.type === "purging-flame") {
+      renderSpriteSheet(
+        ctx,
+        imgCandleSheet,
+        1,
+        127,
+        10,
+        [100, 100],
+        [mouseX - 156, mouseY - 72],
+        [300, 300],
+      );
     } else {
       assertNever(tool);
     }
@@ -1550,6 +1583,14 @@ Promise.all([
     );
 
     renderCandle();
+
+    clickables.push({
+      xywh: [ctx.canvas.width - 145, ctx.canvas.height - 160, 90, 130],
+      callback: () => {
+        tool = { type: "purging-flame" };
+      },
+    });
+
     (window as any).DEBUG = false;
 
     if (draggedOver) {

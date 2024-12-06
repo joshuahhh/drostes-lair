@@ -12,42 +12,44 @@ const incCandleTime = (t: number) => {
   return t + 1;
 };
 
+export const renderSpriteSheet = (
+  ctx: CanvasRenderingContext2D,
+  img: HTMLImageElement,
+  frame: number,
+  frameCount: number,
+  columns: number,
+  frameSize: [number, number],
+  pos: [number, number],
+  size: [number, number],
+) => {
+  const tt = frame % frameCount;
+  const x = tt % columns;
+  const y = Math.floor(tt / columns);
+
+  ctx.save();
+  ctx.imageSmoothingEnabled = false;
+  ctx.globalCompositeOperation = "lighter";
+  ctx.drawImage(
+    img,
+    x * frameSize[0],
+    y * frameSize[1],
+    ...frameSize,
+    ...pos,
+    ...size,
+  );
+  ctx.restore();
+};
+
 export const makeCandleRenderer = (
   ctx: CanvasRenderingContext2D,
   imgCandleSheet: HTMLImageElement,
 ) => {
-  const renderSpriteSheet = (
-    img: HTMLImageElement,
-    frame: number,
-    frameCount: number,
-    columns: number,
-    frameSize: [number, number],
-    pos: [number, number],
-    size: [number, number],
-  ) => {
-    const tt = frame % frameCount;
-    const x = tt % columns;
-    const y = Math.floor(tt / columns);
-
-    ctx.save();
-    ctx.imageSmoothingEnabled = false;
-    ctx.globalCompositeOperation = "lighter";
-    ctx.drawImage(
-      img,
-      x * frameSize[0],
-      y * frameSize[1],
-      ...frameSize,
-      ...pos,
-      ...size,
-    );
-    ctx.restore();
-  };
-
   let t = 0;
 
   const render = () => {
     // render candle
     renderSpriteSheet(
+      ctx,
       imgCandleSheet,
       t,
       127,
