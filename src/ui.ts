@@ -1511,11 +1511,20 @@ Promise.all([
         maxY = Math.max(maxY, defaultY + sceneH);
       }
       if (stack.stepIds.length === 0) {
-        renderParchmentBox(ctx.above, curX, myY, sceneW / 2, sceneH, {
-          empty: true,
-        });
-        maxX = Math.max(maxX, curX + sceneW / 2);
-        maxY = Math.max(maxY, myY + sceneH);
+        const xFactor = 0.6;
+        const yFactor = 0.5;
+        renderParchmentBox(
+          ctx.above,
+          curX,
+          myY,
+          sceneW * xFactor,
+          sceneH * yFactor,
+          {
+            empty: true,
+          },
+        );
+        maxX = Math.max(maxX, curX + sceneW * xFactor);
+        maxY = Math.max(maxY, myY + sceneH * yFactor);
       }
 
       return { maxX, maxY };
@@ -1534,6 +1543,7 @@ Promise.all([
     ): {
       maxX: number;
       maxY: number;
+      initialPosForConnector: Vec2 | undefined;
       finalPosForConnector: Vec2[];
     } => {
       const prevStacks = getPrevStacksInLevel(stack, stepsInStacks, defs);
@@ -1541,7 +1551,12 @@ Promise.all([
         (stack) => stackRHSs[stackPathToString(stack.stackPath)],
       );
       if (!prevStackXs.every((x) => x !== undefined))
-        return { maxX: -Infinity, maxY: -Infinity, finalPosForConnector: [] };
+        return {
+          maxX: -Infinity,
+          maxY: -Infinity,
+          initialPosForConnector: undefined,
+          finalPosForConnector: [],
+        };
 
       const myX = Math.max(initX, Math.max(...prevStackXs) + scenePadX);
 
@@ -1557,11 +1572,14 @@ Promise.all([
 
       // render call, if any
       // curX is lhs of call hole
+      let drewCallHole = false;
       if (frame.action?.type === "call") {
         const childViewchart = viewchart.callViewchartsByFrameId[frameId] as
           | Viewchart
           | undefined;
         if (childViewchart) {
+          drewCallHole = true;
+
           // measure child (will be overdrawn)
           const child = renderViewchart(
             ctxNoop, // don't actually draw
@@ -1599,6 +1617,7 @@ Promise.all([
       // curX is now lhs of stack
       const stackPathString = stackPathToString(stack.stackPath);
       const stackSize = renderStack(ctx.above, stack, curX, myY);
+      const stackH = stackSize.maxY - myY;
       maxY = Math.max(maxY, stackSize.maxY);
       let label = getActionText(flowchart.frames[frameId].action);
       renderOutlinedText(ctx.above.above, label, [curX, myY], {
@@ -1668,7 +1687,7 @@ Promise.all([
       // hacky thing to position unused escape routes or escape-route ghosts
       let lastConnectionJoint: Vec2 = [curX + scenePadX / 2, myY + sceneH / 2];
       if (nextStacks.length === 0) {
-        finalPosForConnectors.push([curX, myY + sceneH / 2]);
+        finalPosForConnectors.push([curX, myY + stackH / 2]);
       }
       for (const [i, nextStack] of nextStacks.entries()) {
         if (
@@ -1699,13 +1718,6 @@ Promise.all([
 
         if (i > 0) curY += scenePadY;
 
-        // draw connector line
-
-        const start = [curX, myY + sceneH / 2] as Vec2;
-        const end = [curX + scenePadX, curY + sceneH / 2] as Vec2;
-        renderConnectorLine(ctx.below, start, end);
-        lastConnectionJoint = [curX + scenePadX / 2, curY + sceneH / 2];
-
         const child = renderStackAndDownstream(
           ctx,
           nextStack,
@@ -1715,6 +1727,18 @@ Promise.all([
         );
         for (const v of child.finalPosForConnector)
           finalPosForConnectors.push(v);
+
+        // draw connector line
+
+        if (child.initialPosForConnector) {
+          const start = [curX, myY + stackH / 2] as Vec2;
+          const end = child.initialPosForConnector;
+          renderConnectorLine(ctx.below, start, end);
+          lastConnectionJoint = add(child.initialPosForConnector, [
+            -scenePadX / 2,
+            0,
+          ]);
+        }
 
         maxX = Math.max(maxX, child.maxX);
         curY = child.maxY;
@@ -1747,7 +1771,15 @@ Promise.all([
         ctx.fill();
       }
 
-      return { maxX, maxY, finalPosForConnector: finalPosForConnectors };
+      return {
+        maxX,
+        maxY,
+        initialPosForConnector: [
+          myX,
+          myY + (drewCallHole ? sceneH / 2 : stackH / 2),
+        ],
+        finalPosForConnector: finalPosForConnectors,
+      };
     };
     const stepsInStacks = putStepsInStacks(traceTree);
     const viewchart = stepsInStacksToViewchart(stepsInStacks);
