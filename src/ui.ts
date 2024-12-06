@@ -336,6 +336,12 @@ const set = (id: string, value: any) => {
 };
 
 let undoStack: UIState[] = [examples.dominoesComplete];
+let redoStack: UIState[] = [];
+
+const pushState = (newState: UIState) => {
+  undoStack.push(newState);
+  redoStack = [];
+};
 
 const modifyFlowchart = (
   flowchartId: string,
@@ -345,7 +351,7 @@ const modifyFlowchart = (
   newState.defs.flowcharts[flowchartId] = modification(
     newState.defs.flowcharts[flowchartId],
   );
-  undoStack.push(newState);
+  pushState(newState);
 };
 
 // globals for communication are the best
@@ -414,8 +420,15 @@ Promise.all([
       altHeld = true;
     }
     if (e.key === "z" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
       if (undoStack.length > 1) {
-        undoStack.pop();
+        redoStack.push(undoStack.pop()!);
+      }
+    }
+    if (e.key === "y" && (e.ctrlKey || e.metaKey)) {
+      e.preventDefault();
+      if (redoStack.length > 0) {
+        undoStack.push(redoStack.pop()!);
       }
     }
     if (e.key === "s" && (e.ctrlKey || e.metaKey)) {
@@ -438,7 +451,7 @@ Promise.all([
       if (!result) return;
       for (const [i, key] of Object.keys(examples).entries()) {
         if (result === key || result === `${i + 1}`) {
-          undoStack.push(examples[key]);
+          pushState(examples[key]);
           return;
         }
       }
@@ -498,7 +511,7 @@ Promise.all([
     const reader = new FileReader();
     reader.onload = () => {
       state = JSON.parse(reader.result as string);
-      undoStack.push(state);
+      pushState(state);
     };
     reader.readAsText(file);
     draggedOver = false;
