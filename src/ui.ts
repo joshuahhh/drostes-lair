@@ -238,6 +238,66 @@ const examples: Record<string, UIState> = {
       },
     },
   },
+  kingOrQueen: {
+    initialValue: {
+      type: "workspace",
+      contents: [
+        ["K", "Q", "J", "A"],
+        ["♠", "♣", "♦", "♥"],
+      ],
+    },
+    initialFlowchartId: "♌︎",
+    defs: {
+      flowcharts: {
+        "♌︎": {
+          id: "♌︎",
+          initialFrameId: "1",
+          frames: {
+            "1": {
+              id: "1",
+              action: {
+                type: "start",
+              },
+            },
+            "0.04794261153881885": {
+              id: "0.04794261153881885",
+              action: {
+                type: "workspace-pick",
+                source: 0,
+                index: 0,
+                target: {
+                  type: "after",
+                  index: 1,
+                },
+              },
+            },
+            "0.7527806732090643": {
+              id: "0.7527806732090643",
+              action: {
+                type: "workspace-pick",
+                source: 0,
+                index: 1,
+                target: {
+                  type: "after",
+                  index: 1,
+                },
+              },
+            },
+          },
+          arrows: [
+            {
+              from: "1",
+              to: "0.04794261153881885",
+            },
+            {
+              from: "1",
+              to: "0.7527806732090643",
+            },
+          ],
+        },
+      },
+    },
+  },
   reverseBlank: {
     initialValue: {
       type: "workspace",
@@ -335,7 +395,7 @@ const set = (id: string, value: any) => {
   return value;
 };
 
-let undoStack: UIState[] = [examples.dominoesComplete];
+let undoStack: UIState[] = [examples.kingOrQueen];
 let redoStack: UIState[] = [];
 
 const pushState = (newState: UIState) => {
@@ -1044,7 +1104,7 @@ Promise.all([
 
     const renderConnectorLine = (start: Vec2, end: Vec2) => {
       const middleX = start[0] + (end[0] - start[0]) / 2;
-      const paddedEndX = end[0] - 25;
+      const paddedEndX = end[0] - 10;
       const jointX = Math.max(middleX, paddedEndX);
       ctx.save();
       ctx.beginPath();
@@ -1233,6 +1293,47 @@ Promise.all([
     };
     const escapeRouteDropY = sceneH;
 
+    const renderStack = (stack: Stack, curX: number, myY: number) => {
+      const stackPathString = stackPathToString(stack.stackPath);
+      const steps = stack.stepIds.map((stepId) => traceTree.steps[stepId]);
+
+      let stackFanTarget = inXYWH(mouseX, mouseY, [curX, myY, sceneW, sceneH])
+        ? 1
+        : 0;
+
+      const sv = interpTo(stackPathString, stackFanTarget, 0);
+      const stackFan = sv * (84 - 14) + 14;
+
+      for (const [stepIdx, step] of steps.entries()) {
+        const defaultX = curX;
+        const defaultY = myY + stepIdx * stackFan;
+        if (inXYWH(mouseX, mouseY, [curX, myY, sceneW, sceneH])) {
+          const modArgs = [
+            myY + stepIdx * stackFan,
+            c.height - sceneH,
+            myY,
+          ] as const;
+          drawQueue.push(() => {
+            renderScene(step, [
+              interpTo(
+                stackPathString + stepIdx + "x",
+                curX + Math.floor(howManyTimesDidModWrap(...modArgs)) * sceneW,
+              ),
+              interpTo(stackPathString + stepIdx + "y", mod(...modArgs)),
+            ]);
+          });
+        } else {
+          renderScene(step, [
+            set(stackPathString + stepIdx + "x", defaultX),
+            set(stackPathString + stepIdx + "y", defaultY),
+          ]);
+        }
+      }
+      if (stack.stepIds.length === 0) {
+        renderParchmentBox(curX, myY, sceneW, sceneH, { empty: true });
+      }
+    };
+
     // saves things to draw for later,
     // so they are drawn on-top of other things
     const drawQueue: Function[] = [];
@@ -1317,47 +1418,7 @@ Promise.all([
       xFromStack[stackPathString] = curX;
       if (actuallyDraw) {
         drawQueue.push(() => {
-          let stackFanTarget = inXYWH(mouseX, mouseY, [
-            curX,
-            myY,
-            sceneW,
-            sceneH,
-          ])
-            ? 1
-            : 0;
-
-          const sv = interpTo(stackPathString, stackFanTarget, 0);
-          const stackFan = sv * (84 - 14) + 14;
-
-          for (const [stepIdx, step] of steps.entries()) {
-            const defaultX = curX;
-            const defaultY = myY + stepIdx * stackFan;
-            if (inXYWH(mouseX, mouseY, [curX, myY, sceneW, sceneH])) {
-              const modArgs = [
-                myY + stepIdx * stackFan,
-                c.height - sceneH,
-                myY,
-              ] as const;
-              drawQueue.push(() => {
-                renderScene(step, [
-                  interpTo(
-                    stackPathString + stepIdx + "x",
-                    curX +
-                      Math.floor(howManyTimesDidModWrap(...modArgs)) * sceneW,
-                  ),
-                  interpTo(stackPathString + stepIdx + "y", mod(...modArgs)),
-                ]);
-              });
-            } else {
-              renderScene(step, [
-                set(stackPathString + stepIdx + "x", defaultX),
-                set(stackPathString + stepIdx + "y", defaultY),
-              ]);
-            }
-          }
-          if (stack.stepIds.length === 0) {
-            renderParchmentBox(curX, myY, sceneW, sceneH, { empty: true });
-          }
+          renderStack(stack, curX, myY);
           let label = getActionText(flowchart.frames[frameId].action);
           drawQueue.push(() =>
             renderOutlinedText(ctx, label, [curX, myY], { textAlign: "left" }),
@@ -1525,12 +1586,30 @@ Promise.all([
     };
     const stepsInStacks = putStepsInStacks(traceTree);
     const viewchart = stepsInStacksToViewchart(stepsInStacks);
-    renderViewchart(viewchart, add(pan, v(100)), true);
+    const topLevel = renderViewchart(viewchart, add(pan, v(100)), true);
+    // is there more than one final stack?
+    const finalStacks = Object.values(viewchart.stackByFrameId).filter(
+      (stack) => traceTree.finalStepIds.includes(stack.stepIds[0]),
+    );
+    if (finalStacks.length > 1) {
+      const extraX = 100;
+      renderConnectorLine(
+        [topLevel.maxX, pan[1] + sceneW / 2 + 100],
+        [topLevel.maxX + extraX, pan[1] + sceneW / 2 + 100],
+      );
+      renderStack(
+        {
+          stackPath: {
+            callPath: [],
+            final: { flowchartId: state.initialFlowchartId, frameId: "FINAL" },
+          },
+          stepIds: traceTree.finalStepIds,
+        },
+        topLevel.maxX + extraX,
+        pan[1] + 100,
+      );
+    }
     for (const f of drawQueue) f();
-    // renderStackAndDownstream(
-    //   stepsInStacks.stackByStepId[initStepId],
-    //   ...add(pan, v(100)),
-    // );
 
     const labelPt = add(pan, v(100, 40));
     renderOutlinedText(ctx, state.initialFlowchartId, labelPt, {
