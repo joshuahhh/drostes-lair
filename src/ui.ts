@@ -239,10 +239,7 @@ const examples = (<T extends Record<string, UIState>>(value: T) => value)({
   cardsBlank: {
     initialValue: {
       type: "workspace",
-      contents: [
-        ["K", "Q", "J", "A"],
-        ["♠", "♣", "♦", "♥"],
-      ],
+      contents: [["K", "Q", "J", "A"], ["♠", "♣", "♦", "♥"], []],
     },
     initialFlowchartId: "♌︎",
     defs: {
@@ -707,6 +704,11 @@ Promise.all([
   });
   c.addEventListener("mousedown", () => {
     mouseDown = true;
+  });
+  c.addEventListener("mouseup", () => {
+    mouseDown = false;
+  });
+  c.addEventListener("click", () => {
     for (const { xywh, callback } of _clickables) {
       if (inXYWH(mouseX, mouseY, xywh)) {
         callback();
@@ -714,9 +716,7 @@ Promise.all([
       }
     }
     tool = { type: "pointer" };
-  });
-  c.addEventListener("mouseup", () => {
-    mouseDown = false;
+    return true;
   });
   let draggedOver = false;
   c.addEventListener("dragover", (e) => {
