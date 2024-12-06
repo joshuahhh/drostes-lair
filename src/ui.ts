@@ -1533,6 +1533,17 @@ Promise.all([
           maxY = Math.max(maxY, defaultY + sceneH);
         }
       }
+      if (stack.stepIds.length > 1) {
+        renderOutlinedText(
+          ctx.above.above,
+          `${stack.stepIds.length}`,
+          [curX + sceneW, myY],
+          {
+            textAlign: "right",
+            size: 20,
+          },
+        );
+      }
       if (stack.stepIds.length === 0) {
         const xFactor = 0.6;
         const yFactor = 0.5;
