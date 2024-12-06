@@ -2030,7 +2030,8 @@ Promise.all([
       ctxReal.fillRect(mouseX, mouseY - 100, 1, 200);
     }
 
-    if (altHeld) {
+    // clickables debug
+    if (false) {
       ctxReal.strokeStyle = "rgba(255, 0, 255, 1)";
       ctxReal.lineWidth = 4;
       for (const clickable of _clickables) {
