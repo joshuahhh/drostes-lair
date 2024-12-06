@@ -1330,7 +1330,10 @@ Promise.all([
 
       // final connector lines, out of viewchart
       for (const v of r.finalPosForConnector) {
-        renderConnectorLine(ctx.below, v, [r.maxX, topLeft[1] + sceneH / 2]);
+        renderConnectorLine(ctx.below, v, [
+          r.maxX,
+          r.finalPosForConnector[0][1],
+        ]);
       }
 
       // initial little connector line on the left
@@ -1596,12 +1599,10 @@ Promise.all([
         if (childViewchart) {
           drewCallHole = true;
 
-          // measure child (will be overdrawn)
-          const child = renderViewchart(
-            ctxNoop, // don't actually draw
-            childViewchart,
-            [curX + callPad, curY + callPad + callTopPad],
-          );
+          const child = renderViewchart(ctx.above, childViewchart, [
+            curX + callPad,
+            curY + callPad + callTopPad,
+          ]);
           maxY = Math.max(maxY, child.maxY + callPad);
 
           renderInset(
@@ -1613,16 +1614,6 @@ Promise.all([
             child.maxY + callPad,
           );
 
-          // draw child for real
-          renderConnectorLine(
-            ctx.below,
-            [child.maxX + callPad, curY + sceneH / 2],
-            [child.maxX + callPad - scenePadX, curY + sceneH / 2],
-          );
-          renderViewchart(ctx, childViewchart, [
-            curX + callPad,
-            curY + callPad + callTopPad,
-          ]);
           // TODO: think about this spacing; seems like call stack
           // should be more attached to call hole?
           curX = child.maxX + callPad;
@@ -1634,6 +1625,11 @@ Promise.all([
       const stackPathString = stackPathToString(stack.stackPath);
       const stackSize = renderStack(ctx.above, stack, curX, myY);
       const stackH = stackSize.maxY - myY;
+      renderConnectorLine(
+        ctx,
+        [curX - scenePadX, curY + stackH / 2],
+        [curX, curY + stackH / 2],
+      );
       maxY = Math.max(maxY, stackSize.maxY);
       let label = getActionText(flowchart.frames[frameId].action);
       renderOutlinedText(ctx.above.above, label, [curX, myY], {
