@@ -617,7 +617,7 @@ Promise.all([
       if (!result) return;
       for (const [i, key] of Object.keys(examples).entries()) {
         if (result === key || result === `${i + 1}`) {
-          pushState(examples[key]);
+          pushState(examples[key as keyof typeof examples]);
           return;
         }
       }
