@@ -177,9 +177,12 @@ class FancyCanvasContextImpl {
     this._above?.replay(ctx);
   }
 
-  clearQueue(): void {
-    this.commands = [];
-  }
+  // WARNING: garbage accumulates in other places; it's best just to
+  // treat these as single-use! no clearQueue plz
+
+  // clearQueue(): void {
+  //   this.commands = [];
+  // }
 
   get above(): FancyCanvasContext {
     if (!this._above) {
@@ -195,8 +198,9 @@ class FancyCanvasContextImpl {
     return this._below;
   }
 
-  static make(): FancyCanvasContext {
+  static make(extra: object = {}): FancyCanvasContext {
     const target = new FancyCanvasContextImpl();
+    Object.assign(target, extra);
     const proxy = target.makeProxy<FancyCanvasContext>(target);
     target.thisProxy = proxy;
     return proxy;
@@ -211,8 +215,8 @@ class FancyCanvasContextImpl {
 export type FancyCanvasContext = CanvasRenderingContext2D &
   FancyCanvasContextImpl;
 
-export function fancyCanvasContext(): FancyCanvasContext {
-  return FancyCanvasContextImpl.make();
+export function fancyCanvasContext(extra?: object): FancyCanvasContext {
+  return FancyCanvasContextImpl.make(extra);
 }
 
 export function getFancyCanvasContextCommands(

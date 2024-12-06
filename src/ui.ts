@@ -537,6 +537,7 @@ const resizeObserver = new ResizeObserver((entries) => {
 });
 resizeObserver.observe(cContainer);
 const ctxReal = c.getContext("2d")!;
+let ctxNoop = fancyCanvasContext();
 
 Promise.all([
   loadImg("./assets/parchment.png"),
@@ -549,10 +550,21 @@ Promise.all([
 
   const renderCandle = makeCandleRenderer(ctxReal, imgCandleSheet);
 
-  let clickables: {
+  // don't touch this directly; use addClickHandler
+  let _clickables: {
     xywh: XYWH;
     callback: Function;
   }[] = [];
+
+  const addClickHandler = (
+    ctx: FancyCanvasContext | true,
+    xywh: XYWH,
+    callback: Function,
+  ) => {
+    if (ctx !== ctxNoop) {
+      _clickables.push({ xywh, callback });
+    }
+  };
 
   // start ambient audio
   audAmbient.loop = true;
@@ -656,7 +668,7 @@ Promise.all([
   });
   c.addEventListener("mousedown", () => {
     mouseDown = true;
-    for (const { xywh, callback } of clickables) {
+    for (const { xywh, callback } of _clickables) {
       if (inXYWH(mouseX, mouseY, xywh)) {
         callback();
         return; // only click one thing at a time
@@ -749,7 +761,7 @@ Promise.all([
     ] as const;
     ctx.rect(...xywh);
     if (onClick) {
-      clickables.push({ xywh, callback: onClick });
+      addClickHandler(ctx, xywh, onClick);
     }
     ctx.fill();
     ctx.restore();
@@ -797,45 +809,39 @@ Promise.all([
           }
           if (tool.type === "domino") {
             const { orientation } = tool;
-            clickables.push({
-              xywh,
-              callback: () => {
-                const { flowchartId, frameId } = path.final;
-                modifyFlowchart(flowchartId, (old) =>
-                  setAction(old, frameId, {
-                    type: "place-domino",
-                    domino: [
+            addClickHandler(ctx, xywh, () => {
+              const { flowchartId, frameId } = path.final;
+              modifyFlowchart(flowchartId, (old) =>
+                setAction(old, frameId, {
+                  type: "place-domino",
+                  domino: [
+                    [c - dx, r - dy],
+                    add(
                       [c - dx, r - dy],
-                      add(
-                        [c - dx, r - dy],
-                        orientation === "h" ? [1, 0] : [0, 1],
-                      ),
-                    ],
-                  }),
-                );
-                tool = { type: "pointer" };
-              },
+                      orientation === "h" ? [1, 0] : [0, 1],
+                    ),
+                  ],
+                }),
+              );
+              tool = { type: "pointer" };
             });
           }
           if (tool.type === "call") {
             const callFlowchartId = tool.flowchartId;
-            clickables.push({
-              xywh,
-              callback: () => {
-                const { flowchartId, frameId } = path.final;
-                modifyFlowchart(flowchartId, (old) =>
-                  setAction(old, frameId, {
-                    type: "call",
-                    flowchartId: callFlowchartId,
-                    lens: {
-                      type: "domino-grid",
-                      dx: c - dx,
-                      dy: r - dy,
-                    },
-                  }),
-                );
-                tool = { type: "pointer" };
-              },
+            addClickHandler(ctx, xywh, () => {
+              const { flowchartId, frameId } = path.final;
+              modifyFlowchart(flowchartId, (old) =>
+                setAction(old, frameId, {
+                  type: "call",
+                  flowchartId: callFlowchartId,
+                  lens: {
+                    type: "domino-grid",
+                    dx: c - dx,
+                    dy: r - dy,
+                  },
+                }),
+              );
+              tool = { type: "pointer" };
             });
           }
         }
@@ -968,18 +974,15 @@ Promise.all([
         ctx.fillStyle = "rgba(255,200,0,0.4)";
         ctx.fillRect(...xywh);
       }
-      clickables.push({
-        xywh,
-        callback: () => {
-          const { flowchartId, frameId } = path.final;
-          modifyFlowchart(flowchartId, (old) =>
-            setAction(old, frameId, {
-              type: "call",
-              flowchartId: callFlowchartId,
-            }),
-          );
-          tool = { type: "pointer" };
-        },
+      addClickHandler(ctx, xywh, () => {
+        const { flowchartId, frameId } = path.final;
+        modifyFlowchart(flowchartId, (old) =>
+          setAction(old, frameId, {
+            type: "call",
+            flowchartId: callFlowchartId,
+          }),
+        );
+        tool = { type: "pointer" };
       });
     }
   };
@@ -1024,17 +1027,14 @@ Promise.all([
           ctx.fillStyle = "rgba(255,200,0,0.4)";
           ctx.fill();
         }
-        clickables.push({
-          xywh,
-          callback: () => {
-            tool = {
-              type: "workspace-pick",
-              source: idxInWorkspace,
-              index: i,
-              stackPath: path,
-              value: item,
-            };
-          },
+        addClickHandler(ctx, xywh, () => {
+          tool = {
+            type: "workspace-pick",
+            source: idxInWorkspace,
+            index: i,
+            stackPath: path,
+            value: item,
+          };
         });
       }
 
@@ -1110,24 +1110,21 @@ Promise.all([
     ctx.lineTo(x2, y2);
     ctx.stroke();
     ctx.restore();
-    clickables.push({
-      xywh,
-      callback: () => {
-        if (tool.type === "workspace-pick") {
-          console.log("applying", target);
-          const { source, index, stackPath } = tool;
-          const { flowchartId, frameId } = stackPath.final;
-          modifyFlowchart(flowchartId, (old) =>
-            setAction(old, frameId, {
-              type: "workspace-pick",
-              source,
-              index,
-              target,
-            }),
-          );
-          tool = { type: "pointer" };
-        }
-      },
+    addClickHandler(ctx, xywh, () => {
+      if (tool.type === "workspace-pick") {
+        console.log("applying", target);
+        const { source, index, stackPath } = tool;
+        const { flowchartId, frameId } = stackPath.final;
+        modifyFlowchart(flowchartId, (old) =>
+          setAction(old, frameId, {
+            type: "workspace-pick",
+            source,
+            index,
+            target,
+          }),
+        );
+        tool = { type: "pointer" };
+      }
     });
   };
 
@@ -1171,16 +1168,13 @@ Promise.all([
     }
 
     if (tool.type === "purging-flame") {
-      clickables.push({
-        xywh: [topleft[0], topleft[1], sceneW, sceneH] as const,
-        callback: () => {
-          const { flowchartId, frameId } = stackPathForStep(
-            step,
-            traceTree,
-          ).final;
-          modifyFlowchart(flowchartId, (old) => deleteFrame(old, frameId));
-          tool = { type: "pointer" };
-        },
+      addClickHandler(ctx, [topleft[0], topleft[1], sceneW, sceneH], () => {
+        const { flowchartId, frameId } = stackPathForStep(
+          step,
+          traceTree,
+        ).final;
+        modifyFlowchart(flowchartId, (old) => deleteFrame(old, frameId));
+        tool = { type: "pointer" };
       });
     }
   };
@@ -1200,8 +1194,12 @@ Promise.all([
   function drawLoop() {
     requestAnimationFrame(drawLoop);
 
-    const ctxNoop = fancyCanvasContext();
+    // console.log("draw");
+
+    // This one will be drawn on the real canvas
     const ctxMain = fancyCanvasContext();
+    // This one is thrown out
+    ctxNoop = fancyCanvasContext({ noop: true });
 
     state = undoStack.at(-1)!;
     const { defs } = state;
@@ -1221,7 +1219,7 @@ Promise.all([
     };
     runAll(initStep, defs, traceTree, 0);
 
-    clickables = [];
+    _clickables = [];
 
     c.style.cursor =
       tool.type === "pointer"
@@ -1272,7 +1270,6 @@ Promise.all([
       ctx: FancyCanvasContext,
       viewchart: Viewchart,
       topLeft: Vec2,
-      actuallyDraw: boolean,
     ): {
       maxX: number;
       maxY: number;
@@ -1284,7 +1281,6 @@ Promise.all([
         initialStack,
         ...topLeft,
         viewchart,
-        actuallyDraw,
       );
 
       // final connector lines, out of viewchart
@@ -1430,15 +1426,16 @@ Promise.all([
       ctx.restore();
 
       if (onClick) {
-        clickables.push({
-          xywh: [
+        addClickHandler(
+          ctx,
+          [
             centerPos[0] - markRadius,
             centerPos[1] - markRadius,
             markRadius * 2,
             markRadius * 2,
           ],
-          callback: onClick,
-        });
+          onClick,
+        );
       }
     };
     const escapeRouteDropY = sceneH;
@@ -1448,7 +1445,6 @@ Promise.all([
       stack: Stack,
       curX: number,
       myY: number,
-      actuallyDraw: boolean,
     ): { maxY: number } => {
       const stackPathString = stackPathToString(stack.stackPath);
       const steps = stack.stepIds.map((stepId) => traceTree.steps[stepId]);
@@ -1471,28 +1467,25 @@ Promise.all([
             c.height - sceneH,
             myY,
           ] as const;
-          if (actuallyDraw)
-            renderScene(ctx, step, [
-              interpTo(
-                stackPathString + stepIdx + "x",
-                curX + Math.floor(howManyTimesDidModWrap(...modArgs)) * sceneW,
-              ),
-              interpTo(stackPathString + stepIdx + "y", mod(...modArgs)),
-            ]);
+          renderScene(ctx, step, [
+            interpTo(
+              stackPathString + stepIdx + "x",
+              curX + Math.floor(howManyTimesDidModWrap(...modArgs)) * sceneW,
+            ),
+            interpTo(stackPathString + stepIdx + "y", mod(...modArgs)),
+          ]);
         } else {
-          if (actuallyDraw)
-            renderScene(ctx, step, [
-              set(stackPathString + stepIdx + "x", defaultX),
-              set(stackPathString + stepIdx + "y", defaultY),
-            ]);
+          renderScene(ctx, step, [
+            set(stackPathString + stepIdx + "x", defaultX),
+            set(stackPathString + stepIdx + "y", defaultY),
+          ]);
         }
         maxY = Math.max(maxY, defaultY + sceneH);
       }
       if (stack.stepIds.length === 0) {
-        if (actuallyDraw)
-          renderParchmentBox(ctxMain.above, curX, myY, sceneW, sceneH, {
-            empty: true,
-          });
+        renderParchmentBox(ctx.above, curX, myY, sceneW, sceneH, {
+          empty: true,
+        });
         maxY = Math.max(maxY, myY + sceneH);
       }
 
@@ -1509,7 +1502,6 @@ Promise.all([
       initX: number,
       myY: number,
       viewchart: Viewchart,
-      actuallyDraw: boolean,
     ): {
       maxX: number;
       maxY: number;
@@ -1545,37 +1537,31 @@ Promise.all([
         if (childViewchart) {
           // measure child (will be overdrawn)
           const child = renderViewchart(
-            ctx,
+            ctxNoop, // don't actually draw
             childViewchart,
             [curX + callPad, curY + callPad + callTopPad],
-            false,
           );
           maxY = Math.max(maxY, child.maxY + callPad);
 
-          if (actuallyDraw)
-            renderInset(
-              ctx.below,
-              childViewchart.callPath,
-              curX,
-              curY,
-              child.maxX - callPad,
-              child.maxY + callPad,
-            );
+          renderInset(
+            ctx.below,
+            childViewchart.callPath,
+            curX,
+            curY,
+            child.maxX - callPad,
+            child.maxY + callPad,
+          );
 
           // draw child for real
-          if (actuallyDraw) {
-            renderConnectorLine(
-              ctx.below,
-              [child.maxX + callPad, curY + sceneH / 2],
-              [child.maxX + callPad - scenePadX, curY + sceneH / 2],
-            );
-            renderViewchart(
-              ctx,
-              childViewchart,
-              [curX + callPad, curY + callPad + callTopPad],
-              actuallyDraw,
-            );
-          }
+          renderConnectorLine(
+            ctx.below,
+            [child.maxX + callPad, curY + sceneH / 2],
+            [child.maxX + callPad - scenePadX, curY + sceneH / 2],
+          );
+          renderViewchart(ctx, childViewchart, [
+            curX + callPad,
+            curY + callPad + callTopPad,
+          ]);
           curX = child.maxX + callPad;
         }
       }
@@ -1583,70 +1569,64 @@ Promise.all([
       // render stack
       const stackPathString = stackPathToString(stack.stackPath);
       xFromStack[stackPathString] = curX;
-      const stackSize = renderStack(ctx.above, stack, curX, myY, actuallyDraw);
+      const stackSize = renderStack(ctx.above, stack, curX, myY);
       maxY = Math.max(maxY, stackSize.maxY);
-      if (actuallyDraw) {
-        let label = getActionText(flowchart.frames[frameId].action);
-        renderOutlinedText(ctx.above.above, label, [curX, myY], {
-          textAlign: "left",
+      let label = getActionText(flowchart.frames[frameId].action);
+      renderOutlinedText(ctx.above.above, label, [curX, myY], {
+        textAlign: "left",
+      });
+      if (frame.action?.type === "workspace-pick") {
+        const action = frame.action;
+        const index = action.index;
+        addClickHandler(ctx, [curX, myY - 6, sceneW, 12], () => {
+          modifyFlowchart(flowchartId, (old) =>
+            setAction(
+              old,
+              frameId,
+              {
+                ...action,
+                index:
+                  typeof index === "number"
+                    ? "first"
+                    : index === "first"
+                      ? "last"
+                      : index === "last"
+                        ? "any"
+                        : "first",
+              },
+              true,
+            ),
+          );
         });
-        if (frame.action?.type === "workspace-pick") {
-          const action = frame.action;
-          const index = action.index;
-          clickables.push({
-            xywh: [curX, myY - 6, sceneW, 12],
-            callback: () => {
-              modifyFlowchart(flowchartId, (old) =>
-                setAction(
-                  old,
-                  frameId,
-                  {
-                    ...action,
-                    index:
-                      typeof index === "number"
-                        ? "first"
-                        : index === "first"
-                          ? "last"
-                          : index === "last"
-                            ? "any"
-                            : "first",
-                  },
-                  true,
-                ),
-              );
-            },
-          });
-        }
+      }
 
-        const buttonRadius = 20;
+      const buttonRadius = 20;
 
-        if (
-          inXYWH(mouseX, mouseY, [curX + sceneW, myY, buttonRadius, sceneH])
-        ) {
-          // draw semi-circle on the right
-          ctx.beginPath();
-          ctx.arc(curX + sceneW + 10, myY + sceneH / 2, 5, 0, Math.PI * 2);
-          ctx.fillStyle = patternParchment;
-          ctx.fill();
+      if (inXYWH(mouseX, mouseY, [curX + sceneW, myY, buttonRadius, sceneH])) {
+        // draw semi-circle on the right
+        ctx.beginPath();
+        ctx.arc(curX + sceneW + 10, myY + sceneH / 2, 5, 0, Math.PI * 2);
+        ctx.fillStyle = patternParchment;
+        ctx.fill();
 
-          clickables.push({
-            xywh: [
-              curX + sceneW - buttonRadius,
-              myY + sceneH / 2 - buttonRadius,
-              buttonRadius * 2,
-              buttonRadius * 2,
-            ],
-            callback: () => {
-              modifyFlowchart(flowchartId, (old) =>
-                appendFrameAfter(old, frameId),
-              );
-            },
-          });
-        }
+        addClickHandler(
+          ctx,
+          [
+            curX + sceneW - buttonRadius,
+            myY + sceneH / 2 - buttonRadius,
+            buttonRadius * 2,
+            buttonRadius * 2,
+          ],
+          () => {
+            modifyFlowchart(flowchartId, (old) =>
+              appendFrameAfter(old, frameId),
+            );
+          },
+        );
+      }
 
-        if (isEscapeRoute(frameId, flowchart)) {
-          renderEscapeRouteMark(ctx, [curX - scenePadX / 2, myY + sceneH / 2]);
-        }
+      if (isEscapeRoute(frameId, flowchart)) {
+        renderEscapeRouteMark(ctx, [curX - scenePadX / 2, myY + sceneH / 2]);
       }
 
       // render downstream
@@ -1705,7 +1685,6 @@ Promise.all([
           initX,
           curY,
           viewchart,
-          actuallyDraw,
         );
         for (const v of child.final) final.push(v);
 
@@ -1717,22 +1696,17 @@ Promise.all([
       // do we need an escape route?
       if (steps.some((step) => step.isStuck) && !frame.escapeRouteFrameId) {
         const markPos = add(lastConnectionJoint, [0, escapeRouteDropY]);
-        if (actuallyDraw) {
-          renderConnectorLine(ctx, lastConnectionJoint, markPos);
-          renderEscapeRouteMark(ctx, markPos, () => {
-            if (!frame.escapeRouteFrameId) {
-              console.log("no escape route");
-              modifyFlowchart(flowchartId, (old) =>
-                addEscapeRoute(old, frameId),
-              );
-            }
-          });
-          renderOutlinedText(ctx, "!?", add(markPos, v(15, 0)), {
-            textAlign: "left",
-            textBaseline: "middle",
-            size: 20,
-          });
-        }
+        renderConnectorLine(ctx, lastConnectionJoint, markPos);
+        renderEscapeRouteMark(ctx, markPos, () => {
+          if (!frame.escapeRouteFrameId) {
+            modifyFlowchart(flowchartId, (old) => addEscapeRoute(old, frameId));
+          }
+        });
+        renderOutlinedText(ctx, "!?", add(markPos, v(15, 0)), {
+          textAlign: "left",
+          textBaseline: "middle",
+          size: 20,
+        });
         maxY = Math.max(maxY, markPos[1]);
       }
 
@@ -1749,12 +1723,7 @@ Promise.all([
     };
     const stepsInStacks = putStepsInStacks(traceTree);
     const viewchart = stepsInStacksToViewchart(stepsInStacks);
-    const topLevel = renderViewchart(
-      ctxMain,
-      viewchart,
-      add(pan, v(100)),
-      true,
-    );
+    const topLevel = renderViewchart(ctxMain, viewchart, add(pan, v(100)));
     // is there more than one final stack?
     const finalStacks = Object.values(viewchart.stackByFrameId).filter(
       (stack) => traceTree.finalStepIds.includes(stack.stepIds[0]),
@@ -1777,7 +1746,6 @@ Promise.all([
         },
         topLevel.maxX + extraX,
         pan[1] + 100,
-        true,
       );
     }
 
@@ -1793,11 +1761,8 @@ Promise.all([
       family: "mono",
     });
     if (tool.type === "pointer") {
-      clickables.push({
-        xywh: [...labelPt, 40, 40],
-        callback: () => {
-          tool = { type: "call", flowchartId: state.initialFlowchartId };
-        },
+      addClickHandler(true, [...labelPt, 40, 40], () => {
+        tool = { type: "call", flowchartId: state.initialFlowchartId };
       });
     }
 
@@ -1860,11 +1825,8 @@ Promise.all([
 
     renderCandle();
 
-    clickables.push({
-      xywh: [c.width - 145, c.height - 160, 90, 130],
-      callback: () => {
-        tool = { type: "purging-flame" };
-      },
+    addClickHandler(true, [c.width - 145, c.height - 160, 90, 130], () => {
+      tool = { type: "purging-flame" };
     });
 
     (window as any).DEBUG = false;
@@ -1884,7 +1846,7 @@ Promise.all([
     if (altHeld) {
       ctxReal.strokeStyle = "rgba(255, 0, 255, 1)";
       ctxReal.lineWidth = 4;
-      for (const clickable of clickables) {
+      for (const clickable of _clickables) {
         ctxReal.strokeRect(...clickable.xywh);
       }
     }
