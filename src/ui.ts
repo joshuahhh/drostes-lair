@@ -38,6 +38,7 @@ import {
   fancyCanvasContext,
   fillRect,
   fillRectGradient,
+  getFancyCanvasContextCommandCount,
   inXYWH,
   loadAudio,
   loadImg,
@@ -537,7 +538,6 @@ const resizeObserver = new ResizeObserver((entries) => {
 });
 resizeObserver.observe(cContainer);
 const ctxReal = c.getContext("2d")!;
-let ctxNoop = fancyCanvasContext();
 
 Promise.all([
   loadImg("./assets/parchment.png"),
@@ -561,7 +561,7 @@ Promise.all([
     xywh: XYWH,
     callback: Function,
   ) => {
-    if (ctx !== ctxNoop) {
+    if (ctx === true || !ctx.noop) {
       _clickables.push({ xywh, callback });
     }
   };
@@ -1199,7 +1199,7 @@ Promise.all([
     // This one will be drawn on the real canvas
     const ctxMain = fancyCanvasContext();
     // This one is thrown out
-    ctxNoop = fancyCanvasContext({ noop: true });
+    const ctxNoop = fancyCanvasContext({ noop: true });
 
     state = undoStack.at(-1)!;
     const { defs } = state;
@@ -1562,6 +1562,8 @@ Promise.all([
             curX + callPad,
             curY + callPad + callTopPad,
           ]);
+          // TODO: think about this spacing; seems like call stack
+          // should be more attached to call hole?
           curX = child.maxX + callPad;
         }
       }
@@ -1749,6 +1751,7 @@ Promise.all([
       );
     }
 
+    console.log("about to replay", getFancyCanvasContextCommandCount(ctxMain));
     ctxMain.replay(ctxReal);
 
     const ctxToppest = fancyCanvasContext();
@@ -1854,7 +1857,7 @@ Promise.all([
     const endTime = performance.now();
     if (false) {
       renderOutlinedText(
-        ctx,
+        ctxReal,
         `${Math.round(endTime - lastEndTime)}ms`,
         [10, 10],
         {

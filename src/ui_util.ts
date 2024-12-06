@@ -97,9 +97,12 @@ class FancyCanvasContextImpl {
   private proxies: WeakSet<any> = new WeakSet();
   private thisProxy: FancyCanvasContext;
 
-  constructor() {
+  public noop: boolean;
+
+  constructor(opts: { noop?: boolean } = {}) {
     // make typescript happy; you're supposed to use static make()
     this.thisProxy = undefined as any;
+    this.noop = opts.noop ?? false;
   }
 
   private makeProxy<T>(target: any = {}): T {
@@ -185,6 +188,9 @@ class FancyCanvasContextImpl {
   // }
 
   get above(): FancyCanvasContext {
+    if (this.noop) {
+      return this.thisProxy;
+    }
     if (!this._above) {
       this._above = fancyCanvasContext();
     }
@@ -192,6 +198,9 @@ class FancyCanvasContextImpl {
   }
 
   get below(): FancyCanvasContext {
+    if (this.noop) {
+      return this.thisProxy;
+    }
     if (!this._below) {
       this._below = fancyCanvasContext();
     }
@@ -210,6 +219,14 @@ class FancyCanvasContextImpl {
   static getCommands(ctx: FancyCanvasContext) {
     return ctx.commands;
   }
+
+  static countCommands(ctx: FancyCanvasContext): number {
+    return (
+      (ctx._below ? FancyCanvasContextImpl.countCommands(ctx._below) : 0) +
+      ctx.commands.length +
+      (ctx._above ? FancyCanvasContextImpl.countCommands(ctx._above) : 0)
+    );
+  }
 }
 
 export type FancyCanvasContext = CanvasRenderingContext2D &
@@ -223,4 +240,10 @@ export function getFancyCanvasContextCommands(
   ctx: FancyCanvasContext,
 ): CanvasCommand[] {
   return FancyCanvasContextImpl.getCommands(ctx);
+}
+
+export function getFancyCanvasContextCommandCount(
+  ctx: FancyCanvasContext,
+): number {
+  return FancyCanvasContextImpl.countCommands(ctx);
 }
