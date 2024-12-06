@@ -1367,7 +1367,9 @@ Promise.all([
       ctx.save();
 
       ctx.save();
-      ctx.shadowColor = "rgba(0,0,0,1)";
+      // TODO: for some reason I don't understand, this line is
+      // EXTREMELY costly on Chrome. (fine on Safari.) disabling for now!
+      // ctx.shadowColor = "rgba(0,0,0,1)";
       ctx.shadowOffsetY = 4;
       ctx.shadowBlur = 15;
       ctx.beginPath();
@@ -1827,7 +1829,7 @@ Promise.all([
     }
 
     const endTime = performance.now();
-    if (true) {
+    if (false) {
       renderOutlinedText(
         ctx,
         `${Math.round(endTime - lastEndTime)}ms`,
