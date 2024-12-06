@@ -480,7 +480,7 @@ const examples = (<T extends Record<string, UIState>>(value: T) => value)({
 });
 
 // DEFAULT FLOWCHART RIGHT HERE BUDDY
-let undoStack: UIState[] = [examples.dominoesSimpleRecurse];
+let undoStack: UIState[] = [examples.dominoesComplete];
 let redoStack: UIState[] = [];
 
 const pushState = (newState: UIState) => {
@@ -1167,6 +1167,8 @@ Promise.all([
     }
   });
 
+  let lastEndTime = performance.now();
+
   requestAnimationFrame(drawLoop);
 
   function drawLoop() {
@@ -1823,5 +1825,20 @@ Promise.all([
         ctx.strokeRect(...clickable.xywh);
       }
     }
+
+    const endTime = performance.now();
+    if (true) {
+      renderOutlinedText(
+        ctx,
+        `${Math.round(endTime - lastEndTime)}ms`,
+        [10, 10],
+        {
+          textAlign: "left",
+          textBaseline: "top",
+          size: 20,
+        },
+      );
+    }
+    lastEndTime = endTime;
   }
 });
