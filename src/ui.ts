@@ -39,7 +39,6 @@ import {
   fancyCanvasContext,
   fillRect,
   fillRectGradient,
-  getFancyCanvasContextCommandCount,
   inXYWH,
   loadAudio,
   loadImg,
@@ -506,12 +505,25 @@ const examples = (<T extends Record<string, UIState>>(value: T) => value)({
 });
 
 // DEFAULT FLOWCHART RIGHT HERE BUDDY
-let undoStack: UIState[] = [examples.dominoesComplete];
+let undoStack: UIState[] = [examples.dominoesBlank];
 let redoStack: UIState[] = [];
+
+const maybeFromLocalStorage = localStorage.getItem("panda-stacks");
+if (maybeFromLocalStorage) {
+  ({ undoStack, redoStack } = JSON.parse(maybeFromLocalStorage));
+}
 
 const pushState = (newState: UIState) => {
   undoStack.push(newState);
   redoStack = [];
+  syncStacks();
+};
+
+const syncStacks = () => {
+  localStorage.setItem(
+    "panda-stacks",
+    JSON.stringify({ undoStack, redoStack }),
+  );
 };
 
 const modifyFlowchart = (
@@ -626,12 +638,14 @@ Promise.all([
       e.preventDefault();
       if (undoStack.length > 1) {
         redoStack.push(undoStack.pop()!);
+        syncStacks();
       }
     }
     if (e.key === "y" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       if (redoStack.length > 0) {
         undoStack.push(redoStack.pop()!);
+        syncStacks();
       }
     }
     if (e.key === "s" && (e.ctrlKey || e.metaKey)) {
@@ -654,7 +668,9 @@ Promise.all([
       if (!result) return;
       for (const [i, key] of Object.keys(examples).entries()) {
         if (result === key || result === `${i + 1}`) {
-          pushState(examples[key as keyof typeof examples]);
+          undoStack = [examples[key as keyof typeof examples]];
+          redoStack = [];
+          syncStacks();
           return;
         }
       }
@@ -1809,7 +1825,7 @@ Promise.all([
       );
     }
 
-    console.log("about to replay", getFancyCanvasContextCommandCount(ctxMain));
+    // console.log("about to replay", getFancyCanvasContextCommandCount(ctxMain));
     ctxMain.replay(ctxReal);
 
     const ctxToppest = fancyCanvasContext();
