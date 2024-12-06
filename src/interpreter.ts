@@ -857,7 +857,7 @@ export function getActionText(action?: Action): string {
     return "start";
   } else if (action.type === "workspace-pick") {
     return (
-      "pick " +
+      "move " +
       (typeof action.index === "number"
         ? `item ${action.index + 1}`
         : `${action.index} item`)

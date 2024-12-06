@@ -1526,8 +1526,12 @@ Promise.all([
             set(stackPathString + stepIdx + "y", defaultY),
           ]);
         }
-        maxX = Math.max(maxX, defaultX + sceneW);
-        maxY = Math.max(maxY, defaultY + sceneH);
+        if (stepIdx === 0) {
+          // TODO: Only one step is used to determine size. This is
+          // needed, at least, for consistent connector placement.
+          maxX = Math.max(maxX, defaultX + sceneW);
+          maxY = Math.max(maxY, defaultY + sceneH);
+        }
       }
       if (stack.stepIds.length === 0) {
         const xFactor = 0.6;
