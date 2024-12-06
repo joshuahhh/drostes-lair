@@ -1,3 +1,4 @@
+import { detect as detectBrowser } from "detect-browser";
 import seedrandom from "seedrandom";
 import { dominoFlowchart } from "./dominoes.ex";
 import {
@@ -46,6 +47,8 @@ import {
 } from "./ui_util";
 import { assertNever, indexById } from "./util";
 import { Vec2, add, v } from "./vec2";
+
+const browser = detectBrowser();
 
 (window as any).DEBUG = true;
 function DEBUG() {
@@ -734,6 +737,7 @@ Promise.all([
     opts: { empty?: boolean } = {},
   ) => {
     const { empty = false } = opts;
+    const xywh = [x, y, w, h] as const;
 
     ctx.save();
     ctx.shadowColor = "rgba(0,0,0,1)";
@@ -742,12 +746,17 @@ Promise.all([
     if (empty) {
       ctx.globalAlpha = 0.3;
     }
-    ctx.drawImage(imgParchment, Math.random(), Math.random(), w, h, x, y, w, h);
+    if (browser?.name === "safari") {
+      // Safari doesn't seem to draw shadows for drawImage?
+      ctx.fillStyle = "black";
+      ctx.fillRect(...xywh);
+    }
+    ctx.drawImage(imgParchment, Math.random(), Math.random(), w, h, ...xywh);
     if (empty) {
       ctx.globalAlpha = 1;
       ctx.strokeStyle = "rgba(183,167,148)";
       ctx.lineWidth = 1;
-      ctx.strokeRect(x, y, w, h);
+      ctx.strokeRect(...xywh);
     }
     ctx.restore();
   };
