@@ -33,7 +33,9 @@ import { howManyTimesDidModWrap, mod } from "./number";
 import { makeCandleRenderer, renderSpriteSheet } from "./ui_candle";
 import { renderOutlinedText } from "./ui_text";
 import {
+  FancyCanvasContext,
   XYWH,
+  fancyCanvasContext,
   fillRect,
   fillRectGradient,
   inXYWH,
@@ -534,7 +536,7 @@ const resizeObserver = new ResizeObserver((entries) => {
   }
 });
 resizeObserver.observe(cContainer);
-const ctx = c.getContext("2d")!;
+const ctxReal = c.getContext("2d")!;
 
 Promise.all([
   loadImg("./assets/parchment.png"),
@@ -542,10 +544,10 @@ Promise.all([
   loadImg("./assets/candle_sheet.png"),
   loadAudio("./assets/ambient.wav"),
 ]).then(([imgParchment, imgAsfault, imgCandleSheet, audAmbient]) => {
-  const patternParchment = ctx.createPattern(imgParchment, "repeat")!;
-  const patternAsfault = ctx.createPattern(imgAsfault, "repeat")!;
+  const patternParchment = ctxReal.createPattern(imgParchment, "repeat")!;
+  const patternAsfault = ctxReal.createPattern(imgAsfault, "repeat")!;
 
-  const renderCandle = makeCandleRenderer(ctx, imgCandleSheet);
+  const renderCandle = makeCandleRenderer(ctxReal, imgCandleSheet);
 
   let clickables: {
     xywh: XYWH;
@@ -692,6 +694,7 @@ Promise.all([
   });
 
   const renderParchmentBox = (
+    ctx: FancyCanvasContext,
     x: number,
     y: number,
     w: number,
@@ -723,6 +726,7 @@ Promise.all([
   const dominoPadding = 5;
 
   const renderDomino = (
+    ctx: FancyCanvasContext,
     x: number,
     y: number,
     orientation: "h" | "v",
@@ -751,7 +755,12 @@ Promise.all([
     ctx.restore();
   };
 
-  const renderDominoes = (value: any, path: StackPath, pos: Vec2) => {
+  const renderDominoes = (
+    ctx: FancyCanvasContext,
+    value: any,
+    path: StackPath,
+    pos: Vec2,
+  ) => {
     const { defs } = state;
 
     function gridToXY([x, y]: [number, number]): [number, number] {
@@ -851,6 +860,7 @@ Promise.all([
     for (const domino of value.dominoes) {
       const orientation = domino[0][0] === domino[1][0] ? "v" : "h";
       renderDomino(
+        ctx,
         ...add(gridToXY(domino[0]), [cellSize / 2, cellSize / 2]),
         orientation,
       );
@@ -895,6 +905,7 @@ Promise.all([
   };
 
   const renderWorkspace = (
+    ctx: FancyCanvasContext,
     contents: unknown[][],
     path: StackPath,
     pos: Vec2,
@@ -911,6 +922,7 @@ Promise.all([
 
     if (isDropTarget) {
       renderDropTargetLine(
+        ctx,
         pos[0] + 10,
         curY - 5,
         pos[0] + sceneW - 20,
@@ -924,6 +936,7 @@ Promise.all([
         curY += 5;
       }
       const { maxY } = renderWorkspaceValue(
+        ctx,
         item,
         idxInWorkspace,
         path,
@@ -934,10 +947,17 @@ Promise.all([
 
       if (isDropTarget) {
         curY += 5;
-        renderDropTargetLine(pos[0] + 10, curY, pos[0] + sceneW - 20, curY, {
-          type: "after",
-          index: idxInWorkspace,
-        });
+        renderDropTargetLine(
+          ctx,
+          pos[0] + 10,
+          curY,
+          pos[0] + sceneW - 20,
+          curY,
+          {
+            type: "after",
+            index: idxInWorkspace,
+          },
+        );
       }
     }
 
@@ -965,6 +985,7 @@ Promise.all([
   };
 
   const renderWorkspaceValue = (
+    ctx: FancyCanvasContext,
     value: any,
     idxInWorkspace: number,
     path: StackPath | undefined,
@@ -980,7 +1001,7 @@ Promise.all([
     let left = pos[0];
 
     if (isDropTarget) {
-      renderDropTargetLine(left - 5, pos[1], left - 5, pos[1] + cellSize, {
+      renderDropTargetLine(ctx, left - 5, pos[1], left - 5, pos[1] + cellSize, {
         type: "at",
         index: idxInWorkspace,
         side: "before",
@@ -1043,6 +1064,7 @@ Promise.all([
     ctx.stroke();
     if (isDropTarget) {
       renderDropTargetLine(
+        ctx,
         left + cellSize / 2,
         pos[1] + cellSize / 2,
         left + cellSize * value.length - cellSize / 2,
@@ -1059,7 +1081,7 @@ Promise.all([
     left += 5;
 
     if (isDropTarget) {
-      renderDropTargetLine(left, pos[1], left, pos[1] + cellSize, {
+      renderDropTargetLine(ctx, left, pos[1], left, pos[1] + cellSize, {
         type: "at",
         index: idxInWorkspace,
         side: "after",
@@ -1070,6 +1092,7 @@ Promise.all([
   };
 
   const renderDropTargetLine = (
+    ctx: FancyCanvasContext,
     x1: number,
     y1: number,
     x2: number,
@@ -1108,7 +1131,7 @@ Promise.all([
     });
   };
 
-  const renderScene = (step: Step, topleft: Vec2) => {
+  const renderScene = (ctx: FancyCanvasContext, step: Step, topleft: Vec2) => {
     const { defs } = state;
 
     const isOutlined = traceTree.finalStepIds.includes(step.id);
@@ -1124,14 +1147,15 @@ Promise.all([
       ctx.stroke();
       ctx.restore();
     }
-    renderParchmentBox(...topleft, sceneW, sceneH);
+    renderParchmentBox(ctx, ...topleft, sceneW, sceneH);
     const value = step.scene.value;
     if ("dominoes" in value) {
       const value = topLevelValueForStep(step, traceTree, defs) as any;
-      renderDominoes(value, stackPathForStep(step, traceTree), topleft);
+      renderDominoes(ctx, value, stackPathForStep(step, traceTree), topleft);
     } else if (value.type === "workspace") {
       const frame = defs.flowcharts[step.flowchartId].frames[step.frameId];
       renderWorkspace(
+        ctx,
         value.contents,
         stackPathForStep(step, traceTree),
         topleft,
@@ -1176,6 +1200,9 @@ Promise.all([
   function drawLoop() {
     requestAnimationFrame(drawLoop);
 
+    const ctxNoop = fancyCanvasContext();
+    const ctxMain = fancyCanvasContext();
+
     state = undoStack.at(-1)!;
     const { defs } = state;
 
@@ -1206,13 +1233,17 @@ Promise.all([
         : "none";
 
     // draw background
-    ctx.fillStyle = patternAsfault;
+    ctxReal.fillStyle = patternAsfault;
     patternAsfault.setTransform(new DOMMatrix().translate(...pan, 0));
-    ctx.fillRect(0, 0, c.width, c.height);
-    ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
-    ctx.fillRect(0, 0, c.width, c.height);
+    ctxReal.fillRect(0, 0, c.width, c.height);
+    ctxReal.fillStyle = "rgba(255, 255, 255, 0.2)";
+    ctxReal.fillRect(0, 0, c.width, c.height);
 
-    const renderConnectorLine = (start: Vec2, end: Vec2) => {
+    const renderConnectorLine = (
+      ctx: FancyCanvasContext,
+      start: Vec2,
+      end: Vec2,
+    ) => {
       const middleX = start[0] + (end[0] - start[0]) / 2;
       const paddedEndX = end[0] - 10;
       const jointX = Math.max(middleX, paddedEndX);
@@ -1238,6 +1269,7 @@ Promise.all([
     const xFromStack: Record<string, number> = {}; // keyed by stackPathToString
 
     const renderViewchart = (
+      ctx: FancyCanvasContext,
       viewchart: Viewchart,
       topLeft: Vec2,
       actuallyDraw: boolean,
@@ -1248,27 +1280,31 @@ Promise.all([
       const flowchart = defs.flowcharts[viewchart.flowchartId];
       const initialStack = viewchart.stackByFrameId[flowchart.initialFrameId];
       const r = renderStackAndDownstream(
+        ctx,
         initialStack,
         ...topLeft,
         viewchart,
         actuallyDraw,
       );
 
+      // final connector lines, out of viewchart
       for (const v of r.final) {
-        renderConnectorLine(add(v, [sceneW, sceneH / 2]), [
+        renderConnectorLine(ctx.below, add(v, [sceneW, sceneH / 2]), [
           r.maxX,
           topLeft[1] + sceneH / 2,
         ]);
       }
 
+      // initial little connector line on the left
       const start = add(topLeft, v(-scenePadX, sceneH / 2));
       const end = add(start, v(scenePadX, 0));
-      renderConnectorLine(start, end);
+      renderConnectorLine(ctx.below, start, end);
 
       return r;
     };
 
     const renderInset = (
+      ctx: FancyCanvasContext,
       callPath: StackPathSegment[],
       curX: number,
       curY: number,
@@ -1363,7 +1399,11 @@ Promise.all([
       );
     };
 
-    const renderEscapeRouteMark = (centerPos: Vec2, onClick?: Function) => {
+    const renderEscapeRouteMark = (
+      ctx: FancyCanvasContext,
+      centerPos: Vec2,
+      onClick?: Function,
+    ) => {
       const markRadius = 10;
 
       ctx.save();
@@ -1404,6 +1444,7 @@ Promise.all([
     const escapeRouteDropY = sceneH;
 
     const renderStack = (
+      ctx: FancyCanvasContext,
       stack: Stack,
       curX: number,
       myY: number,
@@ -1431,31 +1472,26 @@ Promise.all([
             myY,
           ] as const;
           if (actuallyDraw)
-            drawQueue.push(() => {
-              renderScene(step, [
-                interpTo(
-                  stackPathString + stepIdx + "x",
-                  curX +
-                    Math.floor(howManyTimesDidModWrap(...modArgs)) * sceneW,
-                ),
-                interpTo(stackPathString + stepIdx + "y", mod(...modArgs)),
-              ]);
-            });
+            renderScene(ctx, step, [
+              interpTo(
+                stackPathString + stepIdx + "x",
+                curX + Math.floor(howManyTimesDidModWrap(...modArgs)) * sceneW,
+              ),
+              interpTo(stackPathString + stepIdx + "y", mod(...modArgs)),
+            ]);
         } else {
           if (actuallyDraw)
-            drawQueue.push(() => {
-              renderScene(step, [
-                set(stackPathString + stepIdx + "x", defaultX),
-                set(stackPathString + stepIdx + "y", defaultY),
-              ]);
-            });
+            renderScene(ctx, step, [
+              set(stackPathString + stepIdx + "x", defaultX),
+              set(stackPathString + stepIdx + "y", defaultY),
+            ]);
         }
         maxY = Math.max(maxY, defaultY + sceneH);
       }
       if (stack.stepIds.length === 0) {
         if (actuallyDraw)
-          drawQueue.push(() => {
-            renderParchmentBox(curX, myY, sceneW, sceneH, { empty: true });
+          renderParchmentBox(ctxMain.above, curX, myY, sceneW, sceneH, {
+            empty: true,
           });
         maxY = Math.max(maxY, myY + sceneH);
       }
@@ -1463,13 +1499,11 @@ Promise.all([
       return { maxY };
     };
 
-    // saves things to draw for later,
-    // so they are drawn on-top of other things
-    const drawQueue: Function[] = [];
     /**
      * returns maximum X & Y values reached
      */
     const renderStackAndDownstream = (
+      ctx: FancyCanvasContext,
       stack: Stack,
       /* initial x-position – only used for the starting stack. other fellas consult xFromStack */
       initX: number,
@@ -1511,6 +1545,7 @@ Promise.all([
         if (childViewchart) {
           // measure child (will be overdrawn)
           const child = renderViewchart(
+            ctx,
             childViewchart,
             [curX + callPad, curY + callPad + callTopPad],
             false,
@@ -1519,6 +1554,7 @@ Promise.all([
 
           if (actuallyDraw)
             renderInset(
+              ctx.below,
               childViewchart.callPath,
               curX,
               curY,
@@ -1529,10 +1565,12 @@ Promise.all([
           // draw child for real
           if (actuallyDraw) {
             renderConnectorLine(
+              ctx.below,
               [child.maxX + callPad, curY + sceneH / 2],
               [child.maxX + callPad - scenePadX, curY + sceneH / 2],
             );
             renderViewchart(
+              ctx,
               childViewchart,
               [curX + callPad, curY + callPad + callTopPad],
               actuallyDraw,
@@ -1545,13 +1583,13 @@ Promise.all([
       // render stack
       const stackPathString = stackPathToString(stack.stackPath);
       xFromStack[stackPathString] = curX;
-      const stackSize = renderStack(stack, curX, myY, actuallyDraw);
+      const stackSize = renderStack(ctx.above, stack, curX, myY, actuallyDraw);
       maxY = Math.max(maxY, stackSize.maxY);
       if (actuallyDraw) {
         let label = getActionText(flowchart.frames[frameId].action);
-        drawQueue.push(() =>
-          renderOutlinedText(ctx, label, [curX, myY], { textAlign: "left" }),
-        );
+        renderOutlinedText(ctx.above.above, label, [curX, myY], {
+          textAlign: "left",
+        });
         if (frame.action?.type === "workspace-pick") {
           const action = frame.action;
           const index = action.index;
@@ -1607,7 +1645,7 @@ Promise.all([
         }
 
         if (isEscapeRoute(frameId, flowchart)) {
-          renderEscapeRouteMark([curX - scenePadX / 2, myY + sceneH / 2]);
+          renderEscapeRouteMark(ctx, [curX - scenePadX / 2, myY + sceneH / 2]);
         }
       }
 
@@ -1629,8 +1667,8 @@ Promise.all([
         ) {
           // don't draw it for real; just draw a mark below lastConnectionJoint
           const markPos = add(lastConnectionJoint, [0, escapeRouteDropY]);
-          renderConnectorLine(lastConnectionJoint, markPos);
-          renderEscapeRouteMark(markPos);
+          renderConnectorLine(ctx.below, lastConnectionJoint, markPos);
+          renderEscapeRouteMark(ctx, markPos);
           for (let i = 0; i < 3; i++) {
             ctx.save();
             ctx.beginPath();
@@ -1655,13 +1693,14 @@ Promise.all([
 
         const start = [curX + sceneW, myY + sceneH / 2] as Vec2;
         const end = [curX + sceneW + scenePadX, curY + sceneH / 2] as Vec2;
-        renderConnectorLine(start, end);
+        renderConnectorLine(ctx.below, start, end);
         lastConnectionJoint = [
           curX + sceneW + scenePadX / 2,
           curY + sceneH / 2,
         ];
 
         const child = renderStackAndDownstream(
+          ctx,
           nextStack,
           initX,
           curY,
@@ -1679,8 +1718,8 @@ Promise.all([
       if (steps.some((step) => step.isStuck) && !frame.escapeRouteFrameId) {
         const markPos = add(lastConnectionJoint, [0, escapeRouteDropY]);
         if (actuallyDraw) {
-          renderConnectorLine(lastConnectionJoint, markPos);
-          renderEscapeRouteMark(markPos, () => {
+          renderConnectorLine(ctx, lastConnectionJoint, markPos);
+          renderEscapeRouteMark(ctx, markPos, () => {
             if (!frame.escapeRouteFrameId) {
               console.log("no escape route");
               modifyFlowchart(flowchartId, (old) =>
@@ -1710,7 +1749,12 @@ Promise.all([
     };
     const stepsInStacks = putStepsInStacks(traceTree);
     const viewchart = stepsInStacksToViewchart(stepsInStacks);
-    const topLevel = renderViewchart(viewchart, add(pan, v(100)), true);
+    const topLevel = renderViewchart(
+      ctxMain,
+      viewchart,
+      add(pan, v(100)),
+      true,
+    );
     // is there more than one final stack?
     const finalStacks = Object.values(viewchart.stackByFrameId).filter(
       (stack) => traceTree.finalStepIds.includes(stack.stepIds[0]),
@@ -1718,10 +1762,12 @@ Promise.all([
     if (finalStacks.length > 1) {
       const extraX = 100;
       renderConnectorLine(
+        ctxMain,
         [topLevel.maxX, pan[1] + sceneW / 2 + 100],
         [topLevel.maxX + extraX, pan[1] + sceneW / 2 + 100],
       );
       renderStack(
+        ctxMain,
         {
           stackPath: {
             callPath: [],
@@ -1734,10 +1780,13 @@ Promise.all([
         true,
       );
     }
-    for (const f of drawQueue) f();
+
+    ctxMain.replay(ctxReal);
+
+    const ctxToppest = fancyCanvasContext();
 
     const labelPt = add(pan, v(100, 40));
-    renderOutlinedText(ctx, state.initialFlowchartId, labelPt, {
+    renderOutlinedText(ctxToppest, state.initialFlowchartId, labelPt, {
       textAlign: "left",
       textBaseline: "top",
       size: 40,
@@ -1755,13 +1804,19 @@ Promise.all([
     if (tool.type === "pointer") {
       // handled by css cursor
     } else if (tool.type === "domino") {
-      renderDomino(mouseX, mouseY, tool.orientation);
+      renderDomino(ctxToppest, mouseX, mouseY, tool.orientation);
     } else if (tool.type === "call") {
-      renderOutlinedText(ctx, state.initialFlowchartId, [mouseX, mouseY], {
-        size: 40,
-      });
+      renderOutlinedText(
+        ctxToppest,
+        state.initialFlowchartId,
+        [mouseX, mouseY],
+        {
+          size: 40,
+        },
+      );
     } else if (tool.type === "workspace-pick") {
       renderWorkspaceValue(
+        ctxToppest,
         [tool.value],
         0,
         undefined,
@@ -1769,7 +1824,7 @@ Promise.all([
       );
     } else if (tool.type === "purging-flame") {
       renderSpriteSheet(
-        ctx,
+        ctxToppest,
         imgCandleSheet,
         1,
         127,
@@ -1783,6 +1838,7 @@ Promise.all([
     }
 
     renderDomino(
+      ctxToppest,
       c.width - 250,
       c.height - 30 - (cellSize - dominoPadding * 2),
       "h",
@@ -1791,6 +1847,7 @@ Promise.all([
       },
     );
     renderDomino(
+      ctxToppest,
       c.width - 200,
       c.height - 30 - (2 * cellSize - dominoPadding * 2),
       "v",
@@ -1799,10 +1856,12 @@ Promise.all([
       },
     );
 
+    ctxToppest.replay(ctxReal);
+
     renderCandle();
 
     clickables.push({
-      xywh: [ctx.canvas.width - 145, ctx.canvas.height - 160, 90, 130],
+      xywh: [c.width - 145, c.height - 160, 90, 130],
       callback: () => {
         tool = { type: "purging-flame" };
       },
@@ -1811,22 +1870,22 @@ Promise.all([
     (window as any).DEBUG = false;
 
     if (draggedOver) {
-      ctx.fillStyle = "rgba(128, 255, 128, 0.5)";
-      ctx.fillRect(0, 0, c.width, c.height);
+      ctxReal.fillStyle = "rgba(128, 255, 128, 0.5)";
+      ctxReal.fillRect(0, 0, c.width, c.height);
     }
 
     // mouse position debug
     if (false) {
-      ctx.fillStyle = "white";
-      ctx.fillRect(mouseX - 100, mouseY, 200, 1);
-      ctx.fillRect(mouseX, mouseY - 100, 1, 200);
+      ctxReal.fillStyle = "white";
+      ctxReal.fillRect(mouseX - 100, mouseY, 200, 1);
+      ctxReal.fillRect(mouseX, mouseY - 100, 1, 200);
     }
 
     if (altHeld) {
-      ctx.strokeStyle = "rgba(255, 0, 255, 1)";
-      ctx.lineWidth = 4;
+      ctxReal.strokeStyle = "rgba(255, 0, 255, 1)";
+      ctxReal.lineWidth = 4;
       for (const clickable of clickables) {
-        ctx.strokeRect(...clickable.xywh);
+        ctxReal.strokeRect(...clickable.xywh);
       }
     }
 
