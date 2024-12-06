@@ -1629,11 +1629,13 @@ Promise.all([
       const stackPathString = stackPathToString(stack.stackPath);
       const stackSize = renderStack(ctx.above, stack, curX, myY);
       const stackH = stackSize.maxY - myY;
-      renderConnectorLine(
-        ctx,
-        [curX - scenePadX, curY + stackH / 2],
-        [curX, curY + stackH / 2],
-      );
+      if (drewCallHole) {
+        renderConnectorLine(
+          ctx,
+          [curX - scenePadX, curY + stackH / 2],
+          [curX, curY + stackH / 2],
+        );
+      }
       maxY = Math.max(maxY, stackSize.maxY);
       let label = getActionText(flowchart.frames[frameId].action);
       renderOutlinedText(ctx.above.above, label, [curX, myY], {
