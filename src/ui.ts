@@ -589,14 +589,8 @@ Promise.all([
     callback: Function;
   }[] = [];
 
-  const addClickHandler = (
-    ctx: FancyCanvasContext | true,
-    xywh: XYWH,
-    callback: Function,
-  ) => {
-    if (ctx === true || !ctx.noop) {
-      _clickables.push({ xywh, callback });
-    }
+  const addClickHandler = (xywh: XYWH, callback: Function) => {
+    _clickables.push({ xywh, callback });
   };
 
   // start ambient audio
@@ -834,7 +828,6 @@ Promise.all([
     ctx.rect(...xywh);
     if (onClick) {
       addClickHandler(
-        ctx,
         [xywh[0] - 10, xywh[1] - 10, xywh[2] + 20, xywh[3] + 20],
         onClick,
       );
@@ -885,7 +878,7 @@ Promise.all([
           }
           if (tool.type === "domino") {
             const { orientation } = tool;
-            addClickHandler(ctx, xywh, () => {
+            addClickHandler(xywh, () => {
               const { flowchartId, frameId } = path.final;
               modifyFlowchart(flowchartId, (old) =>
                 setAction(old, frameId, {
@@ -904,7 +897,7 @@ Promise.all([
           }
           if (tool.type === "call") {
             const callFlowchartId = tool.flowchartId;
-            addClickHandler(ctx, xywh, () => {
+            addClickHandler(xywh, () => {
               const { flowchartId, frameId } = path.final;
               modifyFlowchart(flowchartId, (old) =>
                 setAction(old, frameId, {
@@ -1057,7 +1050,7 @@ Promise.all([
         ctx.fillRect(...xywh);
         ctx.restore();
       }
-      addClickHandler(ctx, xywh, () => {
+      addClickHandler(xywh, () => {
         const { flowchartId, frameId } = path.final;
         modifyFlowchart(flowchartId, (old) =>
           setAction(old, frameId, {
@@ -1110,7 +1103,7 @@ Promise.all([
           ctx.fillStyle = "rgba(255,200,0,0.4)";
           ctx.fill();
         }
-        addClickHandler(ctx, xywh, () => {
+        addClickHandler(xywh, () => {
           tool = {
             type: "workspace-pick",
             source: idxInWorkspace,
@@ -1193,7 +1186,7 @@ Promise.all([
     ctx.lineTo(x2, y2);
     ctx.stroke();
     ctx.restore();
-    addClickHandler(ctx, xywh, () => {
+    addClickHandler(xywh, () => {
       if (tool.type === "workspace-pick") {
         console.log("applying", target);
         const { source, index, stackPath } = tool;
@@ -1251,7 +1244,7 @@ Promise.all([
     }
 
     if (tool.type === "purging-flame") {
-      addClickHandler(ctx, [topleft[0], topleft[1], sceneW, sceneH], () => {
+      addClickHandler([topleft[0], topleft[1], sceneW, sceneH], () => {
         const { flowchartId, frameId } = stackPathForStep(
           step,
           traceTree,
@@ -1286,8 +1279,6 @@ Promise.all([
 
     // This one will be drawn on the real canvas
     const ctxMain = fancyCanvasContext();
-    // This one is thrown out
-    const ctxNoop = fancyCanvasContext({ noop: true });
 
     state = undoStack.at(-1)!;
     const { defs } = state;
@@ -1542,7 +1533,6 @@ Promise.all([
 
       if (onClick) {
         addClickHandler(
-          ctx,
           [
             centerPos[0] - markRadius,
             centerPos[1] - markRadius,
@@ -1746,7 +1736,7 @@ Promise.all([
       if (frame.action?.type === "workspace-pick") {
         const action = frame.action;
         const index = action.index;
-        addClickHandler(ctx, [curX, myY - 6, sceneW, 12], () => {
+        addClickHandler([curX, myY - 6, sceneW, 12], () => {
           modifyFlowchart(flowchartId, (old) =>
             setAction(
               old,
@@ -1788,7 +1778,6 @@ Promise.all([
         ctx.fill();
 
         addClickHandler(
-          ctx,
           [
             curX - buttonRadius,
             myY + sceneH / 2 - buttonRadius,
@@ -1963,7 +1952,7 @@ Promise.all([
       color: `hsl(${callHueSaturation} 70%)`,
     });
     if (tool.type === "pointer") {
-      addClickHandler(true, [...labelPt, 40, 40], () => {
+      addClickHandler([...labelPt, 40, 40], () => {
         tool = { type: "call", flowchartId: state.initialFlowchartId };
       });
     }
@@ -2029,7 +2018,7 @@ Promise.all([
 
     renderCandle();
 
-    addClickHandler(true, [c.width - 145, c.height - 160, 90, 130], () => {
+    addClickHandler([c.width - 145, c.height - 160, 90, 130], () => {
       tool = { type: "purging-flame" };
     });
 

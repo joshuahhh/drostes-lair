@@ -97,12 +97,9 @@ class FancyCanvasContextImpl {
   private proxies: WeakSet<any> = new WeakSet();
   private thisProxy: FancyCanvasContext;
 
-  public noop: boolean;
-
-  constructor(opts: { noop?: boolean } = {}) {
+  constructor() {
     // make typescript happy; you're supposed to use static make()
     this.thisProxy = undefined as any;
-    this.noop = opts.noop ?? false;
   }
 
   private makeProxy<T>(target: any = {}): T {
@@ -188,9 +185,6 @@ class FancyCanvasContextImpl {
   // }
 
   get above(): FancyCanvasContext {
-    if (this.noop) {
-      return this.thisProxy;
-    }
     if (!this._above) {
       this._above = fancyCanvasContext();
     }
@@ -198,9 +192,6 @@ class FancyCanvasContextImpl {
   }
 
   get below(): FancyCanvasContext {
-    if (this.noop) {
-      return this.thisProxy;
-    }
     if (!this._below) {
       this._below = fancyCanvasContext();
     }
