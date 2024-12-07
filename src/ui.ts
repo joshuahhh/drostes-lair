@@ -170,6 +170,8 @@ const ensureFlowchartExists = (flowchartId: string) => {
   });
 };
 
+let viewDepth = Infinity;
+
 const persistantValuesById = new Map();
 const interpTo = (
   id: string,
@@ -332,6 +334,12 @@ Promise.all([
       } catch (e) {
         window.alert("Can't read that JSON, sorry.");
       }
+    }
+    if (e.key >= "1" && e.key <= "9") {
+      viewDepth = parseInt(e.key) - 1;
+    }
+    if (e.key === "0") {
+      viewDepth = Infinity;
     }
   });
   window.addEventListener("keyup", (e) => {
@@ -1293,7 +1301,10 @@ Promise.all([
       // render call, if any
       // curX is lhs of call hole
       let drewCallHole = false;
-      if (frame.action?.type === "call") {
+      if (
+        frame.action?.type === "call" &&
+        stack.stackPath.callPath.length <= viewDepth - 1
+      ) {
         const childViewchart = viewchart.callViewchartsByFrameId[frameId] as
           | Viewchart
           | undefined;
