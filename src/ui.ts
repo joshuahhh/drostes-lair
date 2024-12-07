@@ -983,6 +983,26 @@ Promise.all([
       ctx.restore();
     };
 
+    const renderFlowchartSigil = (
+      ctx: FancyCanvasContext,
+      flowchartId: string,
+      pos: Vec2,
+      exists: boolean = true,
+    ) => {
+      renderOutlinedText(ctx, flowchartId, pos, {
+        textAlign: "left",
+        textBaseline: "top",
+        size: 40,
+        family: "monospace",
+        color: `hsl(${callHueSaturation} 70% ${exists ? "" : "/ 50%"})`,
+      });
+      if (tool.type === "pointer") {
+        addClickHandler([...pos, 40, 40], () => {
+          tool = { type: "call", flowchartId };
+        });
+      }
+    };
+
     // render trace
     const scenePadX = 20;
     const scenePadY = 40;
@@ -1007,22 +1027,11 @@ Promise.all([
         viewchart,
       );
 
-      ctx.above.above.save();
-      // ctx.above.above.globalAlpha =
-      //   Math.random() * 0.03 + 0.3 + (Math.random() > 0.99 ? 0.1 : 0);
-      renderOutlinedText(
+      renderFlowchartSigil(
         ctx.above.above,
         viewchart.flowchartId,
         add(topLeft, [0, -60]),
-        {
-          textAlign: "left",
-          textBaseline: "top",
-          size: 40,
-          family: "monospace",
-          color: `hsl(${callHueSaturation} 70%)`,
-        },
       );
-      ctx.above.above.restore();
 
       // final connector lines, out of viewchart
       for (const v of r.finalPosForConnector) {
@@ -1572,20 +1581,6 @@ Promise.all([
 
     const ctxToppest = fancyCanvasContext(ctxReal);
 
-    const labelPt = add(pan, v(100, 40));
-    renderOutlinedText(ctxToppest, state.initialFlowchartId, labelPt, {
-      textAlign: "left",
-      textBaseline: "top",
-      size: 40,
-      family: "monospace",
-      color: `hsl(${callHueSaturation} 70%)`,
-    });
-    if (tool.type === "pointer") {
-      addClickHandler([...labelPt, 40, 40], () => {
-        tool = { type: "call", flowchartId: state.initialFlowchartId };
-      });
-    }
-
     if (tool.type === "pointer") {
       // handled by css cursor
     } else if (tool.type === "domino") {
@@ -1639,23 +1634,12 @@ Promise.all([
     );
 
     for (const [i, flowchartId] of flowchartIds.entries()) {
-      const labelPt = [
-        c.width - 340 - 50 * (flowchartIds.length - 1 - i),
-        c.height - 60,
-      ] as const;
-      const exists = state.defs.flowcharts[flowchartId];
-      renderOutlinedText(ctxToppest, flowchartId, labelPt, {
-        textAlign: "left",
-        textBaseline: "top",
-        size: 40,
-        family: "monospace",
-        color: `hsl(${callHueSaturation} 70% ${exists ? "" : "/ 50%"})`,
-      });
-      if (tool.type === "pointer") {
-        addClickHandler([...labelPt, 40, 40], () => {
-          tool = { type: "call", flowchartId };
-        });
-      }
+      renderFlowchartSigil(
+        ctxToppest,
+        flowchartId,
+        [c.width - 340 - 50 * (flowchartIds.length - 1 - i), c.height - 60],
+        state.defs.flowcharts[flowchartId] !== undefined,
+      );
     }
 
     renderDomino(
