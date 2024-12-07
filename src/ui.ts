@@ -43,7 +43,7 @@ import {
   loadImg,
   saveFile,
 } from "./ui_util";
-import { assertNever } from "./util";
+import { assertNever, indexById } from "./util";
 import { Vec2, add, mul, v } from "./vec2";
 
 const browser = detectBrowser();
@@ -87,6 +87,21 @@ const zodiac = [
   "♑︎",
   "♒︎",
   "♓︎",
+];
+
+const zodiacRankedInOrderOfCoolness = [
+  "♌︎",
+  "♋︎",
+  "♈︎",
+  "♉︎",
+  "♊︎",
+  "♍︎",
+  "♎︎",
+  "♐︎",
+  "♑︎",
+  "♒︎",
+  "♓︎",
+  "♏︎",
 ];
 
 let callHueSaturation = "249deg 37%";
@@ -139,6 +154,19 @@ const modifyFlowchart = (
     state.defs.flowcharts[flowchartId] = modification(
       state.defs.flowcharts[flowchartId],
     );
+  });
+};
+
+const ensureFlowchartExists = (flowchartId: string) => {
+  act((state) => {
+    if (!state.defs.flowcharts[flowchartId]) {
+      state.defs.flowcharts[flowchartId] = {
+        id: flowchartId,
+        initialFrameId: "1",
+        frames: indexById([{ id: "1", action: { type: "start" } }]),
+        arrows: [],
+      };
+    }
   });
 };
 
@@ -500,17 +528,20 @@ Promise.all([
             const callFlowchartId = tool.flowchartId;
             addClickHandler(xywh, () => {
               const { flowchartId, frameId } = path.final;
-              modifyFlowchart(flowchartId, (old) =>
-                setAction(old, frameId, {
-                  type: "call",
-                  flowchartId: callFlowchartId,
-                  lens: {
-                    type: "domino-grid",
-                    dx: c - dx,
-                    dy: r - dy,
-                  },
-                }),
-              );
+              act(() => {
+                ensureFlowchartExists(callFlowchartId);
+                modifyFlowchart(flowchartId, (old) =>
+                  setAction(old, frameId, {
+                    type: "call",
+                    flowchartId: callFlowchartId,
+                    lens: {
+                      type: "domino-grid",
+                      dx: c - dx,
+                      dy: r - dy,
+                    },
+                  }),
+                );
+              });
               tool = { type: "pointer" };
             });
           }
@@ -653,12 +684,15 @@ Promise.all([
       }
       addClickHandler(xywh, () => {
         const { flowchartId, frameId } = path.final;
-        modifyFlowchart(flowchartId, (old) =>
-          setAction(old, frameId, {
-            type: "call",
-            flowchartId: callFlowchartId,
-          }),
-        );
+        act(() => {
+          ensureFlowchartExists(callFlowchartId);
+          modifyFlowchart(flowchartId, (old) =>
+            setAction(old, frameId, {
+              type: "call",
+              flowchartId: callFlowchartId,
+            }),
+          );
+        });
         tool = { type: "pointer" };
       });
     }
@@ -882,6 +916,7 @@ Promise.all([
     const ctxMain = fancyCanvasContext(ctxReal);
 
     state = undoStack.at(-1)!;
+    (window as any).state = state;
     const { defs } = state;
 
     // run program on every frame lol
@@ -965,8 +1000,8 @@ Promise.all([
       );
 
       ctx.above.above.save();
-      ctx.above.above.globalAlpha =
-        Math.random() * 0.03 + 0.3 + (Math.random() > 0.99 ? 0.1 : 0);
+      // ctx.above.above.globalAlpha =
+      //   Math.random() * 0.03 + 0.3 + (Math.random() > 0.99 ? 0.1 : 0);
       renderOutlinedText(
         ctx.above.above,
         viewchart.flowchartId,
@@ -1526,11 +1561,6 @@ Promise.all([
 
     const ctxToppest = fancyCanvasContext(ctxReal);
 
-    // render inventory drawer
-    renderParchmentBox(ctxToppest, c.width - 300, c.height - 80, 310, 110, {
-      empty: true,
-    });
-
     const labelPt = add(pan, v(100, 40));
     renderOutlinedText(ctxToppest, state.initialFlowchartId, labelPt, {
       textAlign: "left",
@@ -1550,16 +1580,11 @@ Promise.all([
     } else if (tool.type === "domino") {
       renderDomino(ctxToppest, mouseX, mouseY, tool.orientation);
     } else if (tool.type === "call") {
-      renderOutlinedText(
-        ctxToppest,
-        state.initialFlowchartId,
-        [mouseX, mouseY],
-        {
-          size: 40,
-          color: `hsl(${callHueSaturation} 70%)`,
-          family: "monospace",
-        },
-      );
+      renderOutlinedText(ctxToppest, tool.flowchartId, [mouseX, mouseY], {
+        size: 40,
+        color: `hsl(${callHueSaturation} 70%)`,
+        family: "monospace",
+      });
     } else if (tool.type === "workspace-pick") {
       renderWorkspaceValue(
         ctxToppest,
@@ -1581,6 +1606,45 @@ Promise.all([
       );
     } else {
       assertNever(tool);
+    }
+
+    const flowchartIds = [
+      ...Object.values(state.defs.flowcharts).map((f) => f.id),
+      zodiacRankedInOrderOfCoolness.find((z) => !state.defs.flowcharts[z])!,
+    ];
+
+    // render inventory drawer
+    // 300
+    const drawerWidth = 320 + 50 * flowchartIds.length;
+    renderParchmentBox(
+      ctxToppest,
+      c.width - drawerWidth,
+      c.height - 80,
+      drawerWidth + 10,
+      110,
+      {
+        empty: true,
+      },
+    );
+
+    for (const [i, flowchartId] of flowchartIds.entries()) {
+      const labelPt = [
+        c.width - 340 - 50 * (flowchartIds.length - 1 - i),
+        c.height - 60,
+      ] as const;
+      const exists = state.defs.flowcharts[flowchartId];
+      renderOutlinedText(ctxToppest, flowchartId, labelPt, {
+        textAlign: "left",
+        textBaseline: "top",
+        size: 40,
+        family: "monospace",
+        color: `hsl(${callHueSaturation} 70% ${exists ? "" : "/ 50%"})`,
+      });
+      if (tool.type === "pointer") {
+        addClickHandler([...labelPt, 40, 40], () => {
+          tool = { type: "call", flowchartId };
+        });
+      }
     }
 
     renderDomino(
