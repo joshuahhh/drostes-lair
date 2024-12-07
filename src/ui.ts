@@ -1272,7 +1272,7 @@ Promise.all([
     // console.log("draw");
 
     // This one will be drawn on the real canvas
-    const ctxMain = fancyCanvasContext();
+    const ctxMain = fancyCanvasContext(ctxReal);
 
     state = undoStack.at(-1)!;
     const { defs } = state;
@@ -1915,9 +1915,9 @@ Promise.all([
     }
 
     // console.log("about to replay", getFancyCanvasContextCommandCount(ctxMain));
-    ctxMain.replay(ctxReal);
+    ctxMain.replay();
 
-    const ctxToppest = fancyCanvasContext();
+    const ctxToppest = fancyCanvasContext(ctxReal);
 
     // render inventory drawer
     renderParchmentBox(ctxToppest, c.width - 300, c.height - 80, 310, 110, {
@@ -1995,7 +1995,7 @@ Promise.all([
       },
     );
 
-    ctxToppest.replay(ctxReal);
+    ctxToppest.replay();
 
     renderCandle();
 

@@ -74,136 +74,107 @@ export function saveFile(contents: Blob, fileName: string) {
 //   new Blob([contents], {type})
 // type is something funky like "application/json;charset=utf-8"
 
-type CanvasCommand =
-  | {
-      objectProxy: object;
-      type: "call";
-      prop: string | symbol;
-      args: any[];
-      resultProxy: object;
-    }
-  | {
-      objectProxy: object;
-      type: "set";
-      prop: string | symbol;
-      value: any;
-    };
+/**
+ * Properties that return (or directly are) values that don't depend
+ * on context state. These can safely be proxied immediately to the
+ * underlying context.
+ */
+const CTX_DIRECT_PROPERTIES: (keyof CanvasRenderingContext2D)[] = [
+  "canvas",
+  "createConicGradient",
+  "createImageData",
+  "createLinearGradient",
+  "createPattern",
+  "createRadialGradient",
+  "getContextAttributes",
+];
+
+/**
+ * Properties that return values dependent on context state. These
+ * cannot be used with FancyCanvasContext at all.
+ */
+const CTX_UNSAFE_PROPERTIES: (keyof CanvasRenderingContext2D)[] = [
+  "getImageData",
+  "getLineDash",
+  "getTransform",
+  "isContextLost",
+  "isPointInPath",
+  "isPointInStroke",
+  "measureText",
+];
+
+const includes = <T>(arr: T[], item: any): item is T => arr.includes(item);
 
 class FancyCanvasContextImpl {
-  private commands: CanvasCommand[] = [];
+  private commands: (() => void)[] = [];
   private _above: FancyCanvasContext | null = null;
   private _below: FancyCanvasContext | null = null;
 
-  private proxies: WeakSet<any> = new WeakSet();
   private thisProxy: FancyCanvasContext;
 
-  constructor() {
-    // make typescript happy; you're supposed to use static make()
-    this.thisProxy = undefined as any;
-  }
-
-  private makeProxy<T>(target: any = {}): T {
-    const handler: ProxyHandler<any> = {
+  constructor(private ctx: CanvasRenderingContext2D) {
+    this.thisProxy = new Proxy<any>(this, {
       get: (target, prop) => {
         if (prop in target) {
           return (target as any)[prop];
         }
 
+        if (includes(CTX_DIRECT_PROPERTIES, prop)) {
+          const value = this.ctx[prop];
+          return typeof value === "function" ? value.bind(this.ctx) : value;
+        }
+
+        if (includes(CTX_UNSAFE_PROPERTIES, prop)) {
+          throw new Error(
+            `FancyCanvasContext doesn't support ${String(prop)}; sorry.`,
+          );
+        }
+
         // Assume the property is a method, and return a function to capture calls
         return (...args: any[]) => {
-          const resultProxy = this.makeProxy<any>({});
-          this.commands.push({
-            type: "call",
-            objectProxy: proxy,
-            prop,
-            args,
-            resultProxy,
+          this.commands.push(() => {
+            // @ts-ignore
+            this.ctx[prop](...args);
           });
-          return resultProxy;
         };
       },
 
       set: (_target, prop, value) => {
         // Capture property assignments
-        this.commands.push({ type: "set", objectProxy: proxy, prop, value });
+        this.commands.push(() => {
+          // @ts-ignore
+          this.ctx[prop] = value;
+        });
         return true;
       },
-    };
-
-    const proxy = new Proxy(target, handler);
-    this.proxies.add(proxy);
-    return proxy;
+    });
   }
 
   // Replay all captured commands on the real CanvasRenderingContext2D
-  replay(ctx: CanvasRenderingContext2D): void {
-    this._below?.replay(ctx);
-    const runtimeValues: Map<Object, any> = new Map([[this.thisProxy, ctx]]);
-    const resolveValue = (value: any): any => {
-      if (this.proxies.has(value)) {
-        if (runtimeValues.has(value)) {
-          return runtimeValues.get(value);
-        } else {
-          throw new Error(
-            "FancyProxy used before being assigned a value... woah",
-          );
-        }
-      } else {
-        return value;
-      }
-    };
+  replay(): void {
+    this._below?.replay();
     for (const command of this.commands) {
-      try {
-        const resolvedObject = resolveValue(command.objectProxy);
-        if (command.type === "call") {
-          const resolvedArgs = command.args.map(resolveValue);
-          const result = resolvedObject[command.prop](...resolvedArgs);
-          runtimeValues.set(command.resultProxy, result);
-        } else if (command.type === "set") {
-          const resolvedValue = resolveValue(command.value);
-          resolvedObject[command.prop] = resolvedValue;
-        }
-      } catch (e) {
-        console.error("Error replaying command", command);
-        console.error("Resolved object", resolveValue(command.objectProxy));
-        if (command.type === "call") {
-          console.error("Resolved args", command.args.map(resolveValue));
-        } else if (command.type === "set") {
-          console.error("Resolved value", resolveValue(command.value));
-        }
-        throw e;
-      }
+      command();
     }
-    this._above?.replay(ctx);
+    this._above?.replay();
   }
-
-  // WARNING: garbage accumulates in other places; it's best just to
-  // treat these as single-use! no clearQueue plz
-
-  // clearQueue(): void {
-  //   this.commands = [];
-  // }
 
   get above(): FancyCanvasContext {
     if (!this._above) {
-      this._above = fancyCanvasContext();
+      this._above = fancyCanvasContext(this.ctx);
     }
     return this._above;
   }
 
   get below(): FancyCanvasContext {
     if (!this._below) {
-      this._below = fancyCanvasContext();
+      this._below = fancyCanvasContext(this.ctx);
     }
     return this._below;
   }
 
-  static make(extra: object = {}): FancyCanvasContext {
-    const target = new FancyCanvasContextImpl();
-    Object.assign(target, extra);
-    const proxy = target.makeProxy<FancyCanvasContext>(target);
-    target.thisProxy = proxy;
-    return proxy;
+  static make(ctx: CanvasRenderingContext2D): FancyCanvasContext {
+    return new FancyCanvasContextImpl(ctx).thisProxy;
   }
 
   /** For debugging */
@@ -223,14 +194,10 @@ class FancyCanvasContextImpl {
 export type FancyCanvasContext = CanvasRenderingContext2D &
   FancyCanvasContextImpl;
 
-export function fancyCanvasContext(extra?: object): FancyCanvasContext {
-  return FancyCanvasContextImpl.make(extra);
-}
-
-export function getFancyCanvasContextCommands(
-  ctx: FancyCanvasContext,
-): CanvasCommand[] {
-  return FancyCanvasContextImpl.getCommands(ctx);
+export function fancyCanvasContext(
+  ctx: CanvasRenderingContext2D,
+): FancyCanvasContext {
+  return FancyCanvasContextImpl.make(ctx);
 }
 
 export function getFancyCanvasContextCommandCount(
