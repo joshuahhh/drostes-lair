@@ -22,3 +22,11 @@ export function assertNever(_never: never, message?: string): never {
 export function indexById<T extends { id: string }>(arr: T[]) {
   return Object.fromEntries(arr.map((item) => [item.id, item]));
 }
+
+// Here, we want T to be explicit and U to be inferred, but
+// TypeScript doesn't support partial infererence of generic
+// arguments, so we curry.
+export const assertExtends =
+  <T>() =>
+  <U extends T>(value: U) =>
+    value;
