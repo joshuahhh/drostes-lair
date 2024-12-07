@@ -91,6 +91,24 @@ const zodiac = [
 
 let callHueSaturation = "249deg 37%";
 
+// Nested `act` calls are supposed to be batched – the nested calls
+// shouldn't separately commit changes to the undo stack. This global
+// variable marks that a call is nested, and provides the mutable
+// state for the batch.
+let curStateYouCanChange: UIState | undefined = undefined;
+const act = (f: (stateYouCanChange: UIState) => void) => {
+  if (!curStateYouCanChange) {
+    // we're the top-level call
+    curStateYouCanChange = structuredClone(state);
+    f(curStateYouCanChange);
+    pushState(curStateYouCanChange);
+    curStateYouCanChange = undefined;
+  } else {
+    // we're nested
+    f(curStateYouCanChange);
+  }
+};
+
 // DEFAULT FLOWCHART RIGHT HERE BUDDY
 let undoStack: UIState[] = [examples.dominoesBlank];
 let redoStack: UIState[] = [];
@@ -117,11 +135,11 @@ const modifyFlowchart = (
   flowchartId: string,
   modification: (old: Flowchart) => Flowchart,
 ) => {
-  const newState = structuredClone(state);
-  newState.defs.flowcharts[flowchartId] = modification(
-    newState.defs.flowcharts[flowchartId],
-  );
-  pushState(newState);
+  act((state) => {
+    state.defs.flowcharts[flowchartId] = modification(
+      state.defs.flowcharts[flowchartId],
+    );
+  });
 };
 
 const persistantValuesById = new Map();
