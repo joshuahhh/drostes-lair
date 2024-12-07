@@ -551,10 +551,6 @@ const interpTo = (
   persistantValuesById.set(id, newValue);
   return newValue;
 };
-const set = (id: string, value: any) => {
-  persistantValuesById.set(id, value);
-  return value;
-};
 
 // globals for communication are the best
 let state: UIState;
@@ -597,9 +593,7 @@ Promise.all([
   audAmbient.loop = true;
   audAmbient.start();
 
-  let pan =
-    JSON.parse(localStorage.getItem("pan") + "") ??
-    ([0, 0] as [number, number]);
+  let pan: Vec2 = JSON.parse(localStorage.getItem("pan") + "") ?? [0, 0];
   const setPan = (v: Vec2) => {
     localStorage.setItem("pan", JSON.stringify(v));
     pan = v;
@@ -1554,45 +1548,32 @@ Promise.all([
       const stackPathString = stackPathToString(stack.stackPath);
       const steps = stack.stepIds.map((stepId) => traceTree.steps[stepId]);
 
-      let stackFanTarget = inXYWH(mouseX, mouseY, [curX, myY, sceneW, sceneH])
-        ? 1
-        : 0;
-
-      const sv = interpTo(stackPathString, stackFanTarget, 0);
-      // linear map from interval (0, 1) to (14, 84)
-      const stackFan = sv * (110 - 14) + 14;
-
       let maxX = curX;
       let maxY = myY;
 
       for (const [stepIdx, step] of steps.entries()) {
-        const defaultX = curX;
-        const defaultY = myY + stepIdx * stackFan;
+        let targetX = curX;
+        let targetY = myY + stepIdx * 14;
         if (inXYWH(mouseX, mouseY, [curX, myY, sceneW, sceneH])) {
+          const stackFan = 84;
           const modArgs = [
             myY + stepIdx * stackFan,
             c.height - sceneH,
             myY,
           ] as const;
-          renderScene(ctx.above, step, [
-            interpTo(
-              stackPathString + stepIdx + "x",
-              curX +
-                Math.floor(howManyTimesDidModWrap(...modArgs)) * (sceneW + 10),
-            ),
-            interpTo(stackPathString + stepIdx + "y", mod(...modArgs)),
-          ]);
-        } else {
-          renderScene(ctx, step, [
-            set(stackPathString + stepIdx + "x", defaultX),
-            set(stackPathString + stepIdx + "y", defaultY),
-          ]);
+          targetX = curX + Math.floor(howManyTimesDidModWrap(...modArgs)) * 100;
+          targetY = mod(...modArgs);
         }
+        renderScene(ctx.above, step, [
+          interpTo(stackPathString + stepIdx + "x", targetX - pan[0]) + pan[0],
+          interpTo(stackPathString + stepIdx + "y", targetY - pan[1]) + pan[1],
+        ]);
+
         if (stepIdx === 0) {
           // TODO: Only one step is used to determine size. This is
           // needed, at least, for consistent connector placement.
-          maxX = Math.max(maxX, defaultX + sceneW);
-          maxY = Math.max(maxY, defaultY + sceneH);
+          maxX = Math.max(maxX, curX + sceneW);
+          maxY = Math.max(maxY, myY + sceneH);
         }
       }
       if (stack.stepIds.length > 1) {
