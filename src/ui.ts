@@ -1018,6 +1018,36 @@ Promise.all([
       maxX: number;
       maxY: number;
     } => {
+      renderFlowchartSigil(
+        ctx.above.above,
+        viewchart.flowchartId,
+        add(topLeft, [0, -60]),
+      );
+
+      if (viewchart.callPath.length > viewDepth) {
+        // TODO: we're backwards-engineering the padding put around
+        // the viewchart; this is dumb
+        ctx.save();
+        for (let i = -1; i < 2; i++) {
+          ctx.beginPath();
+          ctx.arc(
+            topLeft[0] + sceneW / 2 - callPad + i * 20,
+            topLeft[1] + sceneH / 2 - callPad,
+            5,
+            0,
+            Math.PI * 2,
+          );
+          ctx.globalAlpha = 0.5;
+          ctx.fillStyle = patternParchment;
+          ctx.fill();
+        }
+        ctx.restore();
+        return {
+          maxX: topLeft[0] + sceneW - callPad,
+          maxY: topLeft[1] + sceneH - 2 * callPad - 2 * callTopPad,
+        };
+      }
+
       const flowchart = defs.flowcharts[viewchart.flowchartId];
       const initialStack = viewchart.stackByFrameId[flowchart.initialFrameId];
       const r = renderStackAndDownstream(
@@ -1025,12 +1055,6 @@ Promise.all([
         initialStack,
         ...topLeft,
         viewchart,
-      );
-
-      renderFlowchartSigil(
-        ctx.above.above,
-        viewchart.flowchartId,
-        add(topLeft, [0, -60]),
       );
 
       // final connector lines, out of viewchart
@@ -1057,36 +1081,11 @@ Promise.all([
       maxX: number,
       maxY: number,
     ) => {
-      // ctx.fillStyle = patternAsfault;
-      // const rng = seedrandom(JSON.stringify(callPath));
-      // patternAsfault.setTransform(
-      //   new DOMMatrix().translate(
-      //     ...add(pan, [rng() * 1000, rng() * 1000]),
-      //     100,
-      //   ),
-      // );
-      // ctx.fillRect(
-      //   curX,
-      //   curY + callTopPad,
-      //   maxX + callPad - curX,
-      //   maxY + callPad - curY - callTopPad,
-      // );
-      // // lighten
-      // ctx.fillStyle = "rgba(255, 255, 255, 0.2)";
-      // ctx.fillRect(
-      //   curX,
-      //   curY + callTopPad,
-      //   maxX + callPad - curX,
-      //   maxY + callPad - curY - callTopPad,
-      // );
-      // darken
+      const callPathStr = JSON.stringify(callPath);
+      const w = interpTo(`inset-${callPathStr}-w`, maxX + callPad - curX);
+      const h = interpTo(`inset-${callPathStr}-h`, maxY + callPad - curY);
       ctx.fillStyle = `rgba(0, 0, 0, ${0.15 * callPath.length})`;
-      ctx.fillRect(
-        curX,
-        curY + callTopPad,
-        maxX + callPad - curX,
-        maxY + callPad - curY - callTopPad,
-      );
+      ctx.fillRect(curX, curY + callTopPad, w, h - callTopPad);
       // shadows (via gradients inset from the edges)
       // left
       fillRectGradient(
@@ -1094,7 +1093,7 @@ Promise.all([
         curX,
         curY + 10,
         15,
-        maxY + callPad - curY - 10,
+        h - 10,
         "rgba(0,0,0,0.7)",
         "rgba(0,0,0,0)",
         "H",
@@ -1102,10 +1101,10 @@ Promise.all([
       // right
       fillRectGradient(
         ctx,
-        maxX + callPad,
+        curX + w,
         curY + 10,
         -15,
-        maxY + callPad - curY - 10,
+        h - 10,
         "rgba(0,0,0,0.7)",
         "rgba(0,0,0,0)",
         "H",
@@ -1114,20 +1113,20 @@ Promise.all([
       fillRectGradient(
         ctx,
         curX,
-        maxY + callPad,
-        maxX + callPad - curX,
+        curY + h,
+        w,
         -5,
         "rgba(0,0,0,0.2)",
         "rgba(0,0,0,0)",
         "V",
       );
       // top
-      fillRect(ctx, curX, curY, maxX + callPad - curX, 20, "rgba(0,0,0,0.4)");
+      fillRect(ctx, curX, curY, w, 20, "rgba(0,0,0,0.4)");
       fillRectGradient(
         ctx,
         curX,
         curY + 20,
-        maxX + callPad - curX,
+        w,
         -10,
         "rgba(0,0,0,0.7)",
         "rgba(0,0,0,0)",
@@ -1137,7 +1136,7 @@ Promise.all([
         ctx,
         curX,
         curY + 20,
-        maxX + callPad - curX,
+        w,
         10,
         "rgba(0,0,0,0.8)",
         "rgba(0,0,0,0)",
@@ -1310,16 +1309,11 @@ Promise.all([
       // render call, if any
       // curX is lhs of call hole
       let drewCallHole = false;
-      if (
-        frame.action?.type === "call" &&
-        stack.stackPath.callPath.length <= viewDepth - 1
-      ) {
+      if (frame.action?.type === "call") {
         const childViewchart = viewchart.callViewchartsByFrameId[frameId] as
           | Viewchart
           | undefined;
         if (childViewchart) {
-          drewCallHole = true;
-
           const child = renderViewchart(ctx.above, childViewchart, [
             curX + callPad,
             curY + callPad + callTopPad,
@@ -1338,6 +1332,8 @@ Promise.all([
           // TODO: think about this spacing; seems like call stack
           // should be more attached to call hole?
           curX = child.maxX + callPad;
+
+          drewCallHole = true;
         }
       }
 
