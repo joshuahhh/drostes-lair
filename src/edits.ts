@@ -20,12 +20,16 @@
 
 import { Action, Flowchart } from "./interpreter";
 
-export const appendFrameAfter = (fc: Flowchart, frameId: string) => {
+export const makeId = () => Math.random() + "";
+
+export const appendFrameAfter = (
+  fc: Flowchart,
+  frameId: string,
+  id?: string,
+) => {
   const newFc = structuredClone(fc);
-  const id = Math.random() + "";
-  const newFrame = {
-    id,
-  };
+  id = id ?? makeId();
+  const newFrame = { id };
   newFc.arrows.push({ from: frameId, to: id });
   newFc.frames[id] = newFrame;
   return newFc;
@@ -43,6 +47,22 @@ export const setAction = (
     throw "tried to setAction on a frame that has an action!";
   frame.action = action;
   return newFc;
+};
+
+export const setActionOnFrameOrAfter = (
+  fc: Flowchart,
+  frameId: string,
+  action: Action,
+) => {
+  let newFc = structuredClone(fc);
+  const frame = newFc.frames[frameId];
+  if (frame.action) {
+    const newFrameId = makeId();
+    newFc = appendFrameAfter(fc, frameId, newFrameId);
+    return setAction(newFc, newFrameId, action);
+  } else {
+    return setAction(newFc, frameId, action);
+  }
 };
 
 export const addEscapeRoute = (fc: Flowchart, frameId: string) => {

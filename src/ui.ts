@@ -4,11 +4,11 @@ import {
   appendFrameAfter,
   deleteFrame,
   setAction,
+  setActionOnFrameOrAfter,
 } from "./edits";
 import {
   Action,
   Flowchart,
-  Frame,
   Stack,
   StackPath,
   StackPathSegment,
@@ -497,9 +497,6 @@ Promise.all([
       dy += lens.dy;
     }
 
-    const { flowchartId, frameId } = path.final;
-    const frame = defs.flowcharts[flowchartId].frames[frameId];
-
     // grid squares
     ctx.beginPath();
     ctx.lineWidth = 3;
@@ -509,50 +506,45 @@ Promise.all([
       for (let r = 0; r < value.height; r++) {
         const xywh = [...gridToXY([c, r]), cellSize, cellSize] as const;
         ctx.rect(...xywh);
-        if (!frame.action) {
-          if (inXYWH(mouseX, mouseY, xywh)) {
-            hoveredCell = [c, r];
-          }
-          if (tool.type === "domino") {
-            const { orientation } = tool;
-            addClickHandler(xywh, () => {
-              const { flowchartId, frameId } = path.final;
+        if (inXYWH(mouseX, mouseY, xywh)) {
+          hoveredCell = [c, r];
+        }
+        if (tool.type === "domino") {
+          const { orientation } = tool;
+          addClickHandler(xywh, () => {
+            const { flowchartId, frameId } = path.final;
+            modifyFlowchart(flowchartId, (old) =>
+              setActionOnFrameOrAfter(old, frameId, {
+                type: "place-domino",
+                domino: [
+                  [c - dx, r - dy],
+                  add([c - dx, r - dy], orientation === "h" ? [1, 0] : [0, 1]),
+                ],
+              }),
+            );
+            tool = { type: "pointer" };
+          });
+        }
+        if (tool.type === "call") {
+          const callFlowchartId = tool.flowchartId;
+          addClickHandler(xywh, () => {
+            const { flowchartId, frameId } = path.final;
+            act(() => {
+              ensureFlowchartExists(callFlowchartId);
               modifyFlowchart(flowchartId, (old) =>
-                setAction(old, frameId, {
-                  type: "place-domino",
-                  domino: [
-                    [c - dx, r - dy],
-                    add(
-                      [c - dx, r - dy],
-                      orientation === "h" ? [1, 0] : [0, 1],
-                    ),
-                  ],
+                setActionOnFrameOrAfter(old, frameId, {
+                  type: "call",
+                  flowchartId: callFlowchartId,
+                  lens: {
+                    type: "domino-grid",
+                    dx: c - dx,
+                    dy: r - dy,
+                  },
                 }),
               );
-              tool = { type: "pointer" };
             });
-          }
-          if (tool.type === "call") {
-            const callFlowchartId = tool.flowchartId;
-            addClickHandler(xywh, () => {
-              const { flowchartId, frameId } = path.final;
-              act(() => {
-                ensureFlowchartExists(callFlowchartId);
-                modifyFlowchart(flowchartId, (old) =>
-                  setAction(old, frameId, {
-                    type: "call",
-                    flowchartId: callFlowchartId,
-                    lens: {
-                      type: "domino-grid",
-                      dx: c - dx,
-                      dy: r - dy,
-                    },
-                  }),
-                );
-              });
-              tool = { type: "pointer" };
-            });
-          }
+            tool = { type: "pointer" };
+          });
         }
       }
     }
@@ -628,12 +620,9 @@ Promise.all([
     contents: unknown[][],
     path: StackPath,
     pos: Vec2,
-    frame: Frame,
   ) => {
-    const hasAction = !!frame.action;
     const isDropTarget =
       path &&
-      !hasAction &&
       tool.type === "workspace-pick" &&
       stackPathToString(tool.stackPath) === stackPathToString(path);
 
@@ -654,14 +643,10 @@ Promise.all([
       if (idxInWorkspace > 0) {
         curY += 5;
       }
-      const { maxY } = renderWorkspaceValue(
-        ctx,
-        item,
-        idxInWorkspace,
-        path,
-        [pos[0] + 10, curY],
-        hasAction,
-      );
+      const { maxY } = renderWorkspaceValue(ctx, item, idxInWorkspace, path, [
+        pos[0] + 10,
+        curY,
+      ]);
       curY = maxY;
 
       if (isDropTarget) {
@@ -680,7 +665,7 @@ Promise.all([
       }
     }
 
-    if (tool.type === "call" && !hasAction) {
+    if (tool.type === "call") {
       const xywh = [pos[0], pos[1], sceneW, sceneH] as const;
       const callFlowchartId = tool.flowchartId;
       if (inXYWH(mouseX, mouseY, xywh)) {
@@ -695,7 +680,7 @@ Promise.all([
         act(() => {
           ensureFlowchartExists(callFlowchartId);
           modifyFlowchart(flowchartId, (old) =>
-            setAction(old, frameId, {
+            setActionOnFrameOrAfter(old, frameId, {
               type: "call",
               flowchartId: callFlowchartId,
             }),
@@ -712,11 +697,9 @@ Promise.all([
     idxInWorkspace: number,
     path: StackPath | undefined,
     pos: Vec2,
-    hasAction = false,
   ): { maxY: number } => {
     const isDropTarget =
       path &&
-      !hasAction &&
       tool.type === "workspace-pick" &&
       stackPathToString(tool.stackPath) === stackPathToString(path);
 
@@ -741,7 +724,7 @@ Promise.all([
       ctx.strokeStyle = "#70665a";
       ctx.rect(...xywh);
       ctx.stroke();
-      if (tool.type === "pointer" && path && !hasAction) {
+      if (tool.type === "pointer" && path) {
         if (inXYWH(mouseX, mouseY, xywh)) {
           ctx.fillStyle = "rgba(255,200,0,0.4)";
           ctx.fill();
@@ -835,7 +818,7 @@ Promise.all([
         const { source, index, stackPath } = tool;
         const { flowchartId, frameId } = stackPath.final;
         modifyFlowchart(flowchartId, (old) =>
-          setAction(old, frameId, {
+          setActionOnFrameOrAfter(old, frameId, {
             type: "workspace-pick",
             source,
             index,
@@ -875,7 +858,6 @@ Promise.all([
         value.contents,
         stackPathForStep(step, traceTree),
         topleft,
-        frame,
       );
     } else {
       renderOutlinedText(
