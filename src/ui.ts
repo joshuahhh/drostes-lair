@@ -25,6 +25,7 @@ import {
   stackPathForStep,
   stackPathToString,
   stepsInStacksToViewchart,
+  stringifyEqual,
   topLevelValueForStep,
 } from "./interpreter";
 import { howManyTimesDidModWrap, mod } from "./number";
@@ -35,6 +36,7 @@ import { renderOutlinedText } from "./ui_text";
 import {
   FancyCanvasContext,
   XYWH,
+  expand,
   fancyCanvasContext,
   fillRect,
   fillRectGradient,
@@ -445,14 +447,11 @@ Promise.all([
     x: number,
     y: number,
     orientation: "h" | "v",
+    justPlaced: boolean,
     onClick?: () => void,
   ) => {
     ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,0.7)";
-    ctx.shadowBlur = 3;
-    ctx.beginPath();
-    ctx.fillStyle = "#25221E";
-    const xywh = [
+    const xywh = XYWH(
       x - cellSize / 2 + dominoPadding,
       y - cellSize / 2 + dominoPadding,
       orientation === "h"
@@ -461,22 +460,37 @@ Promise.all([
       orientation === "v"
         ? cellSize * 2 - dominoPadding * 2
         : cellSize - dominoPadding * 2,
-    ] as const;
+    );
+    if (justPlaced) {
+      ctx.beginPath();
+      ctx.fillStyle = "#fce8a7";
+      ctx.shadowColor = "#fce8a7";
+      ctx.shadowBlur = 8;
+      ctx.rect(...expand(xywh, 2));
+      ctx.fill();
+    }
+    ctx.beginPath();
+    ctx.fillStyle = "#25221E";
     ctx.rect(...xywh);
+    ctx.fill();
     if (onClick) {
       addClickHandler(
         [xywh[0] - 10, xywh[1] - 10, xywh[2] + 20, xywh[3] + 20],
         onClick,
       );
     }
-    ctx.fill();
     ctx.restore();
   };
 
   const renderDominoes = (
     ctx: FancyCanvasContext,
-    value: any,
+    value: {
+      width: number;
+      height: number;
+      dominoes: [[number, number], [number, number]][];
+    },
     path: StackPath,
+    action: Action | undefined,
     pos: Vec2,
   ) => {
     const { defs } = state;
@@ -569,11 +583,22 @@ Promise.all([
 
     // dominoes
     for (const domino of value.dominoes) {
+      let justPlaced = false;
+      if (action?.type === "place-domino") {
+        if (
+          stringifyEqual(add(domino[0], [-dx, -dy]), action.domino[0]) &&
+          stringifyEqual(add(domino[1], [-dx, -dy]), action.domino[1])
+        ) {
+          justPlaced = true;
+        }
+      }
+
       const orientation = domino[0][0] === domino[1][0] ? "v" : "h";
       renderDomino(
         ctx,
         ...add(gridToXY(domino[0]), [cellSize / 2, cellSize / 2]),
         orientation,
+        justPlaced,
       );
     }
 
@@ -833,6 +858,8 @@ Promise.all([
   const renderScene = (ctx: FancyCanvasContext, step: Step, topleft: Vec2) => {
     const { defs } = state;
 
+    const frame = defs.flowcharts[step.flowchartId].frames[step.frameId];
+
     const isOutlined = traceTree.finalStepIds.includes(step.id);
 
     if (isOutlined) {
@@ -850,9 +877,14 @@ Promise.all([
     const value = step.scene.value;
     if ("dominoes" in value) {
       const value = topLevelValueForStep(step, traceTree, defs) as any;
-      renderDominoes(ctx, value, stackPathForStep(step, traceTree), topleft);
+      renderDominoes(
+        ctx,
+        value,
+        stackPathForStep(step, traceTree),
+        frame.action,
+        topleft,
+      );
     } else if (value.type === "workspace") {
-      const frame = defs.flowcharts[step.flowchartId].frames[step.frameId];
       renderWorkspace(
         ctx,
         value.contents,
@@ -1562,7 +1594,7 @@ Promise.all([
     if (tool.type === "pointer") {
       // handled by css cursor
     } else if (tool.type === "domino") {
-      renderDomino(ctxToppest, mouseX, mouseY, tool.orientation);
+      renderDomino(ctxToppest, mouseX, mouseY, tool.orientation, false);
     } else if (tool.type === "call") {
       renderOutlinedText(ctxToppest, tool.flowchartId, [mouseX, mouseY], {
         size: 40,
@@ -1625,6 +1657,7 @@ Promise.all([
       c.width - 270,
       c.height - 20 - (cellSize - dominoPadding * 2),
       "h",
+      false,
       () => {
         tool = { type: "domino", orientation: "h" };
       },
@@ -1634,6 +1667,7 @@ Promise.all([
       c.width - 220,
       c.height - 20 - (2 * cellSize - dominoPadding * 2),
       "v",
+      false,
       () => {
         tool = { type: "domino", orientation: "v" };
       },
