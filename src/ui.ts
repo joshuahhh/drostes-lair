@@ -9,6 +9,7 @@ import {
 import {
   Action,
   Flowchart,
+  Scene,
   Stack,
   StackPath,
   StackPathSegment,
@@ -641,10 +642,16 @@ Promise.all([
 
   const renderWorkspace = (
     lyr: Layer,
-    contents: unknown[][],
+    scene: Scene & { value: { contents: unknown[][] } },
     path: StackPath,
     pos: Vec2,
   ) => {
+    const contents = scene.value.contents;
+    let annotation = undefined;
+    if (scene.actionAnnotation?.type === "workspace-pick") {
+      annotation = scene.actionAnnotation;
+    }
+
     const isDropTarget =
       path &&
       tool.type === "workspace-pick" &&
@@ -667,10 +674,15 @@ Promise.all([
       if (idxInWorkspace > 0) {
         curY += 5;
       }
-      const { maxY } = renderWorkspaceValue(lyr, item, idxInWorkspace, path, [
-        pos[0] + 10,
-        curY,
-      ]);
+      const { maxY } = renderWorkspaceValue(
+        lyr,
+        item,
+        idxInWorkspace,
+        path,
+        [pos[0] + 10, curY],
+        annotation?.src[0] === idxInWorkspace ? annotation?.src[1] : undefined,
+        annotation?.dst[0] === idxInWorkspace ? annotation?.dst[1] : undefined,
+      );
       curY = maxY;
 
       if (isDropTarget) {
@@ -717,10 +729,12 @@ Promise.all([
 
   const renderWorkspaceValue = (
     lyr: Layer,
-    value: any,
+    value: unknown[],
     idxInWorkspace: number,
     path: StackPath | undefined,
     pos: Vec2,
+    removalIdx: number | undefined,
+    insertionIdx: number | undefined,
   ): { maxY: number } => {
     const isDropTarget =
       path &&
@@ -737,57 +751,99 @@ Promise.all([
       });
     }
 
+    let cellContents: (
+      | { type: "item"; value: unknown; isAdded: boolean }
+      | { type: "removal" }
+    )[] = value.map((item: unknown, idx: number) => ({
+      type: "item",
+      value: item,
+      isAdded: insertionIdx === idx,
+    }));
+    if (removalIdx !== undefined) {
+      cellContents.splice(removalIdx, 0, { type: "removal" });
+    }
+
+    const lyrRemoval = lyr.above();
+
     // grid squares
-    for (let [i, item] of value.entries()) {
+    for (let [i, cell] of cellContents.entries()) {
+      const isInsertion = cell.type === "item" && cell.isAdded;
+      const isRemoval = cell.type === "removal";
+
       const cellPos = [left + cellSize * i, pos[1] + cellSize * 0] as const;
       const xywh = [...cellPos, cellSize, cellSize] as const;
 
-      // the box
+      (isRemoval ? lyrRemoval : lyr).do((lyr) => {
+        // the box
+        if (isInsertion || isRemoval) {
+          lyr.save();
+          lyr.beginPath();
+          lyr.fillStyle = "#fce8a7";
+          lyr.shadowColor = "#fce8a7";
+          lyr.shadowBlur = 8;
+          lyr.rect(...expand(xywh, 2));
+          lyr.fill();
+          lyr.restore();
+        }
+        lyr.beginPath();
+        lyr.lineWidth = 3;
+        lyr.strokeStyle = "#70665a";
+        if (isRemoval) {
+          lyr.setLineDash([4, 4]);
+        }
+        lyr.rect(...xywh);
+        lyr.stroke();
+        lyr.setLineDash([]);
+        if (!isRemoval && tool.type === "pointer" && path) {
+          if (inXYWH(mouseX, mouseY, xywh)) {
+            lyr.fillStyle = "rgba(255,200,0,0.4)";
+            lyr.fill();
+          }
+          if (cell.type === "item")
+            addClickHandler(xywh, () => {
+              tool = {
+                type: "workspace-pick",
+                source: idxInWorkspace,
+                index: i,
+                stackPath: path,
+                value: cell.value,
+              };
+            });
+        }
+
+        // the text
+        if (cell.type === "item") {
+          lyr.font = "14px serif";
+          lyr.textAlign = "center";
+          lyr.textBaseline = "middle";
+          lyr.fillStyle = "rgba(0,0,0,0.8)";
+          lyr.fillText(
+            typeof cell.value === "string"
+              ? cell.value
+              : JSON.stringify(cell.value),
+            ...add(cellPos, v(cellSize / 2)),
+          );
+        }
+
+        if (
+          isDropTarget &&
+          tool.type === "workspace-pick" &&
+          tool.source === idxInWorkspace &&
+          tool.index === i
+        ) {
+          lyr.fillStyle = "rgba(200,200,200,1)";
+          lyr.fillRect(...xywh);
+        }
+      });
+    }
+    if (cellContents.length === 0) {
       lyr.beginPath();
       lyr.lineWidth = 3;
       lyr.strokeStyle = "#70665a";
-      lyr.rect(...xywh);
+      lyr.moveTo(left, pos[1]);
+      lyr.lineTo(left, pos[1] + cellSize);
       lyr.stroke();
-      if (tool.type === "pointer" && path) {
-        if (inXYWH(mouseX, mouseY, xywh)) {
-          lyr.fillStyle = "rgba(255,200,0,0.4)";
-          lyr.fill();
-        }
-        addClickHandler(xywh, () => {
-          tool = {
-            type: "workspace-pick",
-            source: idxInWorkspace,
-            index: i,
-            stackPath: path,
-            value: item,
-          };
-        });
-      }
-
-      // the text
-      lyr.font = "14px serif";
-      lyr.textAlign = "center";
-      lyr.textBaseline = "middle";
-      lyr.fillStyle = "rgba(0,0,0,0.8)";
-      lyr.fillText(
-        typeof item === "string" ? item : JSON.stringify(item),
-        ...add(cellPos, v(cellSize / 2)),
-      );
-
-      if (
-        isDropTarget &&
-        tool.type === "workspace-pick" &&
-        tool.source === idxInWorkspace &&
-        tool.index === i
-      ) {
-        lyr.fillStyle = "rgba(200,200,200,1)";
-        lyr.fillRect(...xywh);
-      }
     }
-    lyr.beginPath();
-    lyr.moveTo(left, pos[1]);
-    lyr.lineTo(left, pos[1] + cellSize);
-    lyr.stroke();
     if (isDropTarget) {
       renderDropTargetLine(
         lyr,
@@ -886,7 +942,7 @@ Promise.all([
     } else if (value.type === "workspace") {
       renderWorkspace(
         lyr,
-        value.contents,
+        step.scene,
         stackPathForStep(step, traceTree),
         topleft,
       );
@@ -1189,6 +1245,7 @@ Promise.all([
       lyr.fillStyle = `rgba(128,0,0,${flickeringOpacity})`;
       lyr.fill();
 
+      lyr.save();
       lyr.fillStyle = "rgba(0, 0, 0, 0.8)";
       lyr.font = "25px serif";
       lyr.textAlign = "center";
@@ -1607,6 +1664,8 @@ Promise.all([
         0,
         undefined,
         add([mouseX, mouseY], v(-cellSize / 2)),
+        undefined,
+        undefined,
       );
     } else if (tool.type === "purging-flame") {
       renderSpriteSheet(

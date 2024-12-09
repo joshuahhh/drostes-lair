@@ -52,6 +52,12 @@ export type Action =
         | { type: "after"; index: number };
     };
 
+export type ActionAnnotation = {
+  type: "workspace-pick";
+  src: [number, number];
+  dst: [number, number];
+};
+
 export type Lens = {
   type: "domino-grid";
   dx: number;
@@ -123,6 +129,9 @@ export type Call = {
  */
 export type Scene = {
   value: any;
+  // This is metadata provided by the action that produced this
+  // scene, providing information to help illustrate the action.
+  actionAnnotation?: ActionAnnotation;
 };
 
 // FUNCTIONS
@@ -283,7 +292,7 @@ function performAction(
   }
 
   if (!action || action.type === "start") {
-    proceedWith([scene]);
+    proceedWith([{ ...scene, actionAnnotation: undefined }]);
   } else if (action.type === "test-func") {
     proceedWith(action.func(scene));
   } else if (action.type === "place-domino") {
@@ -320,7 +329,10 @@ function performAction(
     if (!nextFlowchart) {
       throw new Error(`Flowchart ${action.flowchartId} not found`);
     }
-    let callScene = scene;
+    let callScene = {
+      ...scene,
+      actionAnnotation: undefined,
+    };
     if (action.lens) {
       const lensImpl = lenses[action.lens.type];
       if (!lensImpl) {
@@ -329,6 +341,7 @@ function performAction(
       callScene = {
         ...scene,
         value: lensImpl.getPart(action.lens, scene.value),
+        actionAnnotation: undefined,
       };
     }
     const nextStep: Step = {
@@ -367,6 +380,7 @@ function performAction(
       if (pickedIndex < 0 || pickedIndex >= sourceValue.length) {
         throw new Error(`Item ${pickedIndex} is out of bounds`);
       }
+      let annotation: ActionAnnotation | undefined = undefined;
       let newWorkspace = value.contents.slice();
       const pickedItem = sourceValue[pickedIndex];
       newWorkspace[source] = sourceValue.slice();
@@ -374,21 +388,41 @@ function performAction(
       if (target.type === "at") {
         if (target.side === "replace") {
           newWorkspace[target.index] = [pickedItem];
+          annotation = {
+            type: "workspace-pick",
+            src: [source, pickedIndex],
+            dst: [target.index, 0],
+          };
         } else if (target.side === "before") {
           newWorkspace[target.index] = [
             pickedItem,
             ...newWorkspace[target.index],
           ];
+          annotation = {
+            type: "workspace-pick",
+            src: [source, pickedIndex],
+            dst: [target.index, 0],
+          };
         } else if (target.side === "after") {
           newWorkspace[target.index] = [
             ...newWorkspace[target.index],
             pickedItem,
           ];
+          annotation = {
+            type: "workspace-pick",
+            src: [source, pickedIndex],
+            dst: [target.index, newWorkspace[target.index].length - 1],
+          };
         } else {
           assertNever(target.side);
         }
       } else if (target.type === "after") {
         newWorkspace.splice(target.index + 1, 0, [pickedItem]);
+        annotation = {
+          type: "workspace-pick",
+          src: [source, pickedIndex],
+          dst: [target.index + 1, 0],
+        };
       } else {
         assertNever(target);
       }
@@ -397,6 +431,7 @@ function performAction(
           ...value,
           contents: newWorkspace,
         },
+        actionAnnotation: annotation,
       };
     });
     proceedWith(nextScenes);

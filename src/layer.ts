@@ -104,9 +104,9 @@ class LayerImpl {
     return lyr;
   }
 
-  do(f: () => void) {
+  do(f: (lyr: Layer) => void) {
     this.thisProxy.save();
-    f();
+    f(this.thisProxy);
     this.thisProxy.restore();
   }
 
