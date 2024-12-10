@@ -760,7 +760,13 @@ Promise.all([
       isAdded: insertionIdx === idx,
     }));
     if (removalIdx !== undefined) {
-      cellContents.splice(removalIdx, 0, { type: "removal" });
+      cellContents.splice(
+        insertionIdx !== undefined && insertionIdx < removalIdx
+          ? removalIdx + 1
+          : removalIdx,
+        0,
+        { type: "removal" },
+      );
     }
 
     const lyrRemoval = lyr.above();
