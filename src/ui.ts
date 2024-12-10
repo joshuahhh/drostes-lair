@@ -28,7 +28,7 @@ import {
   stringifyEqual,
   topLevelValueForStep,
 } from "./interpreter";
-import { Layer, layer } from "./layer";
+import { Layer, getLayerCommandCount, layer } from "./layer";
 import { howManyTimesDidModWrap, mod } from "./number";
 import { makeCandleRenderer, renderSpriteSheet } from "./ui_candle";
 import { examples } from "./ui_examples";
@@ -215,7 +215,7 @@ Promise.all([
   const patternParchment = ctxReal.createPattern(imgParchment, "repeat")!;
   const patternAsfault = ctxReal.createPattern(imgAsfault, "repeat")!;
 
-  const renderCandle = makeCandleRenderer(ctxReal, imgCandleSheet);
+  const renderCandle = makeCandleRenderer(imgCandleSheet);
 
   // don't touch this directly; use addClickHandler
   let _clickables: {
@@ -935,6 +935,7 @@ Promise.all([
 
     // This one will be drawn on the real canvas
     const lyrMain = layer(ctxReal);
+    const lyrAbove = lyrMain.above();
 
     state = undoStack.at(-1)!;
     (window as any).state = state;
@@ -1589,24 +1590,19 @@ Promise.all([
       );
     }
 
-    // console.log("about to replay", getLayerCommandCount(lyrMain));
-    lyrMain.replay();
-
-    const lyrToppest = layer(ctxReal);
-
     if (tool.type === "pointer") {
       // handled by css cursor
     } else if (tool.type === "domino") {
-      renderDomino(lyrToppest, mouseX, mouseY, tool.orientation, false);
+      renderDomino(lyrAbove, mouseX, mouseY, tool.orientation, false);
     } else if (tool.type === "call") {
-      renderOutlinedText(lyrToppest, tool.flowchartId, [mouseX, mouseY], {
+      renderOutlinedText(lyrAbove, tool.flowchartId, [mouseX, mouseY], {
         size: 40,
         color: `hsl(${callHueSaturation} 70%)`,
         family: "monospace",
       });
     } else if (tool.type === "workspace-pick") {
       renderWorkspaceValue(
-        lyrToppest,
+        lyrAbove,
         [tool.value],
         0,
         undefined,
@@ -1614,7 +1610,7 @@ Promise.all([
       );
     } else if (tool.type === "purging-flame") {
       renderSpriteSheet(
-        lyrToppest,
+        lyrAbove,
         imgCandleSheet,
         1,
         127,
@@ -1636,7 +1632,7 @@ Promise.all([
     // 300
     const drawerWidth = 320 + 50 * flowchartIds.length;
     renderParchmentBox(
-      lyrToppest,
+      lyrAbove,
       c.width - drawerWidth,
       c.height - 80,
       drawerWidth + 10,
@@ -1648,7 +1644,7 @@ Promise.all([
 
     for (const [i, flowchartId] of flowchartIds.entries()) {
       renderFlowchartSigil(
-        lyrToppest,
+        lyrAbove,
         flowchartId,
         [c.width - 340 - 50 * (flowchartIds.length - 1 - i), c.height - 60],
         state.defs.flowcharts[flowchartId] !== undefined,
@@ -1656,7 +1652,7 @@ Promise.all([
     }
 
     renderDomino(
-      lyrToppest,
+      lyrAbove,
       c.width - 270,
       c.height - 20 - (cellSize - dominoPadding * 2),
       "h",
@@ -1666,7 +1662,7 @@ Promise.all([
       },
     );
     renderDomino(
-      lyrToppest,
+      lyrAbove,
       c.width - 220,
       c.height - 20 - (2 * cellSize - dominoPadding * 2),
       "v",
@@ -1676,9 +1672,7 @@ Promise.all([
       },
     );
 
-    lyrToppest.replay();
-
-    renderCandle();
+    renderCandle(lyrAbove);
 
     addClickHandler([c.width - 145, c.height - 160, 90, 130], () => {
       tool = { type: "purging-flame" };
@@ -1687,30 +1681,30 @@ Promise.all([
     (window as any).DEBUG = false;
 
     if (draggedOver) {
-      ctxReal.fillStyle = "rgba(128, 255, 128, 0.5)";
-      ctxReal.fillRect(0, 0, c.width, c.height);
+      lyrAbove.fillStyle = "rgba(128, 255, 128, 0.5)";
+      lyrAbove.fillRect(0, 0, c.width, c.height);
     }
 
     // mouse position debug
     if (false) {
-      ctxReal.fillStyle = "white";
-      ctxReal.fillRect(mouseX - 100, mouseY, 200, 1);
-      ctxReal.fillRect(mouseX, mouseY - 100, 1, 200);
+      lyrAbove.fillStyle = "white";
+      lyrAbove.fillRect(mouseX - 100, mouseY, 200, 1);
+      lyrAbove.fillRect(mouseX, mouseY - 100, 1, 200);
     }
 
     // clickables debug
     if (false) {
-      ctxReal.strokeStyle = "rgba(255, 0, 255, 1)";
-      ctxReal.lineWidth = 4;
+      lyrAbove.strokeStyle = "rgba(255, 0, 255, 1)";
+      lyrAbove.lineWidth = 4;
       for (const clickable of _clickables) {
-        ctxReal.strokeRect(...clickable.xywh);
+        lyrAbove.strokeRect(...clickable.xywh);
       }
     }
 
     const endTime = performance.now();
     if (false) {
       renderOutlinedText(
-        ctxReal,
+        lyrAbove,
         `${Math.round(endTime - lastEndTime)}ms`,
         [10, 10],
         {
@@ -1721,5 +1715,10 @@ Promise.all([
       );
     }
     lastEndTime = endTime;
+
+    if (false) {
+      console.log("about to draw", getLayerCommandCount(lyrMain));
+    }
+    lyrMain.draw();
   }
 });

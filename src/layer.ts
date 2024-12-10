@@ -36,7 +36,10 @@ class LayerImpl {
 
   private thisProxy: Layer;
 
-  constructor(private ctx: CanvasRenderingContext2D) {
+  constructor(
+    private ctx: CanvasRenderingContext2D,
+    private drawable: boolean,
+  ) {
     this.thisProxy = new Proxy<any>(this, {
       get: (target, prop) => {
         if (prop in target) {
@@ -72,23 +75,31 @@ class LayerImpl {
     });
   }
 
-  // Replay all captured commands on the real CanvasRenderingContext2D
-  replay(): void {
-    this.layersBelow.forEach((layer) => layer.replay());
+  _draw(): void {
+    this.layersBelow.forEach((layer) => layer._draw());
     for (const command of this.commands) {
       command();
     }
-    this.layersAbove.forEach((layer) => layer.replay());
+    this.layersAbove.forEach((layer) => layer._draw());
+  }
+
+  draw(): void {
+    if (this.drawable) {
+      this._draw();
+      this.drawable = false;
+    } else {
+      throw new Error("Can't draw a non-root / already-drawn layer");
+    }
   }
 
   below(): Layer {
-    const lyr = layer(this.ctx);
+    const lyr = LayerImpl.make(this.ctx, false);
     this.layersBelow.push(lyr);
     return lyr;
   }
 
   above(): Layer {
-    const lyr = layer(this.ctx);
+    const lyr = LayerImpl.make(this.ctx, false);
     this.layersAbove.unshift(lyr);
     return lyr;
   }
@@ -96,8 +107,8 @@ class LayerImpl {
   // To get stuff out of LayerImpl, we use static methods (which have
   // access to private fields)
 
-  static make(lyr: CanvasRenderingContext2D): Layer {
-    return new LayerImpl(lyr).thisProxy;
+  static make(lyr: CanvasRenderingContext2D, drawable: boolean): Layer {
+    return new LayerImpl(lyr, drawable).thisProxy;
   }
 
   static commandCount(lyr: Layer): number {
@@ -112,7 +123,7 @@ class LayerImpl {
 export type Layer = CanvasRenderingContext2D & LayerImpl;
 
 export function layer(lyr: CanvasRenderingContext2D): Layer {
-  return LayerImpl.make(lyr);
+  return LayerImpl.make(lyr, true);
 }
 
 export function getLayerCommandCount(lyr: Layer): number {

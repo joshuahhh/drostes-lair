@@ -40,13 +40,10 @@ export const renderSpriteSheet = (
   ctx.restore();
 };
 
-export const makeCandleRenderer = (
-  ctx: CanvasRenderingContext2D,
-  imgCandleSheet: HTMLImageElement,
-) => {
+export const makeCandleRenderer = (imgCandleSheet: HTMLImageElement) => {
   let t = 0;
 
-  const render = () => {
+  const render = (ctx: CanvasRenderingContext2D) => {
     // render candle
     renderSpriteSheet(
       ctx,
