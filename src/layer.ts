@@ -104,6 +104,12 @@ class LayerImpl {
     return lyr;
   }
 
+  do(f: () => void) {
+    this.thisProxy.save();
+    f();
+    this.thisProxy.restore();
+  }
+
   // To get stuff out of LayerImpl, we use static methods (which have
   // access to private fields)
 
