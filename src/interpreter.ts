@@ -851,14 +851,7 @@ function traceTreeToViewchartHelper(
       stackByFrameId[stack.stackPath.final.frameId] = stack;
       // TODO hacky
       flowchartId = stack.stackPath.final.flowchartId;
-    }
-
-    // callPath is a prefix of stack.stackPath.callPath
-    const isStackDeeperThanCallPath = callPath.every(
-      (segment, i) =>
-        JSON.stringify(segment) === JSON.stringify(stack.stackPath.callPath[i]),
-    );
-    if (isStackDeeperThanCallPath && !isStackAtCallPath) {
+    } else {
       const callFrameId = stack.stackPath.callPath[callPath.length].frameId;
       if (!stacksByCallFrameId[callFrameId]) {
         stacksByCallFrameId[callFrameId] = [];
