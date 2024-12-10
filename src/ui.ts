@@ -174,20 +174,20 @@ const ensureFlowchartExists = (flowchartId: string) => {
 
 let viewDepth = Infinity;
 
-const persistantValuesById = new Map();
+const persistentValuesById = new Map<string, number>();
 const interpTo = (
   id: string,
-  targetValue: any,
+  targetValue: number,
   initValue = targetValue,
   slowness = 3,
 ) => {
-  let v = persistantValuesById.get(id);
+  let v = persistentValuesById.get(id);
   if (v === undefined) {
-    persistantValuesById.set(id, initValue);
+    persistentValuesById.set(id, initValue);
     v = initValue;
   }
   const newValue = v + (targetValue - v) / slowness;
-  persistantValuesById.set(id, newValue);
+  persistentValuesById.set(id, newValue);
   return newValue;
 };
 
