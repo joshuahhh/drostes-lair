@@ -894,7 +894,6 @@ Promise.all([
     lyr.restore();
     addClickHandler(xywh, () => {
       if (tool.type === "workspace-pick") {
-        console.log("applying", target);
         const { source, index, stackPath } = tool;
         const { flowchartId, frameId } = stackPath.final;
         modifyFlowchart(flowchartId, (old) =>
