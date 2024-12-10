@@ -28,16 +28,15 @@ import {
   stringifyEqual,
   topLevelValueForStep,
 } from "./interpreter";
+import { Layer, layer } from "./layer";
 import { howManyTimesDidModWrap, mod } from "./number";
 import { makeCandleRenderer, renderSpriteSheet } from "./ui_candle";
 import { examples } from "./ui_examples";
 import { UIState } from "./ui_state";
 import { renderOutlinedText } from "./ui_text";
 import {
-  FancyCanvasContext,
   XYWH,
   expand,
-  fancyCanvasContext,
   fillRect,
   fillRectGradient,
   inXYWH,
@@ -55,24 +54,24 @@ function DEBUG() {
   return (window as any).DEBUG;
 }
 
-function debugPoint(ctx: FancyCanvasContext, pos: Vec2) {
-  ctx.save();
-  ctx.beginPath();
-  ctx.arc(...pos, 5, 0, 2 * Math.PI);
-  ctx.fillStyle = "yellow";
-  ctx.fill();
-  ctx.restore();
+function debugPoint(lyr: Layer, pos: Vec2) {
+  lyr.save();
+  lyr.beginPath();
+  lyr.arc(...pos, 5, 0, 2 * Math.PI);
+  lyr.fillStyle = "yellow";
+  lyr.fill();
+  lyr.restore();
 }
 
-function debugLine(ctx: FancyCanvasContext, a: Vec2, b: Vec2) {
-  ctx.save();
-  ctx.beginPath();
-  ctx.moveTo(...a);
-  ctx.lineTo(...b);
-  ctx.lineWidth = 2;
-  ctx.strokeStyle = "yellow";
-  ctx.stroke();
-  ctx.restore();
+function debugLine(lyr: Layer, a: Vec2, b: Vec2) {
+  lyr.save();
+  lyr.beginPath();
+  lyr.moveTo(...a);
+  lyr.lineTo(...b);
+  lyr.lineWidth = 2;
+  lyr.strokeStyle = "yellow";
+  lyr.stroke();
+  lyr.restore();
 }
 
 // just fyi ;)
@@ -405,7 +404,7 @@ Promise.all([
   });
 
   const renderParchmentBox = (
-    ctx: FancyCanvasContext,
+    lyr: Layer,
     x: number,
     y: number,
     w: number,
@@ -415,26 +414,26 @@ Promise.all([
     const { empty = false } = opts;
     const xywh = [x, y, w, h] as const;
 
-    ctx.save();
-    ctx.shadowColor = "rgba(0,0,0,1)";
-    ctx.shadowOffsetY = 4;
-    ctx.shadowBlur = 15;
+    lyr.save();
+    lyr.shadowColor = "rgba(0,0,0,1)";
+    lyr.shadowOffsetY = 4;
+    lyr.shadowBlur = 15;
     if (empty) {
-      ctx.globalAlpha = 0.3;
+      lyr.globalAlpha = 0.3;
     }
     if (browser?.name === "safari") {
       // Safari doesn't seem to draw shadows for drawImage?
-      ctx.fillStyle = "black";
-      ctx.fillRect(...xywh);
+      lyr.fillStyle = "black";
+      lyr.fillRect(...xywh);
     }
-    ctx.drawImage(imgParchment, Math.random(), Math.random(), w, h, ...xywh);
+    lyr.drawImage(imgParchment, Math.random(), Math.random(), w, h, ...xywh);
     if (empty) {
-      ctx.globalAlpha = 1;
-      ctx.strokeStyle = "rgba(183,167,148)";
-      ctx.lineWidth = 1;
-      ctx.strokeRect(...xywh);
+      lyr.globalAlpha = 1;
+      lyr.strokeStyle = "rgba(183,167,148)";
+      lyr.lineWidth = 1;
+      lyr.strokeRect(...xywh);
     }
-    ctx.restore();
+    lyr.restore();
   };
   const sceneW = 100;
   const sceneH = 100;
@@ -443,14 +442,14 @@ Promise.all([
   const dominoPadding = 5;
 
   const renderDomino = (
-    ctx: FancyCanvasContext,
+    lyr: Layer,
     x: number,
     y: number,
     orientation: "h" | "v",
     justPlaced: boolean,
     onClick?: () => void,
   ) => {
-    ctx.save();
+    lyr.save();
     const xywh = XYWH(
       x - cellSize / 2 + dominoPadding,
       y - cellSize / 2 + dominoPadding,
@@ -462,28 +461,28 @@ Promise.all([
         : cellSize - dominoPadding * 2,
     );
     if (justPlaced) {
-      ctx.beginPath();
-      ctx.fillStyle = "#fce8a7";
-      ctx.shadowColor = "#fce8a7";
-      ctx.shadowBlur = 8;
-      ctx.rect(...expand(xywh, 2));
-      ctx.fill();
+      lyr.beginPath();
+      lyr.fillStyle = "#fce8a7";
+      lyr.shadowColor = "#fce8a7";
+      lyr.shadowBlur = 8;
+      lyr.rect(...expand(xywh, 2));
+      lyr.fill();
     }
-    ctx.beginPath();
-    ctx.fillStyle = "#25221E";
-    ctx.rect(...xywh);
-    ctx.fill();
+    lyr.beginPath();
+    lyr.fillStyle = "#25221E";
+    lyr.rect(...xywh);
+    lyr.fill();
     if (onClick) {
       addClickHandler(
         [xywh[0] - 10, xywh[1] - 10, xywh[2] + 20, xywh[3] + 20],
         onClick,
       );
     }
-    ctx.restore();
+    lyr.restore();
   };
 
   const renderDominoes = (
-    ctx: FancyCanvasContext,
+    lyr: Layer,
     value: {
       width: number;
       height: number;
@@ -512,14 +511,14 @@ Promise.all([
     }
 
     // grid squares
-    ctx.beginPath();
-    ctx.lineWidth = 3;
-    ctx.strokeStyle = "#70665a";
+    lyr.beginPath();
+    lyr.lineWidth = 3;
+    lyr.strokeStyle = "#70665a";
     let hoveredCell: [number, number] | undefined = undefined;
     for (let c = 0; c < value.width; c++) {
       for (let r = 0; r < value.height; r++) {
         const xywh = [...gridToXY([c, r]), cellSize, cellSize] as const;
-        ctx.rect(...xywh);
+        lyr.rect(...xywh);
         if (inXYWH(mouseX, mouseY, xywh)) {
           hoveredCell = [c, r];
         }
@@ -562,11 +561,11 @@ Promise.all([
         }
       }
     }
-    ctx.moveTo(...gridToXY([0, 0]));
-    ctx.lineTo(...gridToXY([value.width, 0]));
-    ctx.moveTo(...gridToXY([0, 0]));
-    ctx.lineTo(...gridToXY([0, value.height]));
-    ctx.stroke();
+    lyr.moveTo(...gridToXY([0, 0]));
+    lyr.lineTo(...gridToXY([value.width, 0]));
+    lyr.moveTo(...gridToXY([0, 0]));
+    lyr.lineTo(...gridToXY([0, value.height]));
+    lyr.stroke();
 
     if (tool.type === "call" && hoveredCell) {
       const xywh = [
@@ -574,11 +573,11 @@ Promise.all([
         cellSize * (value.width - hoveredCell[0]),
         cellSize * (value.height - hoveredCell[1]),
       ] as const;
-      ctx.lineWidth = 2;
-      ctx.strokeStyle = `hsl(${callHueSaturation} 45%)`;
-      ctx.strokeRect(...xywh);
-      ctx.fillStyle = `hsl(${callHueSaturation} 30% / 30%)`;
-      ctx.fillRect(...xywh);
+      lyr.lineWidth = 2;
+      lyr.strokeStyle = `hsl(${callHueSaturation} 45%)`;
+      lyr.strokeRect(...xywh);
+      lyr.fillStyle = `hsl(${callHueSaturation} 30% / 30%)`;
+      lyr.fillRect(...xywh);
     }
 
     // dominoes
@@ -595,7 +594,7 @@ Promise.all([
 
       const orientation = domino[0][0] === domino[1][0] ? "v" : "h";
       renderDomino(
-        ctx,
+        lyr,
         ...add(gridToXY(domino[0]), [cellSize / 2, cellSize / 2]),
         orientation,
         justPlaced,
@@ -617,31 +616,31 @@ Promise.all([
       width -= lens.dx;
       height -= lens.dy;
       // shaded background
-      ctx.beginPath();
-      ctx.rect(...pos, sceneW, sceneH);
-      ctx.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
+      lyr.beginPath();
+      lyr.rect(...pos, sceneW, sceneH);
+      lyr.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
       // use parchment fade or darkness fade?
       if (true) {
-        ctx.fillStyle = patternParchment;
+        lyr.fillStyle = patternParchment;
         patternParchment.setTransform(new DOMMatrix().translate(...pan, 0));
-        ctx.globalAlpha = i === path.callPath.length - 1 ? 0.8 : 0.4;
+        lyr.globalAlpha = i === path.callPath.length - 1 ? 0.8 : 0.4;
       } else {
-        ctx.fillStyle = "rgba(0,0,0,0.4)";
+        lyr.fillStyle = "rgba(0,0,0,0.4)";
       }
-      ctx.fill("evenodd");
-      ctx.globalAlpha = 1;
+      lyr.fill("evenodd");
+      lyr.globalAlpha = 1;
       // outline
-      ctx.lineWidth = 2;
-      ctx.beginPath();
-      ctx.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
-      // ctx.setLineDash([2, 2]);
-      ctx.strokeStyle = `hsl(${callHueSaturation} 50%)`;
-      ctx.stroke();
+      lyr.lineWidth = 2;
+      lyr.beginPath();
+      lyr.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
+      // lyr.setLineDash([2, 2]);
+      lyr.strokeStyle = `hsl(${callHueSaturation} 50%)`;
+      lyr.stroke();
     }
   };
 
   const renderWorkspace = (
-    ctx: FancyCanvasContext,
+    lyr: Layer,
     contents: unknown[][],
     path: StackPath,
     pos: Vec2,
@@ -655,7 +654,7 @@ Promise.all([
 
     if (isDropTarget) {
       renderDropTargetLine(
-        ctx,
+        lyr,
         pos[0] + 10,
         curY - 5,
         pos[0] + sceneW - 20,
@@ -668,7 +667,7 @@ Promise.all([
       if (idxInWorkspace > 0) {
         curY += 5;
       }
-      const { maxY } = renderWorkspaceValue(ctx, item, idxInWorkspace, path, [
+      const { maxY } = renderWorkspaceValue(lyr, item, idxInWorkspace, path, [
         pos[0] + 10,
         curY,
       ]);
@@ -677,7 +676,7 @@ Promise.all([
       if (isDropTarget) {
         curY += 5;
         renderDropTargetLine(
-          ctx,
+          lyr,
           pos[0] + 10,
           curY,
           pos[0] + sceneW - 20,
@@ -694,11 +693,11 @@ Promise.all([
       const xywh = [pos[0], pos[1], sceneW, sceneH] as const;
       const callFlowchartId = tool.flowchartId;
       if (inXYWH(mouseX, mouseY, xywh)) {
-        ctx.save();
-        ctx.globalAlpha = 0.33;
-        ctx.fillStyle = `hsl(${callHueSaturation} 70%)`;
-        ctx.fillRect(...xywh);
-        ctx.restore();
+        lyr.save();
+        lyr.globalAlpha = 0.33;
+        lyr.fillStyle = `hsl(${callHueSaturation} 70%)`;
+        lyr.fillRect(...xywh);
+        lyr.restore();
       }
       addClickHandler(xywh, () => {
         const { flowchartId, frameId } = path.final;
@@ -717,7 +716,7 @@ Promise.all([
   };
 
   const renderWorkspaceValue = (
-    ctx: FancyCanvasContext,
+    lyr: Layer,
     value: any,
     idxInWorkspace: number,
     path: StackPath | undefined,
@@ -731,7 +730,7 @@ Promise.all([
     let left = pos[0];
 
     if (isDropTarget) {
-      renderDropTargetLine(ctx, left - 5, pos[1], left - 5, pos[1] + cellSize, {
+      renderDropTargetLine(lyr, left - 5, pos[1], left - 5, pos[1] + cellSize, {
         type: "at",
         index: idxInWorkspace,
         side: "before",
@@ -744,15 +743,15 @@ Promise.all([
       const xywh = [...cellPos, cellSize, cellSize] as const;
 
       // the box
-      ctx.beginPath();
-      ctx.lineWidth = 3;
-      ctx.strokeStyle = "#70665a";
-      ctx.rect(...xywh);
-      ctx.stroke();
+      lyr.beginPath();
+      lyr.lineWidth = 3;
+      lyr.strokeStyle = "#70665a";
+      lyr.rect(...xywh);
+      lyr.stroke();
       if (tool.type === "pointer" && path) {
         if (inXYWH(mouseX, mouseY, xywh)) {
-          ctx.fillStyle = "rgba(255,200,0,0.4)";
-          ctx.fill();
+          lyr.fillStyle = "rgba(255,200,0,0.4)";
+          lyr.fill();
         }
         addClickHandler(xywh, () => {
           tool = {
@@ -766,11 +765,11 @@ Promise.all([
       }
 
       // the text
-      ctx.font = "14px serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillStyle = "rgba(0,0,0,0.8)";
-      ctx.fillText(
+      lyr.font = "14px serif";
+      lyr.textAlign = "center";
+      lyr.textBaseline = "middle";
+      lyr.fillStyle = "rgba(0,0,0,0.8)";
+      lyr.fillText(
         typeof item === "string" ? item : JSON.stringify(item),
         ...add(cellPos, v(cellSize / 2)),
       );
@@ -781,17 +780,17 @@ Promise.all([
         tool.source === idxInWorkspace &&
         tool.index === i
       ) {
-        ctx.fillStyle = "rgba(200,200,200,1)";
-        ctx.fillRect(...xywh);
+        lyr.fillStyle = "rgba(200,200,200,1)";
+        lyr.fillRect(...xywh);
       }
     }
-    ctx.beginPath();
-    ctx.moveTo(left, pos[1]);
-    ctx.lineTo(left, pos[1] + cellSize);
-    ctx.stroke();
+    lyr.beginPath();
+    lyr.moveTo(left, pos[1]);
+    lyr.lineTo(left, pos[1] + cellSize);
+    lyr.stroke();
     if (isDropTarget) {
       renderDropTargetLine(
-        ctx,
+        lyr,
         left + cellSize / 2,
         pos[1] + cellSize / 2,
         left + cellSize * value.length - cellSize / 2,
@@ -808,7 +807,7 @@ Promise.all([
     left += 5;
 
     if (isDropTarget) {
-      renderDropTargetLine(ctx, left, pos[1], left, pos[1] + cellSize, {
+      renderDropTargetLine(lyr, left, pos[1], left, pos[1] + cellSize, {
         type: "at",
         index: idxInWorkspace,
         side: "after",
@@ -819,7 +818,7 @@ Promise.all([
   };
 
   const renderDropTargetLine = (
-    ctx: FancyCanvasContext,
+    lyr: Layer,
     x1: number,
     y1: number,
     x2: number,
@@ -827,16 +826,16 @@ Promise.all([
     target: (Action & { type: "workspace-pick" })["target"],
   ) => {
     const xywh = [x1 - 3, y1 - 3, x2 - x1 + 6, y2 - y1 + 6] as const;
-    ctx.save();
-    ctx.strokeStyle = inXYWH(mouseX, mouseY, xywh)
+    lyr.save();
+    lyr.strokeStyle = inXYWH(mouseX, mouseY, xywh)
       ? "rgba(255,200,0,0.8)"
       : "#70665a";
-    ctx.setLineDash([2, 2]);
-    ctx.beginPath();
-    ctx.moveTo(x1, y1);
-    ctx.lineTo(x2, y2);
-    ctx.stroke();
-    ctx.restore();
+    lyr.setLineDash([2, 2]);
+    lyr.beginPath();
+    lyr.moveTo(x1, y1);
+    lyr.lineTo(x2, y2);
+    lyr.stroke();
+    lyr.restore();
     addClickHandler(xywh, () => {
       if (tool.type === "workspace-pick") {
         console.log("applying", target);
@@ -855,7 +854,7 @@ Promise.all([
     });
   };
 
-  const renderScene = (ctx: FancyCanvasContext, step: Step, topleft: Vec2) => {
+  const renderScene = (lyr: Layer, step: Step, topleft: Vec2) => {
     const { defs } = state;
 
     const frame = defs.flowcharts[step.flowchartId].frames[step.frameId];
@@ -863,22 +862,22 @@ Promise.all([
     const isOutlined = traceTree.finalStepIds.includes(step.id);
 
     if (isOutlined) {
-      ctx.save();
-      ctx.shadowColor = "white";
-      ctx.shadowBlur = 10;
-      ctx.beginPath();
-      ctx.lineWidth = 4;
-      ctx.strokeStyle = "white";
-      ctx.rect(...topleft, sceneW, sceneH);
-      ctx.stroke();
-      ctx.restore();
+      lyr.save();
+      lyr.shadowColor = "white";
+      lyr.shadowBlur = 10;
+      lyr.beginPath();
+      lyr.lineWidth = 4;
+      lyr.strokeStyle = "white";
+      lyr.rect(...topleft, sceneW, sceneH);
+      lyr.stroke();
+      lyr.restore();
     }
-    renderParchmentBox(ctx, ...topleft, sceneW, sceneH);
+    renderParchmentBox(lyr, ...topleft, sceneW, sceneH);
     const value = step.scene.value;
     if ("dominoes" in value) {
       const value = topLevelValueForStep(step, traceTree, defs) as any;
       renderDominoes(
-        ctx,
+        lyr,
         value,
         stackPathForStep(step, traceTree),
         frame.action,
@@ -886,14 +885,14 @@ Promise.all([
       );
     } else if (value.type === "workspace") {
       renderWorkspace(
-        ctx,
+        lyr,
         value.contents,
         stackPathForStep(step, traceTree),
         topleft,
       );
     } else {
       renderOutlinedText(
-        ctx,
+        lyr,
         JSON.stringify(value, null, 2),
         [topleft[0] + 10, topleft[1] + 10],
         { textAlign: "left", textBaseline: "top" },
@@ -935,7 +934,7 @@ Promise.all([
     // console.log("draw");
 
     // This one will be drawn on the real canvas
-    const ctxMain = fancyCanvasContext(ctxReal);
+    const lyrMain = layer(ctxReal);
 
     state = undoStack.at(-1)!;
     (window as any).state = state;
@@ -974,36 +973,32 @@ Promise.all([
     ctxReal.fillStyle = "rgba(255, 255, 255, 0.2)";
     ctxReal.fillRect(0, 0, c.width, c.height);
 
-    const renderConnectorLine = (
-      ctx: FancyCanvasContext,
-      start: Vec2,
-      end: Vec2,
-    ) => {
+    const renderConnectorLine = (lyr: Layer, start: Vec2, end: Vec2) => {
       const middleX = start[0] + (end[0] - start[0]) / 2;
       const paddedEndX = end[0] - 10;
       const jointX = Math.max(middleX, paddedEndX);
-      ctx.save();
+      lyr.save();
 
-      ctx.beginPath();
-      ctx.globalAlpha = 0.2;
-      ctx.globalCompositeOperation = "screen";
-      ctx.moveTo(...start);
-      ctx.lineTo(...[jointX, start[1]]);
-      ctx.lineTo(...[jointX, end[1]]);
-      ctx.lineTo(...end);
-      ctx.strokeStyle = "rgb(170, 113, 37)";
-      ctx.lineWidth = 5;
-      ctx.stroke();
-      ctx.restore();
+      lyr.beginPath();
+      lyr.globalAlpha = 0.2;
+      lyr.globalCompositeOperation = "screen";
+      lyr.moveTo(...start);
+      lyr.lineTo(...[jointX, start[1]]);
+      lyr.lineTo(...[jointX, end[1]]);
+      lyr.lineTo(...end);
+      lyr.strokeStyle = "rgb(170, 113, 37)";
+      lyr.lineWidth = 5;
+      lyr.stroke();
+      lyr.restore();
     };
 
     const renderFlowchartSigil = (
-      ctx: FancyCanvasContext,
+      lyr: Layer,
       flowchartId: string,
       pos: Vec2,
       exists: boolean = true,
     ) => {
-      renderOutlinedText(ctx, flowchartId, pos, {
+      renderOutlinedText(lyr, flowchartId, pos, {
         textAlign: "left",
         textBaseline: "top",
         size: 40,
@@ -1025,7 +1020,7 @@ Promise.all([
     const stackRHSs: Record<string, number> = {}; // keyed by stackPathToString
 
     const renderViewchart = (
-      ctx: FancyCanvasContext,
+      lyr: Layer,
       viewchart: Viewchart,
       topLeft: Vec2,
     ): {
@@ -1033,7 +1028,7 @@ Promise.all([
       maxY: number;
     } => {
       renderFlowchartSigil(
-        ctx.above.above,
+        lyr.above.above,
         viewchart.flowchartId,
         add(topLeft, [0, -60]),
       );
@@ -1041,21 +1036,21 @@ Promise.all([
       if (viewchart.callPath.length > viewDepth) {
         // TODO: we're backwards-engineering the padding put around
         // the viewchart; this is dumb
-        ctx.save();
+        lyr.save();
         for (let i = -1; i < 2; i++) {
-          ctx.beginPath();
-          ctx.arc(
+          lyr.beginPath();
+          lyr.arc(
             topLeft[0] + sceneW / 2 - callPad + i * 20,
             topLeft[1] + sceneH / 2 - callPad,
             5,
             0,
             Math.PI * 2,
           );
-          ctx.globalAlpha = 0.5;
-          ctx.fillStyle = patternParchment;
-          ctx.fill();
+          lyr.globalAlpha = 0.5;
+          lyr.fillStyle = patternParchment;
+          lyr.fill();
         }
-        ctx.restore();
+        lyr.restore();
         return {
           maxX: topLeft[0] + sceneW - callPad,
           maxY: topLeft[1] + sceneH - 2 * callPad - 2 * callTopPad,
@@ -1065,7 +1060,7 @@ Promise.all([
       const flowchart = defs.flowcharts[viewchart.flowchartId];
       const initialStack = viewchart.stackByFrameId[flowchart.initialFrameId];
       const r = renderStackAndDownstream(
-        ctx,
+        lyr,
         initialStack,
         ...topLeft,
         viewchart,
@@ -1073,7 +1068,7 @@ Promise.all([
 
       // final connector lines, out of viewchart
       for (const v of r.finalPosForConnector) {
-        renderConnectorLine(ctx.below, v, [
+        renderConnectorLine(lyr.below, v, [
           r.maxX,
           r.finalPosForConnector[0][1],
         ]);
@@ -1082,13 +1077,13 @@ Promise.all([
       // initial little connector line on the left
       const start = add(topLeft, v(-scenePadX, sceneH / 2));
       const end = add(start, v(scenePadX, 0));
-      renderConnectorLine(ctx.below, start, end);
+      renderConnectorLine(lyr.below, start, end);
 
       return r;
     };
 
     const renderInset = (
-      ctx: FancyCanvasContext,
+      lyr: Layer,
       callPath: StackPathSegment[],
       curX: number,
       curY: number,
@@ -1098,12 +1093,12 @@ Promise.all([
       const callPathStr = JSON.stringify(callPath);
       const w = interpTo(`inset-${callPathStr}-w`, maxX + callPad - curX);
       const h = interpTo(`inset-${callPathStr}-h`, maxY + callPad - curY);
-      ctx.fillStyle = `rgba(0, 0, 0, ${0.15 * callPath.length})`;
-      ctx.fillRect(curX, curY + callTopPad, w, h - callTopPad);
+      lyr.fillStyle = `rgba(0, 0, 0, ${0.15 * callPath.length})`;
+      lyr.fillRect(curX, curY + callTopPad, w, h - callTopPad);
       // shadows (via gradients inset from the edges)
       // left
       fillRectGradient(
-        ctx,
+        lyr,
         curX,
         curY + 10,
         15,
@@ -1114,7 +1109,7 @@ Promise.all([
       );
       // right
       fillRectGradient(
-        ctx,
+        lyr,
         curX + w,
         curY + 10,
         -15,
@@ -1125,7 +1120,7 @@ Promise.all([
       );
       // bottom
       fillRectGradient(
-        ctx,
+        lyr,
         curX,
         curY + h,
         w,
@@ -1135,9 +1130,9 @@ Promise.all([
         "V",
       );
       // top
-      fillRect(ctx, curX, curY, w, 20, "rgba(0,0,0,0.4)");
+      fillRect(lyr, curX, curY, w, 20, "rgba(0,0,0,0.4)");
       fillRectGradient(
-        ctx,
+        lyr,
         curX,
         curY + 20,
         w,
@@ -1147,7 +1142,7 @@ Promise.all([
         "V",
       );
       fillRectGradient(
-        ctx,
+        lyr,
         curX,
         curY + 20,
         w,
@@ -1159,7 +1154,7 @@ Promise.all([
     };
 
     const renderEscapeRouteMark = (
-      ctx: FancyCanvasContext,
+      lyr: Layer,
       centerPos: Vec2,
       onClick?: Function,
     ) => {
@@ -1168,34 +1163,34 @@ Promise.all([
       // draw a circle with shadow before drawing
       // the actual circle with texture because it caused perf issues
       // to draw the actual circle with a shadow.
-      ctx.save();
-      ctx.shadowColor = `rgba(100,10,10,0.8)`;
-      // ctx.shadowOffsetY = 4;
-      ctx.shadowBlur = 15;
-      ctx.beginPath();
-      ctx.arc(...centerPos, markRadius, 0, 2 * Math.PI);
-      ctx.fillStyle = "red";
-      ctx.fill();
-      ctx.restore();
+      lyr.save();
+      lyr.shadowColor = `rgba(100,10,10,0.8)`;
+      // lyr.shadowOffsetY = 4;
+      lyr.shadowBlur = 15;
+      lyr.beginPath();
+      lyr.arc(...centerPos, markRadius, 0, 2 * Math.PI);
+      lyr.fillStyle = "red";
+      lyr.fill();
+      lyr.restore();
 
       // draw actual circle
-      ctx.save();
-      ctx.beginPath();
-      ctx.arc(...centerPos, markRadius, 0, 2 * Math.PI);
-      ctx.fillStyle = patternParchment;
-      ctx.fill();
-      ctx.restore();
+      lyr.save();
+      lyr.beginPath();
+      lyr.arc(...centerPos, markRadius, 0, 2 * Math.PI);
+      lyr.fillStyle = patternParchment;
+      lyr.fill();
+      lyr.restore();
       const flickeringOpacity =
         Math.sin(t / 20) / 30 + 0.5 + Math.random() * 0.05;
-      ctx.fillStyle = `rgba(128,0,0,${flickeringOpacity})`;
-      ctx.fill();
+      lyr.fillStyle = `rgba(128,0,0,${flickeringOpacity})`;
+      lyr.fill();
 
-      ctx.fillStyle = "rgba(0, 0, 0, 0.8)";
-      ctx.font = "25px serif";
-      ctx.textAlign = "center";
-      ctx.textBaseline = "middle";
-      ctx.fillText("⛧", ...add(centerPos, v(0, 3)));
-      ctx.restore();
+      lyr.fillStyle = "rgba(0, 0, 0, 0.8)";
+      lyr.font = "25px serif";
+      lyr.textAlign = "center";
+      lyr.textBaseline = "middle";
+      lyr.fillText("⛧", ...add(centerPos, v(0, 3)));
+      lyr.restore();
 
       if (onClick) {
         addClickHandler(
@@ -1212,7 +1207,7 @@ Promise.all([
     const escapeRouteDropY = sceneH + 14;
 
     const renderStack = (
-      ctx: FancyCanvasContext,
+      lyr: Layer,
       stack: Stack,
       curX: number,
       myY: number,
@@ -1236,7 +1231,7 @@ Promise.all([
           targetX = curX + Math.floor(howManyTimesDidModWrap(...modArgs)) * 100;
           targetY = mod(...modArgs);
         }
-        renderScene(ctx.above, step, [
+        renderScene(lyr.above, step, [
           interpTo(stackPathString + stepIdx + "x", targetX - pan[0]) + pan[0],
           interpTo(stackPathString + stepIdx + "y", targetY - pan[1]) + pan[1],
         ]);
@@ -1251,7 +1246,7 @@ Promise.all([
       if (stack.stepIds.length > 1) {
         // render number of steps in stack
         renderOutlinedText(
-          ctx.above.above,
+          lyr.above.above,
           `${stack.stepIds.length}`,
           [curX + sceneW, myY],
           {
@@ -1264,7 +1259,7 @@ Promise.all([
         const xFactor = 0.6;
         const yFactor = 0.5;
         renderParchmentBox(
-          ctx.above,
+          lyr.above,
           curX,
           myY,
           sceneW * xFactor,
@@ -1284,7 +1279,7 @@ Promise.all([
      * returns maximum X & Y values reached
      */
     const renderStackAndDownstream = (
-      ctx: FancyCanvasContext,
+      lyr: Layer,
       stack: Stack,
       /* initial x-position – only used for the starting stack. other fellas consult xFromStack */
       initX: number,
@@ -1328,14 +1323,14 @@ Promise.all([
           | Viewchart
           | undefined;
         if (childViewchart) {
-          const child = renderViewchart(ctx.above, childViewchart, [
+          const child = renderViewchart(lyr.above, childViewchart, [
             curX + callPad,
             curY + callPad + callTopPad,
           ]);
           maxY = Math.max(maxY, child.maxY + callPad);
 
           renderInset(
-            ctx.below,
+            lyr.below,
             childViewchart.callPath,
             curX,
             curY,
@@ -1354,11 +1349,11 @@ Promise.all([
       // render stack
       // curX is now lhs of stack
       const stackPathString = stackPathToString(stack.stackPath);
-      const stackSize = renderStack(ctx.above, stack, curX, myY);
+      const stackSize = renderStack(lyr.above, stack, curX, myY);
       const stackH = stackSize.maxY - myY;
       if (drewCallHole) {
         renderConnectorLine(
-          ctx,
+          lyr,
           [curX - scenePadX, curY + stackH / 2],
           [curX, curY + stackH / 2],
         );
@@ -1367,11 +1362,11 @@ Promise.all([
       let label = getActionText(flowchart.frames[frameId].action);
       if (label.startsWith("call")) {
         // special case to make call sigil look good for Elliot
-        renderOutlinedText(ctx.above.above, "call", [curX, myY], {
+        renderOutlinedText(lyr.above.above, "call", [curX, myY], {
           textAlign: "left",
         });
         renderOutlinedText(
-          ctx.above.above,
+          lyr.above.above,
           label.slice("call".length),
           [curX + 10, myY],
           {
@@ -1382,7 +1377,7 @@ Promise.all([
           },
         );
       } else {
-        renderOutlinedText(ctx.above.above, label, [curX, myY], {
+        renderOutlinedText(lyr.above.above, label, [curX, myY], {
           textAlign: "left",
         });
       }
@@ -1411,7 +1406,7 @@ Promise.all([
         });
       }
       if (isEscapeRoute(frameId, flowchart)) {
-        renderEscapeRouteMark(ctx.above, [
+        renderEscapeRouteMark(lyr.above, [
           curX - scenePadX / 2,
           myY + sceneH / 2,
         ]);
@@ -1425,10 +1420,10 @@ Promise.all([
 
       if (inXYWH(mouseX, mouseY, [curX, myY, buttonRadius, sceneH])) {
         // draw semi-circle on the right
-        ctx.beginPath();
-        ctx.arc(curX + 10, myY + sceneH / 2, 5, 0, Math.PI * 2);
-        ctx.fillStyle = patternParchment;
-        ctx.fill();
+        lyr.beginPath();
+        lyr.arc(curX + 10, myY + sceneH / 2, 5, 0, Math.PI * 2);
+        lyr.fillStyle = patternParchment;
+        lyr.fill();
 
         addClickHandler(
           [
@@ -1461,26 +1456,26 @@ Promise.all([
         ) {
           // don't draw it for real; just draw a mark below lastConnectionJoint
           const markPos = add(lastConnectionJoint, [0, escapeRouteDropY]);
-          renderConnectorLine(ctx.below, lastConnectionJoint, markPos);
-          renderEscapeRouteMark(ctx, markPos);
+          renderConnectorLine(lyr.below, lastConnectionJoint, markPos);
+          renderEscapeRouteMark(lyr, markPos);
 
-          renderParchmentBox(ctx.below, ...add(markPos, [10, -7]), 24, 14, {
+          renderParchmentBox(lyr.below, ...add(markPos, [10, -7]), 24, 14, {
             empty: true,
           });
 
           for (let i = 0; i < 1; i++) {
-            ctx.save();
-            ctx.beginPath();
-            ctx.arc(
+            lyr.save();
+            lyr.beginPath();
+            lyr.arc(
               markPos[0] + 13 + (i + 1) * 10,
               markPos[1],
               1.8,
               0,
               2 * Math.PI,
             );
-            ctx.fillStyle = "#98433A";
-            ctx.fill();
-            ctx.restore();
+            lyr.fillStyle = "#98433A";
+            lyr.fill();
+            lyr.restore();
           }
           maxY = Math.max(maxY, markPos[1]);
           continue;
@@ -1489,7 +1484,7 @@ Promise.all([
         if (i > 0) curY += scenePadY;
 
         const child = renderStackAndDownstream(
-          ctx,
+          lyr,
           nextStack,
           initX,
           curY,
@@ -1503,7 +1498,7 @@ Promise.all([
         if (child.initialPosForConnector) {
           const start = [curX, myY + stackH / 2] as Vec2;
           const end = child.initialPosForConnector;
-          renderConnectorLine(ctx.below, start, end);
+          renderConnectorLine(lyr.below, start, end);
           lastConnectionJoint = add(child.initialPosForConnector, [
             -scenePadX / 2,
             0,
@@ -1518,34 +1513,34 @@ Promise.all([
       // do we need an escape route?
       if (steps.some((step) => step.isStuck) && !frame.escapeRouteFrameId) {
         const markPos = add(lastConnectionJoint, [0, escapeRouteDropY]);
-        renderConnectorLine(ctx, lastConnectionJoint, markPos);
-        renderEscapeRouteMark(ctx, markPos, () => {
+        renderConnectorLine(lyr, lastConnectionJoint, markPos);
+        renderEscapeRouteMark(lyr, markPos, () => {
           if (!frame.escapeRouteFrameId) {
             modifyFlowchart(flowchartId, (old) => addEscapeRoute(old, frameId));
           }
         });
-        ctx.save();
+        lyr.save();
         const pos = add(markPos, v(15, 0));
-        ctx.translate(...pos);
-        ctx.scale(1 + Math.sin(t / 10) * 0.1, 1 + Math.sin(t / 10) * 0.1);
-        ctx.translate(...mul(-1, pos));
-        renderOutlinedText(ctx, "!?", add(markPos, v(15, 0)), {
+        lyr.translate(...pos);
+        lyr.scale(1 + Math.sin(t / 10) * 0.1, 1 + Math.sin(t / 10) * 0.1);
+        lyr.translate(...mul(-1, pos));
+        renderOutlinedText(lyr, "!?", add(markPos, v(15, 0)), {
           textAlign: "left",
           textBaseline: "middle",
           size: 20,
           color: "#A25848",
         });
-        ctx.restore();
+        lyr.restore();
         maxY = Math.max(maxY, markPos[1]);
       }
 
       // debug box
       if (false) {
-        ctx.beginPath();
-        ctx.rect(myX, myY, maxX - myX, curY - myY);
-        ctx.fillStyle = "rgba(255,0,0,0.2)";
-        // ctx.lineWidth = 2;
-        ctx.fill();
+        lyr.beginPath();
+        lyr.rect(myX, myY, maxX - myX, curY - myY);
+        lyr.fillStyle = "rgba(255,0,0,0.2)";
+        // lyr.lineWidth = 2;
+        lyr.fill();
       }
 
       return {
@@ -1560,7 +1555,7 @@ Promise.all([
     };
     const stepsInStacks = putStepsInStacks(traceTree);
     const viewchart = stepsInStacksToViewchart(stepsInStacks);
-    const topLevel = renderViewchart(ctxMain, viewchart, add(pan, v(100)));
+    const topLevel = renderViewchart(lyrMain, viewchart, add(pan, v(100)));
     // is there more than one final stack?
     const finalStacks = Object.values(viewchart.stackByFrameId).filter(
       (stack) => traceTree.finalStepIds.includes(stack.stepIds[0]),
@@ -1568,12 +1563,12 @@ Promise.all([
     if (finalStacks.length > 1) {
       const extraX = 100;
       renderConnectorLine(
-        ctxMain,
+        lyrMain,
         [topLevel.maxX, pan[1] + sceneW / 2 + 100],
         [topLevel.maxX + extraX, pan[1] + sceneW / 2 + 100],
       );
       renderStack(
-        ctxMain,
+        lyrMain,
         {
           stackPath: {
             callPath: [],
@@ -1586,24 +1581,24 @@ Promise.all([
       );
     }
 
-    // console.log("about to replay", getFancyCanvasContextCommandCount(ctxMain));
-    ctxMain.replay();
+    // console.log("about to replay", getLayerCommandCount(lyrMain));
+    lyrMain.replay();
 
-    const ctxToppest = fancyCanvasContext(ctxReal);
+    const lyrToppest = layer(ctxReal);
 
     if (tool.type === "pointer") {
       // handled by css cursor
     } else if (tool.type === "domino") {
-      renderDomino(ctxToppest, mouseX, mouseY, tool.orientation, false);
+      renderDomino(lyrToppest, mouseX, mouseY, tool.orientation, false);
     } else if (tool.type === "call") {
-      renderOutlinedText(ctxToppest, tool.flowchartId, [mouseX, mouseY], {
+      renderOutlinedText(lyrToppest, tool.flowchartId, [mouseX, mouseY], {
         size: 40,
         color: `hsl(${callHueSaturation} 70%)`,
         family: "monospace",
       });
     } else if (tool.type === "workspace-pick") {
       renderWorkspaceValue(
-        ctxToppest,
+        lyrToppest,
         [tool.value],
         0,
         undefined,
@@ -1611,7 +1606,7 @@ Promise.all([
       );
     } else if (tool.type === "purging-flame") {
       renderSpriteSheet(
-        ctxToppest,
+        lyrToppest,
         imgCandleSheet,
         1,
         127,
@@ -1633,7 +1628,7 @@ Promise.all([
     // 300
     const drawerWidth = 320 + 50 * flowchartIds.length;
     renderParchmentBox(
-      ctxToppest,
+      lyrToppest,
       c.width - drawerWidth,
       c.height - 80,
       drawerWidth + 10,
@@ -1645,7 +1640,7 @@ Promise.all([
 
     for (const [i, flowchartId] of flowchartIds.entries()) {
       renderFlowchartSigil(
-        ctxToppest,
+        lyrToppest,
         flowchartId,
         [c.width - 340 - 50 * (flowchartIds.length - 1 - i), c.height - 60],
         state.defs.flowcharts[flowchartId] !== undefined,
@@ -1653,7 +1648,7 @@ Promise.all([
     }
 
     renderDomino(
-      ctxToppest,
+      lyrToppest,
       c.width - 270,
       c.height - 20 - (cellSize - dominoPadding * 2),
       "h",
@@ -1663,7 +1658,7 @@ Promise.all([
       },
     );
     renderDomino(
-      ctxToppest,
+      lyrToppest,
       c.width - 220,
       c.height - 20 - (2 * cellSize - dominoPadding * 2),
       "v",
@@ -1673,7 +1668,7 @@ Promise.all([
       },
     );
 
-    ctxToppest.replay();
+    lyrToppest.replay();
 
     renderCandle();
 
