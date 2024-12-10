@@ -1027,8 +1027,11 @@ Promise.all([
       maxX: number;
       maxY: number;
     } => {
+      const lyrAbove = lyr.above();
+      const lyrBelow = lyr.below();
+
       renderFlowchartSigil(
-        lyr.above.above,
+        lyrAbove,
         viewchart.flowchartId,
         add(topLeft, [0, -60]),
       );
@@ -1068,7 +1071,7 @@ Promise.all([
 
       // final connector lines, out of viewchart
       for (const v of r.finalPosForConnector) {
-        renderConnectorLine(lyr.below, v, [
+        renderConnectorLine(lyrBelow, v, [
           r.maxX,
           r.finalPosForConnector[0][1],
         ]);
@@ -1077,7 +1080,7 @@ Promise.all([
       // initial little connector line on the left
       const start = add(topLeft, v(-scenePadX, sceneH / 2));
       const end = add(start, v(scenePadX, 0));
-      renderConnectorLine(lyr.below, start, end);
+      renderConnectorLine(lyrBelow, start, end);
 
       return r;
     };
@@ -1212,6 +1215,8 @@ Promise.all([
       curX: number,
       myY: number,
     ): { maxX: number; maxY: number } => {
+      const lyrAbove = lyr.above();
+
       const stackPathString = stackPathToString(stack.stackPath);
       const steps = stack.stepIds.map((stepId) => traceTree.steps[stepId]);
 
@@ -1231,7 +1236,7 @@ Promise.all([
           targetX = curX + Math.floor(howManyTimesDidModWrap(...modArgs)) * 100;
           targetY = mod(...modArgs);
         }
-        renderScene(lyr.above, step, [
+        renderScene(lyrAbove, step, [
           interpTo(stackPathString + stepIdx + "x", targetX - pan[0]) + pan[0],
           interpTo(stackPathString + stepIdx + "y", targetY - pan[1]) + pan[1],
         ]);
@@ -1246,7 +1251,7 @@ Promise.all([
       if (stack.stepIds.length > 1) {
         // render number of steps in stack
         renderOutlinedText(
-          lyr.above.above,
+          lyrAbove,
           `${stack.stepIds.length}`,
           [curX + sceneW, myY],
           {
@@ -1259,7 +1264,7 @@ Promise.all([
         const xFactor = 0.6;
         const yFactor = 0.5;
         renderParchmentBox(
-          lyr.above,
+          lyrAbove,
           curX,
           myY,
           sceneW * xFactor,
@@ -1291,6 +1296,9 @@ Promise.all([
       initialPosForConnector: Vec2 | undefined;
       finalPosForConnector: Vec2[];
     } => {
+      const lyrAbove = lyr.above();
+      const lyrBelow = lyr.below();
+
       const prevStacks = getPrevStacksInLevel(stack, stepsInStacks, defs);
       const prevStackXs = prevStacks.map(
         (stack) => stackRHSs[stackPathToString(stack.stackPath)],
@@ -1323,14 +1331,14 @@ Promise.all([
           | Viewchart
           | undefined;
         if (childViewchart) {
-          const child = renderViewchart(lyr.above, childViewchart, [
+          const child = renderViewchart(lyrAbove, childViewchart, [
             curX + callPad,
             curY + callPad + callTopPad,
           ]);
           maxY = Math.max(maxY, child.maxY + callPad);
 
           renderInset(
-            lyr.below,
+            lyrBelow,
             childViewchart.callPath,
             curX,
             curY,
@@ -1349,7 +1357,7 @@ Promise.all([
       // render stack
       // curX is now lhs of stack
       const stackPathString = stackPathToString(stack.stackPath);
-      const stackSize = renderStack(lyr.above, stack, curX, myY);
+      const stackSize = renderStack(lyr, stack, curX, myY);
       const stackH = stackSize.maxY - myY;
       if (drewCallHole) {
         renderConnectorLine(
@@ -1362,11 +1370,11 @@ Promise.all([
       let label = getActionText(flowchart.frames[frameId].action);
       if (label.startsWith("call")) {
         // special case to make call sigil look good for Elliot
-        renderOutlinedText(lyr.above.above, "call", [curX, myY], {
+        renderOutlinedText(lyrAbove, "call", [curX, myY], {
           textAlign: "left",
         });
         renderOutlinedText(
-          lyr.above.above,
+          lyrAbove,
           label.slice("call".length),
           [curX + 10, myY],
           {
@@ -1377,7 +1385,7 @@ Promise.all([
           },
         );
       } else {
-        renderOutlinedText(lyr.above.above, label, [curX, myY], {
+        renderOutlinedText(lyrAbove, label, [curX, myY], {
           textAlign: "left",
         });
       }
@@ -1406,7 +1414,7 @@ Promise.all([
         });
       }
       if (isEscapeRoute(frameId, flowchart)) {
-        renderEscapeRouteMark(lyr.above, [
+        renderEscapeRouteMark(lyrAbove, [
           curX - scenePadX / 2,
           myY + sceneH / 2,
         ]);
@@ -1456,10 +1464,10 @@ Promise.all([
         ) {
           // don't draw it for real; just draw a mark below lastConnectionJoint
           const markPos = add(lastConnectionJoint, [0, escapeRouteDropY]);
-          renderConnectorLine(lyr.below, lastConnectionJoint, markPos);
+          renderConnectorLine(lyrBelow, lastConnectionJoint, markPos);
           renderEscapeRouteMark(lyr, markPos);
 
-          renderParchmentBox(lyr.below, ...add(markPos, [10, -7]), 24, 14, {
+          renderParchmentBox(lyrBelow, ...add(markPos, [10, -7]), 24, 14, {
             empty: true,
           });
 
@@ -1498,7 +1506,7 @@ Promise.all([
         if (child.initialPosForConnector) {
           const start = [curX, myY + stackH / 2] as Vec2;
           const end = child.initialPosForConnector;
-          renderConnectorLine(lyr.below, start, end);
+          renderConnectorLine(lyrBelow, start, end);
           lastConnectionJoint = add(child.initialPosForConnector, [
             -scenePadX / 2,
             0,

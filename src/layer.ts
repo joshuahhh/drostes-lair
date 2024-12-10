@@ -31,8 +31,8 @@ const includes = <T>(arr: T[], item: any): item is T => arr.includes(item);
 
 class LayerImpl {
   private commands: (() => void)[] = [];
-  private _above: Layer | null = null;
-  private _below: Layer | null = null;
+  private layersBelow: Layer[] = []; // push onto this one, so later-added layers are above earlier layers
+  private layersAbove: Layer[] = []; // unshift onto this one, so later-added layers are below earlier layers
 
   private thisProxy: Layer;
 
@@ -74,51 +74,47 @@ class LayerImpl {
 
   // Replay all captured commands on the real CanvasRenderingContext2D
   replay(): void {
-    this._below?.replay();
+    this.layersBelow.forEach((layer) => layer.replay());
     for (const command of this.commands) {
       command();
     }
-    this._above?.replay();
+    this.layersAbove.forEach((layer) => layer.replay());
   }
 
-  get above(): Layer {
-    if (!this._above) {
-      this._above = layer(this.ctx);
-    }
-    return this._above;
+  below(): Layer {
+    const lyr = layer(this.ctx);
+    this.layersBelow.push(lyr);
+    return lyr;
   }
 
-  get below(): Layer {
-    if (!this._below) {
-      this._below = layer(this.ctx);
-    }
-    return this._below;
+  above(): Layer {
+    const lyr = layer(this.ctx);
+    this.layersAbove.unshift(lyr);
+    return lyr;
   }
 
-  static make(ctx: CanvasRenderingContext2D): Layer {
-    return new LayerImpl(ctx).thisProxy;
+  // To get stuff out of LayerImpl, we use static methods (which have
+  // access to private fields)
+
+  static make(lyr: CanvasRenderingContext2D): Layer {
+    return new LayerImpl(lyr).thisProxy;
   }
 
-  /** For debugging */
-  static getCommands(ctx: Layer) {
-    return ctx.commands;
-  }
-
-  static countCommands(ctx: Layer): number {
+  static commandCount(lyr: Layer): number {
     return (
-      (ctx._below ? LayerImpl.countCommands(ctx._below) : 0) +
-      ctx.commands.length +
-      (ctx._above ? LayerImpl.countCommands(ctx._above) : 0)
+      lyr.layersBelow.map(LayerImpl.commandCount).reduce((a, b) => a + b, 0) +
+      lyr.commands.length +
+      lyr.layersAbove.map(LayerImpl.commandCount).reduce((a, b) => a + b, 0)
     );
   }
 }
 
 export type Layer = CanvasRenderingContext2D & LayerImpl;
 
-export function layer(ctx: CanvasRenderingContext2D): Layer {
-  return LayerImpl.make(ctx);
+export function layer(lyr: CanvasRenderingContext2D): Layer {
+  return LayerImpl.make(lyr);
 }
 
-export function getLayerCommandCount(ctx: Layer): number {
-  return LayerImpl.countCommands(ctx);
+export function getLayerCommandCount(lyr: Layer): number {
+  return LayerImpl.commandCount(lyr);
 }
