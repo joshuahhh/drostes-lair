@@ -1077,6 +1077,7 @@ Promise.all([
 
     const renderViewchart = (
       lyr: Layer,
+      lyrAboveViewchart: Layer,
       viewchart: Viewchart,
       topLeft: Vec2,
     ): {
@@ -1120,6 +1121,7 @@ Promise.all([
       const initialStack = viewchart.stackByFrameId[flowchart.initialFrameId];
       const r = renderStackAndDownstream(
         lyr,
+        lyrAboveViewchart,
         initialStack,
         ...topLeft,
         viewchart,
@@ -1268,68 +1270,84 @@ Promise.all([
 
     const renderStack = (
       lyr: Layer,
+      lyrAboveViewchart: Layer,
       stack: Stack,
       curX: number,
       myY: number,
-    ): { maxX: number; maxY: number } => {
+    ): { maxX: number; maxY: number; layerUsed: Layer } => {
       const stackPathString = stackPathToString(stack.stackPath);
       const steps = stack.stepIds.map((stepId) => traceTree.steps[stepId]);
 
       let maxX = curX;
       let maxY = myY;
 
-      for (const [stepIdx, step] of steps.entries()) {
-        let targetX = curX;
-        let targetY = myY + stepIdx * 14;
-        if (inXYWH(mouseX, mouseY, [curX, myY, sceneW, sceneH])) {
-          const stackFan = 84;
-          const modArgs = [
-            myY + stepIdx * stackFan,
-            c.height - sceneH,
+      const hovered = inXYWH(mouseX, mouseY, [curX, myY, sceneW, sceneH]);
+
+      const layerToUse = hovered ? lyrAboveViewchart : lyr;
+      layerToUse.do((lyr) => {
+        for (const [stepIdx, step] of steps.entries()) {
+          let targetX = curX;
+          let targetY = myY + stepIdx * 14;
+          if (hovered) {
+            const stackFan = 84;
+            const modArgs = [
+              myY + stepIdx * stackFan,
+              c.height - sceneH,
+              myY,
+            ] as const;
+            targetX =
+              curX + Math.floor(howManyTimesDidModWrap(...modArgs)) * 100;
+            targetY = mod(...modArgs);
+          }
+          // TODO: we spawn a new `below` layer for each scene so they
+          // will be stacked correctly even if they spawn their own
+          // sublayers. feels like this shouldn't be necessary; a
+          // breakdown of modularity?
+          renderScene(lyr.below(), step, [
+            interpTo(stackPathString + stepIdx + "x", targetX - pan[0]) +
+              pan[0],
+            interpTo(stackPathString + stepIdx + "y", targetY - pan[1]) +
+              pan[1],
+          ]);
+
+          if (stepIdx === 0) {
+            // TODO: Only one step is used to determine size. This is
+            // needed, at least, for consistent connector placement.
+            maxX = Math.max(maxX, curX + sceneW);
+            maxY = Math.max(maxY, myY + sceneH);
+          }
+        }
+        if (stack.stepIds.length > 1) {
+          // render number of steps in stack
+          renderOutlinedText(
+            lyr,
+            `${stack.stepIds.length}`,
+            [curX + sceneW, myY],
+            {
+              textAlign: "right",
+              size: 20,
+            },
+          );
+        }
+        if (stack.stepIds.length === 0) {
+          const xFactor = 0.6;
+          const yFactor = 0.5;
+          renderParchmentBox(
+            lyr,
+            curX,
             myY,
-          ] as const;
-          targetX = curX + Math.floor(howManyTimesDidModWrap(...modArgs)) * 100;
-          targetY = mod(...modArgs);
+            sceneW * xFactor,
+            sceneH * yFactor,
+            {
+              empty: true,
+            },
+          );
+          maxX = Math.max(maxX, curX + sceneW * xFactor);
+          maxY = Math.max(maxY, myY + sceneH * yFactor);
         }
-        // TODO: we spawn a new `below` layer for each scene so they
-        // will be stacked correctly even if they spawn their own
-        // sublayers. feels like this shouldn't be necessary; a
-        // breakdown of modularity?
-        renderScene(lyr.below(), step, [
-          interpTo(stackPathString + stepIdx + "x", targetX - pan[0]) + pan[0],
-          interpTo(stackPathString + stepIdx + "y", targetY - pan[1]) + pan[1],
-        ]);
+      });
 
-        if (stepIdx === 0) {
-          // TODO: Only one step is used to determine size. This is
-          // needed, at least, for consistent connector placement.
-          maxX = Math.max(maxX, curX + sceneW);
-          maxY = Math.max(maxY, myY + sceneH);
-        }
-      }
-      if (stack.stepIds.length > 1) {
-        // render number of steps in stack
-        renderOutlinedText(
-          lyr,
-          `${stack.stepIds.length}`,
-          [curX + sceneW, myY],
-          {
-            textAlign: "right",
-            size: 20,
-          },
-        );
-      }
-      if (stack.stepIds.length === 0) {
-        const xFactor = 0.6;
-        const yFactor = 0.5;
-        renderParchmentBox(lyr, curX, myY, sceneW * xFactor, sceneH * yFactor, {
-          empty: true,
-        });
-        maxX = Math.max(maxX, curX + sceneW * xFactor);
-        maxY = Math.max(maxY, myY + sceneH * yFactor);
-      }
-
-      return { maxX, maxY };
+      return { maxX, maxY, layerUsed: layerToUse };
     };
 
     /**
@@ -1337,6 +1355,7 @@ Promise.all([
      */
     const renderStackAndDownstream = (
       lyr: Layer,
+      lyrAboveViewchart: Layer,
       stack: Stack,
       /* initial x-position – only used for the starting stack. other fellas consult xFromStack */
       initX: number,
@@ -1383,10 +1402,12 @@ Promise.all([
           | Viewchart
           | undefined;
         if (childViewchart) {
-          const child = renderViewchart(lyrAbove, childViewchart, [
-            curX + callPad,
-            curY + callPad + callTopPad,
-          ]);
+          const child = renderViewchart(
+            lyrAbove,
+            lyrAboveViewchart,
+            childViewchart,
+            [curX + callPad, curY + callPad + callTopPad],
+          );
           maxY = Math.max(maxY, child.maxY + callPad);
 
           renderInset(
@@ -1409,8 +1430,15 @@ Promise.all([
       // render stack
       // curX is now lhs of stack
       const stackPathString = stackPathToString(stack.stackPath);
-      const stackSize = renderStack(lyr, stack, curX, myY);
-      const stackH = stackSize.maxY - myY;
+      // TODO: returning layerUsed feels bad to me
+      const renderStackResult = renderStack(
+        lyr,
+        lyrAboveViewchart,
+        stack,
+        curX,
+        myY,
+      );
+      const stackH = renderStackResult.maxY - myY;
       if (drewCallHole) {
         renderConnectorLine(
           lyr,
@@ -1418,15 +1446,15 @@ Promise.all([
           [curX, curY + stackH / 2],
         );
       }
-      maxY = Math.max(maxY, stackSize.maxY);
+      maxY = Math.max(maxY, renderStackResult.maxY);
       let label = getActionText(flowchart.frames[frameId].action);
       if (label.startsWith("call")) {
         // special case to make call sigil look good for Elliot
-        renderOutlinedText(lyrAbove, "call", [curX, myY], {
+        renderOutlinedText(renderStackResult.layerUsed, "call", [curX, myY], {
           textAlign: "left",
         });
         renderOutlinedText(
-          lyrAbove,
+          renderStackResult.layerUsed,
           label.slice("call".length),
           [curX + 10, myY],
           {
@@ -1437,7 +1465,7 @@ Promise.all([
           },
         );
       } else {
-        renderOutlinedText(lyrAbove, label, [curX, myY], {
+        renderOutlinedText(renderStackResult.layerUsed, label, [curX, myY], {
           textAlign: "left",
         });
       }
@@ -1466,12 +1494,12 @@ Promise.all([
         });
       }
       if (isEscapeRoute(frameId, flowchart)) {
-        renderEscapeRouteMark(lyrAbove, [
+        renderEscapeRouteMark(renderStackResult.layerUsed, [
           curX - scenePadX / 2,
           myY + sceneH / 2,
         ]);
       }
-      curX = stackSize.maxX;
+      curX = renderStackResult.maxX;
 
       // curX is now rhs of stack
       stackRHSs[stackPathString] = curX;
@@ -1545,6 +1573,7 @@ Promise.all([
 
         const child = renderStackAndDownstream(
           lyr,
+          lyrAboveViewchart,
           nextStack,
           initX,
           curY,
@@ -1615,7 +1644,13 @@ Promise.all([
     };
     const stepsInStacks = putStepsInStacks(traceTree);
     const viewchart = stepsInStacksToViewchart(stepsInStacks);
-    const topLevel = renderViewchart(lyrMain, viewchart, add(pan, v(100)));
+    const lyrAboveViewchart = lyrMain.above();
+    const topLevel = renderViewchart(
+      lyrMain,
+      lyrAboveViewchart,
+      viewchart,
+      add(pan, v(100)),
+    );
     // is there more than one final stack?
     const finalStacks = Object.values(viewchart.stackByFrameId).filter(
       (stack) => traceTree.finalStepIds.includes(stack.stepIds[0]),
@@ -1629,6 +1664,7 @@ Promise.all([
       );
       renderStack(
         lyrMain,
+        lyrAboveViewchart,
         {
           stackPath: {
             callPath: [],
