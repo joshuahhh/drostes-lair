@@ -1295,14 +1295,15 @@ Promise.all([
           let targetX = curX;
           let targetY = myY + stepIdx * 14;
           if (hovered) {
-            const stackFan = 84;
+            const stackFanX = sceneW + 10;
+            const stackFanY = sceneH + 10;
             const modArgs = [
-              myY + stepIdx * stackFan,
+              myY + stepIdx * stackFanY,
               c.height - sceneH,
               myY,
             ] as const;
             targetX =
-              curX + Math.floor(howManyTimesDidModWrap(...modArgs)) * sceneW;
+              curX + Math.floor(howManyTimesDidModWrap(...modArgs)) * stackFanX;
             targetY = mod(...modArgs);
           }
           // TODO: we spawn a new `below` layer for each scene so they
