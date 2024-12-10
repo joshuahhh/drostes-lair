@@ -1272,8 +1272,6 @@ Promise.all([
       curX: number,
       myY: number,
     ): { maxX: number; maxY: number } => {
-      const lyrAbove = lyr.above();
-
       const stackPathString = stackPathToString(stack.stackPath);
       const steps = stack.stepIds.map((stepId) => traceTree.steps[stepId]);
 
@@ -1293,7 +1291,11 @@ Promise.all([
           targetX = curX + Math.floor(howManyTimesDidModWrap(...modArgs)) * 100;
           targetY = mod(...modArgs);
         }
-        renderScene(lyrAbove, step, [
+        // TODO: we spawn a new `below` layer for each scene so they
+        // will be stacked correctly even if they spawn their own
+        // sublayers. feels like this shouldn't be necessary; a
+        // breakdown of modularity?
+        renderScene(lyr.below(), step, [
           interpTo(stackPathString + stepIdx + "x", targetX - pan[0]) + pan[0],
           interpTo(stackPathString + stepIdx + "y", targetY - pan[1]) + pan[1],
         ]);
@@ -1308,7 +1310,7 @@ Promise.all([
       if (stack.stepIds.length > 1) {
         // render number of steps in stack
         renderOutlinedText(
-          lyrAbove,
+          lyr,
           `${stack.stepIds.length}`,
           [curX + sceneW, myY],
           {
@@ -1320,16 +1322,9 @@ Promise.all([
       if (stack.stepIds.length === 0) {
         const xFactor = 0.6;
         const yFactor = 0.5;
-        renderParchmentBox(
-          lyrAbove,
-          curX,
-          myY,
-          sceneW * xFactor,
-          sceneH * yFactor,
-          {
-            empty: true,
-          },
-        );
+        renderParchmentBox(lyr, curX, myY, sceneW * xFactor, sceneH * yFactor, {
+          empty: true,
+        });
         maxX = Math.max(maxX, curX + sceneW * xFactor);
         maxY = Math.max(maxY, myY + sceneH * yFactor);
       }
