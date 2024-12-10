@@ -832,18 +832,18 @@ export type Viewchart = {
 export function stepsInStacksToViewchart(
   stepsInStacks: StepsInStacks,
 ): Viewchart {
-  return traceTreeToViewchartHelper([], stepsInStacks);
+  return traceTreeToViewchartHelper([], Object.values(stepsInStacks.stacks));
 }
 
 function traceTreeToViewchartHelper(
   callPath: StackPathSegment[],
-  stacks: StepsInStacks,
+  stacks: Stack[],
 ): Viewchart {
   let flowchartId: string | undefined = undefined;
   const stackByFrameId: Record<string, Stack> = {};
   const callViewchartsByFrameId: Record<string, Viewchart> = {};
-  const callFrameIds = new Set<string>();
-  for (const stack of Object.values(stacks.stackByStepId)) {
+  const stacksByCallFrameId: Record<string, Stack[]> = {};
+  for (const stack of Object.values(stacks)) {
     const isStackAtCallPath =
       callPathToString(stack.stackPath.callPath) === callPathToString(callPath);
 
@@ -859,15 +859,19 @@ function traceTreeToViewchartHelper(
         JSON.stringify(segment) === JSON.stringify(stack.stackPath.callPath[i]),
     );
     if (isStackDeeperThanCallPath && !isStackAtCallPath) {
-      callFrameIds.add(stack.stackPath.callPath[callPath.length].frameId);
+      const callFrameId = stack.stackPath.callPath[callPath.length].frameId;
+      if (!stacksByCallFrameId[callFrameId]) {
+        stacksByCallFrameId[callFrameId] = [];
+      }
+      stacksByCallFrameId[callFrameId].push(stack);
     }
   }
   if (!flowchartId) {
     throw new Error("No flowchartId?");
   }
-  for (const frameId of callFrameIds) {
-    const nextCallPath = [...callPath, { flowchartId, frameId }];
-    callViewchartsByFrameId[frameId] = traceTreeToViewchartHelper(
+  for (const [callFrameId, stacks] of Object.entries(stacksByCallFrameId)) {
+    const nextCallPath = [...callPath, { flowchartId, frameId: callFrameId }];
+    callViewchartsByFrameId[callFrameId] = traceTreeToViewchartHelper(
       nextCallPath,
       stacks,
     );
