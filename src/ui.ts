@@ -1296,7 +1296,7 @@ Promise.all([
               myY,
             ] as const;
             targetX =
-              curX + Math.floor(howManyTimesDidModWrap(...modArgs)) * 100;
+              curX + Math.floor(howManyTimesDidModWrap(...modArgs)) * sceneW;
             targetY = mod(...modArgs);
           }
           // TODO: we spawn a new `below` layer for each scene so they
@@ -1330,20 +1330,13 @@ Promise.all([
           );
         }
         if (stack.stepIds.length === 0) {
-          const xFactor = 0.6;
-          const yFactor = 0.5;
-          renderParchmentBox(
-            lyr,
-            curX,
-            myY,
-            sceneW * xFactor,
-            sceneH * yFactor,
-            {
-              empty: true,
-            },
-          );
-          maxX = Math.max(maxX, curX + sceneW * xFactor);
-          maxY = Math.max(maxY, myY + sceneH * yFactor);
+          const w = 60;
+          const h = 50;
+          renderParchmentBox(lyr, curX, myY, w, h, {
+            empty: true,
+          });
+          maxX = Math.max(maxX, curX + w);
+          maxY = Math.max(maxY, myY + h);
         }
       });
 
