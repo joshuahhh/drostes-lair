@@ -191,6 +191,8 @@ const interpTo = (
   return newValue;
 };
 
+let hoveredStackPathString = undefined as string | undefined;
+
 // globals for communication are the best
 let state: UIState;
 let traceTree: TraceTree;
@@ -915,10 +917,20 @@ Promise.all([
     });
   };
 
-  const renderScene = (lyr: Layer, step: Step, topleft: Vec2) => {
+  const renderScene = (
+    lyr: Layer,
+    step: Step,
+    topleft: Vec2,
+    onHover: () => void,
+  ) => {
     const { defs } = state;
 
     const frame = defs.flowcharts[step.flowchartId].frames[step.frameId];
+
+    const xywh = [...topleft, sceneW, sceneH] as const;
+    if (inXYWH(mouseX, mouseY, expand(xywh, 10))) {
+      onHover();
+    }
 
     const isOutlined = traceTree.finalStepIds.includes(step.id);
 
@@ -929,11 +941,11 @@ Promise.all([
       lyr.beginPath();
       lyr.lineWidth = 4;
       lyr.strokeStyle = "white";
-      lyr.rect(...topleft, sceneW, sceneH);
+      lyr.rect(...xywh);
       lyr.stroke();
       lyr.restore();
     }
-    renderParchmentBox(lyr, ...topleft, sceneW, sceneH);
+    renderParchmentBox(lyr, ...xywh);
     const value = step.scene.value;
     if ("dominoes" in value) {
       const value = topLevelValueForStep(step, traceTree, defs) as any;
@@ -1287,7 +1299,13 @@ Promise.all([
       let maxX = curX;
       let maxY = myY;
 
-      const hovered = inXYWH(mouseX, mouseY, [curX, myY, sceneW, sceneH]);
+      const hovered =
+        inXYWH(mouseX, mouseY, [curX, myY, sceneW, sceneH]) ||
+        hoveredStackPathString === stackPathString;
+
+      if (hovered) {
+        hoveredStackPathString = undefined;
+      }
 
       const layerToUse = hovered ? lyrAboveViewchart : lyr;
       layerToUse.do((lyr) => {
@@ -1310,12 +1328,19 @@ Promise.all([
           // will be stacked correctly even if they spawn their own
           // sublayers. feels like this shouldn't be necessary; a
           // breakdown of modularity?
-          renderScene(lyr.below(), step, [
-            interpTo(stackPathString + stepIdx + "x", targetX - pan[0]) +
-              pan[0],
-            interpTo(stackPathString + stepIdx + "y", targetY - pan[1]) +
-              pan[1],
-          ]);
+          renderScene(
+            lyr.below(),
+            step,
+            [
+              interpTo(stackPathString + stepIdx + "x", targetX - pan[0]) +
+                pan[0],
+              interpTo(stackPathString + stepIdx + "y", targetY - pan[1]) +
+                pan[1],
+            ],
+            () => {
+              hoveredStackPathString = stackPathString;
+            },
+          );
 
           if (stepIdx === 0) {
             // TODO: Only one step is used to determine size. This is
