@@ -210,7 +210,7 @@ resizeObserver.observe(cContainer);
 const ctxReal = c.getContext("2d")!;
 
 Promise.all([
-  loadImg("./parchment.png"),
+  loadImg("./parchment.jpg"),
   loadImg("./asfault.jpg"),
   loadImg("./candle_sheet.png"),
   loadAudio("./ambient.mp3"),
