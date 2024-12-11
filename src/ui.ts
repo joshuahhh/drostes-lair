@@ -213,7 +213,7 @@ Promise.all([
   loadImg("./parchment.png"),
   loadImg("./asfault.jpg"),
   loadImg("./candle_sheet.png"),
-  loadAudio("./ambient.wav"),
+  loadAudio("./ambient.mp3"),
 ]).then(([imgParchment, imgAsfault, imgCandleSheet, audAmbient]) => {
   const patternParchment = ctxReal.createPattern(imgParchment, "repeat")!;
   const patternAsfault = ctxReal.createPattern(imgAsfault, "repeat")!;
