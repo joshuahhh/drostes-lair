@@ -1304,7 +1304,11 @@ Promise.all([
       lyr.font = tooDeep ? "25px monospace" : "25px serif";
       lyr.textAlign = "center";
       lyr.textBaseline = "middle";
-      lyr.fillText(tooDeep ? "↓" : "⛧", ...add(centerPos, v(0, 3)));
+      if (tooDeep) {
+        lyr.fillText("↓", ...add(centerPos, v(0, 3)));
+      } else {
+        lyr.fillText("‡", ...add(centerPos, v(0, 1)));
+      }
       lyr.restore();
 
       if (onClick) {
