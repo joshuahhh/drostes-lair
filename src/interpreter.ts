@@ -50,6 +50,10 @@ export type Action =
       target:
         | { type: "at"; index: number; side: "before" | "after" | "replace" }
         | { type: "after"; index: number };
+    }
+  | {
+      type: "dev-eval";
+      code: string;
     };
 
 export type ActionAnnotation = {
@@ -435,6 +439,10 @@ function performAction(
       };
     });
     proceedWith(nextScenes);
+  } else if (action.type === "dev-eval") {
+    const func = new Function("x", `return (${action.code})`);
+    const result = func(scene.value);
+    proceedWith([{ value: result }]);
   } else {
     assertNever(action);
   }
@@ -894,6 +902,8 @@ export function getActionText(action?: Action): string {
         ? `item ${action.index + 1}`
         : `${action.index} item`)
     );
+  } else if (action.type === "dev-eval") {
+    return `evaluate ${action.code}`;
   }
   assertNever(action);
 }

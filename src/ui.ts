@@ -954,7 +954,7 @@ Promise.all([
     }
     renderParchmentBox(lyr, ...xywh);
     const value = step.scene.value;
-    if ("dominoes" in value) {
+    if (typeof value === "object" && value !== null && "dominoes" in value) {
       const value = topLevelValueForStep(step, traceTree, defs) as any;
       renderDominoes(
         lyr,
@@ -963,7 +963,11 @@ Promise.all([
         frame.action,
         topleft,
       );
-    } else if (value.type === "workspace") {
+    } else if (
+      typeof value === "object" &&
+      value !== null &&
+      value.type === "workspace"
+    ) {
       renderWorkspace(
         lyr,
         step.scene,
@@ -973,7 +977,7 @@ Promise.all([
     } else {
       renderOutlinedText(
         lyr,
-        JSON.stringify(value, null, 2),
+        JSON.stringify(value, null, 2) ?? "idk",
         [topleft[0] + 10, topleft[1] + 10],
         { textAlign: "left", textBaseline: "top" },
       );
