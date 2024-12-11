@@ -281,6 +281,13 @@ function performAction(
   const { flowchartId, scene, caller } = step;
 
   function proceedWith(nextScenes: Scene[]) {
+    if (nextScenes.length === 0) {
+      // TODO: we currently regard an empty proceedWith as a failure,
+      // so that, e.g., you can provide an escape route if "move any
+      // item" is called on an empty list. this is all weird and
+      // hacky and deserves more thought.
+      throw new Error("proceedWith called with no nextScenes");
+    }
     let i = 0;
     for (const nextScene of nextScenes) {
       const nextStep: Step = {
