@@ -894,6 +894,7 @@ Promise.all([
     lyr.strokeStyle = inXYWH(mouseX, mouseY, xywh)
       ? "rgba(255,200,0,0.8)"
       : "#70665a";
+    lyr.lineWidth = 3;
     lyr.setLineDash([2, 2]);
     lyr.beginPath();
     lyr.moveTo(x1, y1);
