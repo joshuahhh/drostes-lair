@@ -18,7 +18,6 @@ import {
   Viewchart,
   getActionText,
   getNextStacksInLevel,
-  getPrevStacksInLevel,
   isEscapeRoute,
   makeTraceTree,
   putStepsInStacks,
@@ -1122,7 +1121,6 @@ Promise.all([
     const scenePadY = 40;
     const callPad = 20;
     const callTopPad = 20;
-    const stackRHSs: Record<string, number> = {}; // keyed by stackPathToString
 
     const renderViewchart = (
       lyr: Layer,
@@ -1421,8 +1419,7 @@ Promise.all([
       lyr: Layer,
       lyrAboveViewchart: Layer,
       stack: Stack,
-      /* initial x-position – only used for the starting stack. other fellas consult xFromStack */
-      initX: number,
+      myX: number,
       myY: number,
       viewchart: Viewchart,
     ): {
@@ -1433,20 +1430,6 @@ Promise.all([
     } => {
       const lyrAbove = lyr.above();
       const lyrBelow = lyr.below();
-
-      const prevStacks = getPrevStacksInLevel(stack, stepsInStacks, defs);
-      const prevStackXs = prevStacks.map(
-        (stack) => stackRHSs[stackPathToString(stack.stackPath)],
-      );
-      if (!prevStackXs.every((x) => x !== undefined))
-        return {
-          maxX: -Infinity,
-          maxY: -Infinity,
-          initialPosForConnector: undefined,
-          finalPosForConnector: [],
-        };
-
-      const myX = Math.max(initX, Math.max(...prevStackXs) + scenePadX);
 
       let curX = myX;
       let curY = myY;
@@ -1565,9 +1548,6 @@ Promise.all([
       }
       curX = renderStackResult.maxX;
 
-      // curX is now rhs of stack
-      stackRHSs[stackPathString] = curX;
-
       const buttonRadius = 20;
 
       if (inXYWH(mouseX, mouseY, [curX, myY, buttonRadius, sceneH])) {
@@ -1639,7 +1619,7 @@ Promise.all([
           lyr,
           lyrAboveViewchart,
           nextStack,
-          initX,
+          curX + scenePadX,
           curY,
           viewchart,
         );
