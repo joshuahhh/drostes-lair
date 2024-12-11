@@ -253,6 +253,9 @@ Promise.all([
       }
     | {
         type: "purging-flame";
+      }
+    | {
+        type: "dev-action";
       } = {
     type: "pointer",
   };
@@ -324,6 +327,9 @@ Promise.all([
     }
     if (e.key === "Escape") {
       tool = { type: "pointer" };
+    }
+    if (e.key === "a") {
+      tool = { type: "dev-action" };
     }
     if (e.key === "i" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
@@ -974,13 +980,31 @@ Promise.all([
     }
 
     if (tool.type === "purging-flame") {
-      addClickHandler([topleft[0], topleft[1], sceneW, sceneH], () => {
-        const { flowchartId, frameId } = stackPathForStep(
-          step,
-          traceTree,
-        ).final;
+      addClickHandler(xywh, () => {
+        const { flowchartId, frameId } = step;
         modifyFlowchart(flowchartId, (old) => deleteFrame(old, frameId));
         tool = { type: "pointer" };
+      });
+    }
+
+    if (tool.type === "dev-action") {
+      addClickHandler(xywh, () => {
+        const action = frame.action;
+        const newActionStr = window.prompt(
+          "Enter new action JSON:",
+          action === undefined ? "" : JSON.stringify(action),
+        );
+        if (newActionStr === null) return;
+        try {
+          const newAction = JSON.parse(newActionStr);
+          const { flowchartId, frameId } = step;
+          modifyFlowchart(flowchartId, (old) =>
+            setAction(old, frameId, newAction, true),
+          );
+          tool = { type: "pointer" };
+        } catch (e) {
+          window.alert("Can't read that JSON, sorry.");
+        }
       });
     }
   };
@@ -1039,7 +1063,9 @@ Promise.all([
           : shiftHeld
             ? "url('./glove1.png'), pointer"
             : "url('./glove3.png'), pointer"
-        : "none";
+        : tool.type === "dev-action"
+          ? "help"
+          : "none";
 
     // draw background
     ctxReal.fillStyle = patternAsfault;
@@ -1734,6 +1760,8 @@ Promise.all([
         [mouseX - 156, mouseY - 72],
         [300, 300],
       );
+    } else if (tool.type === "dev-action") {
+      // handled by css cursor
     } else {
       assertNever(tool);
     }
