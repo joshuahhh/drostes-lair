@@ -1274,7 +1274,7 @@ Promise.all([
       // to draw the actual circle with a shadow.
       lyr.save();
       lyr.shadowColor = tooDeep
-        ? `rgba(100,10,200,0.8)`
+        ? `rgba(100,10,100,0.8)`
         : `rgba(100,10,10,0.8)`;
       // lyr.shadowOffsetY = 4;
       lyr.shadowBlur = 15;
@@ -1646,7 +1646,6 @@ Promise.all([
       // do we need an escape route?
       if (steps.some((step) => step.isStuck) && !frame.escapeRouteFrameId) {
         const markPos = add(lastConnectionJoint, [0, escapeRouteDropY]);
-        const isTooDeep = steps.some((step) => step.tooDeep);
         renderConnectorLine(lyr, lastConnectionJoint, markPos);
         renderEscapeRouteMark(
           lyr,
@@ -1658,25 +1657,19 @@ Promise.all([
               );
             }
           },
-          isTooDeep,
+          steps.some((step) => step.tooDeep),
         );
         lyr.save();
         const pos = add(markPos, v(15, 0));
         lyr.translate(...pos);
         lyr.scale(1 + Math.sin(t / 10) * 0.1, 1 + Math.sin(t / 10) * 0.1);
         lyr.translate(...mul(-1, pos));
-
-        renderOutlinedText(
-          lyr,
-          isTooDeep ? "...?" : "!?",
-          add(markPos, v(15, 0)),
-          {
-            textAlign: "left",
-            textBaseline: "middle",
-            size: 20,
-            color: isTooDeep ? "#7D5569" : "#A25848",
-          },
-        );
+        renderOutlinedText(lyr, "!?", add(markPos, v(15, 0)), {
+          textAlign: "left",
+          textBaseline: "middle",
+          size: 20,
+          color: "#A25848",
+        });
         lyr.restore();
         maxY = Math.max(maxY, markPos[1]);
       }
