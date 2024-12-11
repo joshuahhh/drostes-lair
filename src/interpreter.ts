@@ -119,6 +119,7 @@ export type Step = {
   scene: Scene;
   caller: Call | undefined;
   isStuck?: boolean;
+  tooDeep?: boolean;
 };
 
 export type Call = {
@@ -230,6 +231,7 @@ export function runAll(
 
     // Otherwise, we follow all arrows.
     let continuedSuccessfully = false;
+    let error;
     for (const nextArrow of nextArrows) {
       const nextFrameId = nextArrow.to;
       const nextFrame = flowchart.frames[nextFrameId];
@@ -247,6 +249,7 @@ export function runAll(
         );
         continuedSuccessfully = true;
       } catch (e) {
+        error = e;
         // console.log(e);
         // TODO: fail silently (aside from lack of
         // continuedSuccessfully); would be nice to surface this
@@ -256,6 +259,8 @@ export function runAll(
     if (!continuedSuccessfully) {
       // TODO: first time we've mutated a step after adding it? idk
       step.isStuck = true;
+      if ((error as RangeError).message === "call depth overflow")
+        step.tooDeep = true;
       if (frame.escapeRouteFrameId) {
         const nextStep: Step = {
           id: `${step.id}→${frameId}↝${frame.escapeRouteFrameId}`,
@@ -334,7 +339,7 @@ function performAction(
     ]);
   } else if (action.type === "call") {
     // console.log("callDepth", callDepth);
-    if (callDepth > 10) {
+    if (callDepth > 9) {
       throw new RangeError("call depth overflow");
     }
 
