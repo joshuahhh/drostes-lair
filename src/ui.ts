@@ -1265,7 +1265,6 @@ Promise.all([
       lyr: Layer,
       centerPos: Vec2,
       onClick?: Function,
-      tooDeep?: boolean,
     ) => {
       const markRadius = 13;
 
@@ -1273,13 +1272,12 @@ Promise.all([
       // the actual circle with texture because it caused perf issues
       // to draw the actual circle with a shadow.
       lyr.save();
-      lyr.shadowColor = tooDeep
-        ? `rgba(100,10,100,0.8)`
-        : `rgba(100,10,10,0.8)`;
+      lyr.shadowColor = `rgba(100,10,10,0.8)`;
       // lyr.shadowOffsetY = 4;
       lyr.shadowBlur = 15;
       lyr.beginPath();
       lyr.arc(...centerPos, markRadius, 0, 2 * Math.PI);
+      lyr.fillStyle = "red";
       lyr.fill();
       lyr.restore();
 
@@ -1292,21 +1290,15 @@ Promise.all([
       lyr.restore();
       const flickeringOpacity =
         Math.sin(t / 20) / 30 + 0.5 + Math.random() * 0.05;
-      lyr.fillStyle = tooDeep
-        ? `rgba(60,0,60,${flickeringOpacity})`
-        : `rgba(128,0,0,${flickeringOpacity})`;
+      lyr.fillStyle = `rgba(128,0,0,${flickeringOpacity})`;
       lyr.fill();
 
       lyr.save();
       lyr.fillStyle = "rgba(0, 0, 0, 0.8)";
-      lyr.font = tooDeep ? "25px monospace" : "25px serif";
+      lyr.font = "25px serif";
       lyr.textAlign = "center";
       lyr.textBaseline = "middle";
-      if (tooDeep) {
-        lyr.fillText("↓", ...add(centerPos, v(0, 3)));
-      } else {
-        lyr.fillText("‡", ...add(centerPos, v(0, 1)));
-      }
+      lyr.fillText("‡", ...add(centerPos, v(0, 1)));
       lyr.restore();
 
       if (onClick) {
@@ -1647,18 +1639,11 @@ Promise.all([
       if (steps.some((step) => step.isStuck) && !frame.escapeRouteFrameId) {
         const markPos = add(lastConnectionJoint, [0, escapeRouteDropY]);
         renderConnectorLine(lyr, lastConnectionJoint, markPos);
-        renderEscapeRouteMark(
-          lyr,
-          markPos,
-          () => {
-            if (!frame.escapeRouteFrameId) {
-              modifyFlowchart(flowchartId, (old) =>
-                addEscapeRoute(old, frameId),
-              );
-            }
-          },
-          steps.some((step) => step.tooDeep),
-        );
+        renderEscapeRouteMark(lyr, markPos, () => {
+          if (!frame.escapeRouteFrameId) {
+            modifyFlowchart(flowchartId, (old) => addEscapeRoute(old, frameId));
+          }
+        });
         lyr.save();
         const pos = add(markPos, v(15, 0));
         lyr.translate(...pos);
