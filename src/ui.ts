@@ -212,12 +212,15 @@ const resizeObserver = new ResizeObserver((entries) => {
 resizeObserver.observe(cContainer);
 const ctxReal = c.getContext("2d")!;
 
-Promise.all([
-  loadImg("./parchment.jpg"),
-  loadImg("./asfault.jpg"),
-  loadImg("./candle_sheet.png"),
-  loadAudio("./ambient.mp3"),
-]).then(([imgParchment, imgAsfault, imgCandleSheet, audAmbient]) => {
+async function main() {
+  const [imgParchment, imgAsfault, imgCandleSheet, audAmbient] =
+    await Promise.all([
+      loadImg("./parchment.jpg"),
+      loadImg("./asfault.jpg"),
+      loadImg("./candle_sheet.png"),
+      loadAudio("./ambient.mp3"),
+    ]);
+
   const patternParchment = ctxReal.createPattern(imgParchment, "repeat")!;
   const patternAsfault = ctxReal.createPattern(imgAsfault, "repeat")!;
 
@@ -2063,4 +2066,6 @@ Promise.all([
     lyrAbove.place();
     lyrMain.draw();
   }
-});
+}
+
+main();
