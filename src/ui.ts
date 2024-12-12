@@ -196,6 +196,7 @@ const hashParams = (() => {
 
 if (hashParams["example"]) {
   loadExample(hashParams["example"] as keyof typeof examples);
+  window.location.replace("#"); // so you won't lose your work when you go back? hmmm
 } else {
   const maybeFromLocalStorage = localStorage.getItem("panda-stacks");
   if (maybeFromLocalStorage) {
@@ -2044,6 +2045,17 @@ async function main() {
 
     addClickHandler([c.width - 145, c.height - 160, 90, 130], () => {
       tool = { type: "purging-flame" };
+    });
+
+    lyrAbove.do(() => {
+      lyrAbove.fillStyle = "rgba(0, 0, 0, 1)";
+      lyrAbove.textAlign = "right";
+      lyrAbove.textBaseline = "bottom";
+      lyrAbove.font = "20px serif";
+      lyrAbove.fillText("𓂀", c.width - 5, c.height - 5);
+    });
+    addClickHandler([c.width - 20, c.height - 20, 20, 20], () => {
+      window.location.href = "./credits.html";
     });
 
     (window as any).DEBUG = false;
