@@ -134,14 +134,33 @@ export type Call = {
  * represent it as an arbitrary value; who knows what might come
  * later.
  */
-export type Scene = {
-  value: any;
-  // This is metadata provided by the action that produced this
-  // scene, providing information to help illustrate the action.
-  actionAnnotation?: ActionAnnotation;
-};
+export type Scene =
+  | {
+      type: "success";
+      value: any;
+      // This is metadata provided by the action that produced this
+      // scene, providing information to help illustrate the action.
+      actionAnnotation?: ActionAnnotation;
+    }
+  | {
+      type: "error";
+      message: string;
+    };
+
+export type SuccessfulStep = Step & { scene: { type: "success" } };
 
 // FUNCTIONS
+
+export function assertSuccessful(step: Step): asserts step is SuccessfulStep {
+  if (step.scene.type === "error") {
+    throw new Error("INTERNAL ERROR: you promised this step was successful :(");
+  }
+}
+
+export function assertSuccessfulValue(step: Step): SuccessfulStep {
+  assertSuccessful(step);
+  return step;
+}
 
 export function makeTraceTree(): TraceTree {
   return {
@@ -158,7 +177,7 @@ let RUN_ALL_DEPTH = 0;
  * mutable traceTreeOut.
  */
 export function runAll(
-  step: Step,
+  step: Step & { scene: { type: "success" } },
   defs: Definitions,
   traceTreeOut: TraceTree,
   callDepth: number,
@@ -210,13 +229,13 @@ export function runAll(
           ...scene,
           value: lensImpl.setPart(
             callerLens,
-            callerInfo.prevStep.scene.value,
+            assertSuccessfulValue(callerInfo.prevStep).scene.value,
             scene.value,
           ),
         };
       }
 
-      const nextStep: Step = {
+      const nextStep: SuccessfulStep = {
         id: `${step.id}↑${callerInfo.flowchart.id}→${caller.frameId}`,
         prevStepId: step.id,
         flowchartId: callerInfo.flowchart.id,
@@ -247,17 +266,26 @@ export function runAll(
         );
         continuedSuccessfully = true;
       } catch (e) {
-        // console.log(e);
-        // TODO: fail silently (aside from lack of
-        // continuedSuccessfully); would be nice to surface this
-        // somehow
+        // TODO: not sure this is the right place to output this...
+        const nextStep: Step = {
+          id: `${step.id}→${nextFrameId}`,
+          prevStepId: step.id,
+          flowchartId,
+          frameId: nextFrameId,
+          scene: {
+            type: "error",
+            message: (e as Error).message,
+          },
+          caller,
+        };
+        traceTreeOut.steps[nextStep.id] = nextStep;
       }
     }
     if (!continuedSuccessfully) {
       // TODO: first time we've mutated a step after adding it? idk
       step.isStuck = true;
       if (frame.escapeRouteFrameId) {
-        const nextStep: Step = {
+        const nextStep: SuccessfulStep = {
           id: `${step.id}→${frameId}↝${frame.escapeRouteFrameId}`,
           prevStepId: step.id,
           flowchartId,
@@ -274,7 +302,7 @@ export function runAll(
 }
 
 function performAction(
-  step: Step,
+  step: SuccessfulStep,
   frameId: string,
   action: Action | undefined,
   defs: Definitions,
@@ -289,7 +317,7 @@ function performAction(
       // so that, e.g., you can provide an escape route if "move any
       // item" is called on an empty list. this is all weird and
       // hacky and deserves more thought.
-      throw new Error("proceedWith called with no nextScenes");
+      throw new Error("no way to go");
     }
     let i = 0;
     for (const nextScene of nextScenes) {
@@ -301,7 +329,9 @@ function performAction(
         scene: nextScene,
         caller,
       };
-      runAll(nextStep, defs, traceTreeOut, callDepth);
+      if (nextScene.type === "success") {
+        runAll(assertSuccessfulValue(nextStep), defs, traceTreeOut, callDepth);
+      }
     }
   }
 
@@ -322,10 +352,11 @@ function performAction(
       domino[1][0] >= value.width ||
       domino[1][1] >= value.height
     ) {
-      throw new Error("domino out of bounds");
+      throw new Error("off the board");
     }
     proceedWith([
       {
+        type: "success",
         value: {
           ...value,
           dominoes: [...value.dominoes, action.domino],
@@ -335,7 +366,7 @@ function performAction(
   } else if (action.type === "call") {
     // console.log("callDepth", callDepth);
     if (callDepth > 10) {
-      throw new RangeError("call depth overflow");
+      throw new Error("too deep");
     }
 
     // time to step into the call
@@ -358,7 +389,7 @@ function performAction(
         actionAnnotation: undefined,
       };
     }
-    const nextStep: Step = {
+    const nextStep: SuccessfulStep = {
       id: `${step.id}→${frameId}↓${nextFlowchart.id}`,
       prevStepId: step.id,
       flowchartId: action.flowchartId,
@@ -392,7 +423,11 @@ function performAction(
     }
     const nextScenes = pickedIndices.map((pickedIndex) => {
       if (pickedIndex < 0 || pickedIndex >= sourceValue.length) {
-        throw new Error(`Item ${pickedIndex} is out of bounds`);
+        if (sourceValue.length === 0) {
+          throw new Error(`list is empty`);
+        } else {
+          throw new Error(`off the list`);
+        }
       }
       let annotation: ActionAnnotation | undefined = undefined;
       let newWorkspace = value.contents.slice();
@@ -441,6 +476,7 @@ function performAction(
         assertNever(target);
       }
       return {
+        type: "success" as const,
         value: {
           ...value,
           contents: newWorkspace,
@@ -452,7 +488,7 @@ function performAction(
   } else if (action.type === "dev-eval") {
     const func = new Function("x", `return (${action.code})`);
     const result = func(scene.value);
-    proceedWith([{ value: result }]);
+    proceedWith([{ type: "success", value: result }]);
   } else {
     assertNever(action);
   }
@@ -512,12 +548,12 @@ export function runHelper(flowcharts: Flowchart[], value: any) {
   const defs = { flowcharts: indexById(flowcharts) };
   const traceTree = makeTraceTree();
   const flowchart = flowcharts[0];
-  const initStep = {
+  const initStep: SuccessfulStep = {
     id: "*",
     prevStepId: undefined,
     flowchartId: flowchart.id,
     frameId: flowchart.initialFrameId,
-    scene: { value },
+    scene: { type: "success", value },
     caller: undefined,
   };
   try {
@@ -533,7 +569,9 @@ export function runHelper(flowcharts: Flowchart[], value: any) {
 }
 
 export function getFinalValues(traceTree: TraceTree): any[] {
-  return traceTree.finalStepIds.map((id) => traceTree.steps[id].scene.value);
+  return traceTree.finalStepIds.map(
+    (id) => assertSuccessfulValue(traceTree.steps[id]).scene.value,
+  );
 }
 
 /**
@@ -609,7 +647,8 @@ export function getCallerInfo(
   traceTree: TraceTree,
   defs: Definitions,
 ) {
-  const prevStep = traceTree.steps[call.prevStepId];
+  // a previous step must have been successful!
+  const prevStep = assertSuccessfulValue(traceTree.steps[call.prevStepId]);
   const flowchart = defs.flowcharts[prevStep.flowchartId];
   const frame = flowchart.frames[call.frameId] as Frame & {
     action: Action & { type: "call" };
@@ -635,7 +674,7 @@ export function getCallerInfo(
  */
 
 export function topLevelValueForStep(
-  step: Step,
+  step: SuccessfulStep,
   traceTree: TraceTree,
   defs: Definitions,
 ): unknown {

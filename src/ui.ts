@@ -14,8 +14,10 @@ import {
   StackPath,
   StackPathSegment,
   Step,
+  SuccessfulStep,
   TraceTree,
   Viewchart,
+  assertSuccessful,
   getActionText,
   getNextStacksInLevel,
   isEscapeRoute,
@@ -649,7 +651,7 @@ Promise.all([
 
   const renderWorkspace = (
     lyr: Layer,
-    scene: Scene & { value: { contents: unknown[][] } },
+    scene: Scene & { type: "success"; value: { contents: unknown[][] } },
     path: StackPath,
     pos: Vec2,
   ) => {
@@ -938,6 +940,26 @@ Promise.all([
       onHover();
     }
 
+    if (step.scene.type === "error") {
+      // TODO: smaller box
+      renderParchmentBox(lyr, ...xywh, {
+        empty: true,
+      });
+      renderOutlinedText(
+        lyr,
+        step.scene.message,
+        [topleft[0] + 10, topleft[1] + 20],
+        {
+          textAlign: "left",
+          textBaseline: "top",
+          color: "#b3523d",
+          size: 16,
+        },
+      );
+      return;
+    }
+    assertSuccessful(step);
+
     const isOutlined = traceTree.finalStepIds.includes(step.id);
 
     if (isOutlined) {
@@ -952,6 +974,7 @@ Promise.all([
       lyr.restore();
     }
     renderParchmentBox(lyr, ...xywh);
+
     const value = step.scene.value;
     if (typeof value === "object" && value !== null && "dominoes" in value) {
       const value = topLevelValueForStep(step, traceTree, defs) as any;
@@ -1047,12 +1070,12 @@ Promise.all([
     (window as any).traceTree = traceTree;
     // TODO: hardcoding the first flowchart
     const flowchart = state.defs.flowcharts[state.initialFlowchartId];
-    const initStep = {
+    const initStep: SuccessfulStep = {
       id: "*",
       prevStepId: undefined,
       flowchartId: flowchart.id,
       frameId: flowchart.initialFrameId,
-      scene: { value: state.initialValue },
+      scene: { type: "success", value: state.initialValue },
       caller: undefined,
     };
     runAll(initStep, defs, traceTree, 0);
