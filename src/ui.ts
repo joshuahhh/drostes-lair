@@ -1124,8 +1124,8 @@ Promise.all([
       renderOutlinedText(
         lyr,
         step.scene.message,
-        [topleft[0] + 10, topleft[1] + sceneH],
-        { textAlign: "left", color: "#e8816b" },
+        [topleft[0] + sceneW, topleft[1] + sceneH],
+        { textAlign: "right", color: "#e8816b" },
       );
       return;
     }
