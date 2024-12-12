@@ -952,7 +952,7 @@ Promise.all([
         {
           textAlign: "left",
           textBaseline: "top",
-          color: "#b3523d",
+          color: "#d66047",
           size: 16,
         },
       );
