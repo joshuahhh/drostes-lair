@@ -236,7 +236,7 @@ export function runAll(
 
       const callerInfo = getCallerInfo(caller, traceTreeOut, defs);
 
-      let returnScene = scene;
+      let returnScene: Scene = { ...scene, actionAnnotation: undefined };
       const callerLens = callerInfo.frame.action.lens;
       if (callerLens) {
         const lensImpl = lenses[callerLens.type];
