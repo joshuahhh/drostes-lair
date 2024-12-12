@@ -674,6 +674,8 @@ Promise.all([
   ) => {
     const { badSource } = opts;
 
+    const lyrTop = lyr.spawnLater(); // so drop target lines go above the contents
+
     const contents = scene.value.contents;
     let annotation = undefined;
     if (scene.actionAnnotation?.type === "workspace-pick") {
@@ -690,7 +692,7 @@ Promise.all([
 
     if (isDropTarget) {
       renderDropTargetLine(
-        lyr,
+        lyrTop,
         pos[0] + 10,
         curY - 5,
         pos[0] + sceneW - 20,
@@ -705,6 +707,7 @@ Promise.all([
       }
       const { maxY } = renderWorkspaceValue(
         lyr,
+        lyrTop,
         item,
         idxInWorkspace,
         path,
@@ -727,7 +730,7 @@ Promise.all([
       if (isDropTarget) {
         curY += 5;
         renderDropTargetLine(
-          lyr,
+          lyrTop,
           pos[0] + 10,
           curY,
           pos[0] + sceneW - 20,
@@ -764,10 +767,13 @@ Promise.all([
         tool = { type: "pointer" };
       });
     }
+
+    lyrTop.place();
   };
 
   const renderWorkspaceValue = (
     lyr: Layer,
+    lyrTop: Layer | undefined,
     value: unknown[],
     idxInWorkspace: number,
     path: StackPath | undefined,
@@ -789,12 +795,19 @@ Promise.all([
 
     let left = pos[0];
 
-    if (isDropTarget) {
-      renderDropTargetLine(lyr, left - 5, pos[1], left - 5, pos[1] + cellSize, {
-        type: "at",
-        index: idxInWorkspace,
-        side: "before",
-      });
+    if (isDropTarget && lyrTop) {
+      renderDropTargetLine(
+        lyrTop,
+        left - 5,
+        pos[1],
+        left - 5,
+        pos[1] + cellSize,
+        {
+          type: "at",
+          index: idxInWorkspace,
+          side: "before",
+        },
+      );
     }
 
     let cellContents: (
@@ -896,9 +909,9 @@ Promise.all([
       lyr.lineTo(left, pos[1] + cellSize);
       lyr.stroke();
     }
-    if (isDropTarget) {
+    if (isDropTarget && lyrTop) {
       renderDropTargetLine(
-        lyr,
+        lyrTop,
         left + cellSize / 2,
         pos[1] + cellSize / 2,
         left + cellSize * value.length - cellSize / 2,
@@ -1842,6 +1855,7 @@ Promise.all([
     } else if (tool.type === "workspace-pick") {
       renderWorkspaceValue(
         lyrAbove,
+        undefined,
         [tool.value],
         0,
         undefined,
