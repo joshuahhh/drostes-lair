@@ -1073,6 +1073,15 @@ Promise.all([
     //   lyr.restore();
     // }
     renderParchmentBox(lyr, ...xywh);
+    lyr.do(() => {
+      const borderWidth = 1;
+      lyr.beginPath();
+      lyr.strokeStyle = `#675E53`;
+      lyr.lineWidth = borderWidth;
+      lyr.stroke;
+      lyr.rect(...expand(xywh, -borderWidth / 2));
+      lyr.stroke();
+    });
 
     if (step.scene.type === "error") {
       const errorAnnotation = step.scene.errorAnnotation;
@@ -1107,6 +1116,8 @@ Promise.all([
         lyr.lineWidth = borderWidth;
         lyr.stroke;
         lyr.rect(...expand(xywh, -borderWidth / 2));
+        lyr.fillStyle = "rgba(30,0,0,0.3)";
+        lyr.fill();
         lyr.stroke();
       });
 
@@ -1567,6 +1578,7 @@ Promise.all([
             {
               textAlign: "right",
               size: 20,
+              color: "#BDAA94",
             },
           );
         }
@@ -1774,6 +1786,11 @@ Promise.all([
 
         if (i > 0) curY += scenePadY;
 
+        const isErrorStack = stack.stepIds
+          .map((stepId) => traceTree.steps[stepId])
+          .every((step) => step.scene.type === "error");
+        const isEmptyStack = stack.stepIds.length === 0;
+
         const child = renderStackAndDownstream(
           lyr,
           lyrAboveViewchart,
@@ -1787,19 +1804,26 @@ Promise.all([
           const y = myY - scenePadY + 10;
           renderEscapeDagger(lyrBelow, [x, y], curY - y);
         }
-        for (const v of child.finalPosForConnector)
-          finalPosForConnectors.push(v);
+        for (const v of child.finalPosForConnector) {
+          if (!isEmptyStack && !isErrorStack) finalPosForConnectors.push(v);
+        }
 
         // draw connector line
         if (child.initialPosForConnector) {
           const start = [curX, myY + stackH / 2] as Vec2;
           const end = child.initialPosForConnector;
-          if (!isEscapeRoute(nextStack.stackPath.final.frameId, flowchart))
+
+          if (
+            !isEmptyStack &&
+            !isErrorStack &&
+            !isEscapeRoute(nextStack.stackPath.final.frameId, flowchart)
+          ) {
             renderConnectorLine(lyrBelow, start, end);
-          lastConnectionJoint = add(child.initialPosForConnector, [
-            -scenePadX / 2,
-            0,
-          ]);
+            lastConnectionJoint = add(child.initialPosForConnector, [
+              -scenePadX / 2,
+              0,
+            ]);
+          }
         }
 
         maxX = Math.max(maxX, child.maxX);
