@@ -133,10 +133,17 @@ const act = (f: (stateYouCanChange: UIState) => void) => {
 let undoStack: UIState[] = [examples.dominoesBlank];
 let redoStack: UIState[] = [];
 
-const maybeFromLocalStorage = localStorage.getItem("panda-stacks");
-if (maybeFromLocalStorage) {
-  ({ undoStack, redoStack } = JSON.parse(maybeFromLocalStorage));
-}
+let pan: Vec2 = [0, 0];
+const setPan = (v: Vec2) => {
+  localStorage.setItem("pan", JSON.stringify(v));
+  pan = v;
+};
+
+const loadExample = (key: keyof typeof examples) => {
+  undoStack = [examples[key]];
+  redoStack = [];
+  syncStacks();
+};
 
 const pushState = (newState: UIState) => {
   undoStack.push(newState);
@@ -174,6 +181,32 @@ const ensureFlowchartExists = (flowchartId: string) => {
     }
   });
 };
+
+const hashParams = (() => {
+  let hash = window.location.hash;
+  if (hash.startsWith("#")) {
+    hash = hash.substring(1);
+  }
+
+  const [_path, queryString] = hash.split("?", 2);
+
+  // this will remove duplicates, but we don't care
+  return Object.fromEntries(new URLSearchParams(queryString).entries());
+})();
+
+if (hashParams["example"]) {
+  loadExample(hashParams["example"] as keyof typeof examples);
+} else {
+  const maybeFromLocalStorage = localStorage.getItem("panda-stacks");
+  if (maybeFromLocalStorage) {
+    ({ undoStack, redoStack } = JSON.parse(maybeFromLocalStorage));
+  }
+
+  const maybePanFromLocalStorage = localStorage.getItem("pan");
+  if (maybePanFromLocalStorage) {
+    pan = JSON.parse(maybePanFromLocalStorage);
+  }
+}
 
 let viewDepth = Infinity;
 
@@ -239,12 +272,6 @@ async function main() {
   // start ambient audio
   audAmbient.loop = true;
   audAmbient.start();
-
-  let pan: Vec2 = JSON.parse(localStorage.getItem("pan") + "") ?? [0, 0];
-  const setPan = (v: Vec2) => {
-    localStorage.setItem("pan", JSON.stringify(v));
-    pan = v;
-  };
 
   let tool:
     | { type: "pointer" }
@@ -317,9 +344,7 @@ async function main() {
       if (!result) return;
       for (const [i, key] of Object.keys(examples).entries()) {
         if (result === key || result === `${i + 1}`) {
-          undoStack = [examples[key as keyof typeof examples]];
-          redoStack = [];
-          syncStacks();
+          loadExample(key as keyof typeof examples);
           return;
         }
       }
