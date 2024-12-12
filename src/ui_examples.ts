@@ -626,6 +626,9 @@ export const examples = assertExtends<Record<string, UIState>>()({
             },
             "0.9120936509806226": {
               id: "0.9120936509806226",
+              action: {
+                type: "escape",
+              },
             },
           },
           arrows: [

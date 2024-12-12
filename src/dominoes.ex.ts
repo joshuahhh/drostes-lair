@@ -67,6 +67,9 @@ export const dominoFlowchart: Flowchart = {
     // and here's where we go if things don't work out
     {
       id: "base-case",
+      action: {
+        type: "escape",
+      },
     },
   ]),
   arrows: [
