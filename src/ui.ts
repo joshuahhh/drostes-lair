@@ -674,6 +674,10 @@ Promise.all([
   ) => {
     const { badSource } = opts;
 
+    if (scene.type !== "success") {
+      throw new Error("bad scene type");
+    }
+
     const lyrTop = lyr.spawnLater(); // so drop target lines go above the contents
 
     const contents = scene.value.contents;
@@ -1006,9 +1010,14 @@ Promise.all([
       "type" in value &&
       value.type === "workspace"
     ) {
+      // TODO: renderSceneValue is a big mess
       renderWorkspace(
         lyr,
-        step.scene as any,
+        {
+          type: "success",
+          value,
+          actionAnnotation: (step.scene as any).actionAnnotation,
+        },
         stackPathForStep(step, traceTree),
         topLeft,
       );

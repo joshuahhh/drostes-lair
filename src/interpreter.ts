@@ -338,7 +338,7 @@ function performAction(
       // so that, e.g., you can provide an escape route if "move any
       // item" is called on an empty list. this is all weird and
       // hacky and deserves more thought.
-      throw new Error("no way to go");
+      throw new ErrorWithAnnotation("no way to go", { type: "scene", scene });
     }
     let i = 0;
     for (const nextScene of nextScenes) {
