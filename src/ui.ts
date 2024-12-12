@@ -1557,7 +1557,7 @@ Promise.all([
       }
       if (isEscapeRoute(frameId, flowchart)) {
         renderEscapeRouteMark(renderStackResult.layerUsed, [
-          curX - scenePadX / 2,
+          myX - scenePadX / 2,
           myY + sceneH / 2,
         ]);
       }

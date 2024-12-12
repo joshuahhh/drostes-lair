@@ -282,15 +282,14 @@ export function runAll(
       // TODO: first time we've mutated a step after adding it? idk
       step.isStuck = true;
       if (frame.escapeRouteFrameId) {
-        const nextStep: SuccessfulStep = {
-          id: `${step.id}→${frameId}↝${frame.escapeRouteFrameId}`,
-          prevStepId: step.id,
-          flowchartId,
-          frameId: frame.escapeRouteFrameId,
-          scene,
-          caller,
-        };
-        runAll(nextStep, defs, traceTreeOut, callDepth);
+        performAction(
+          step,
+          frame.escapeRouteFrameId,
+          flowchart.frames[frame.escapeRouteFrameId].action,
+          defs,
+          traceTreeOut,
+          callDepth,
+        );
       }
     }
   } finally {
