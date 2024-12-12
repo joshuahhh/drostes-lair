@@ -1327,10 +1327,7 @@ Promise.all([
 
       // final connector lines, out of viewchart
       for (const v of r.finalPosForConnector) {
-        renderConnectorLine(lyrBelow, v, [
-          r.maxX,
-          r.finalPosForConnector[0][1],
-        ]);
+        renderConnectorLine(lyrBelow, v, [r.maxX, topLeft[1] + sceneH / 2]);
       }
 
       // initial little connector line on the left
@@ -1511,7 +1508,7 @@ Promise.all([
         height,
       );
     };
-    const escapeRouteDropY = sceneH;
+    const escapeRouteDropY = sceneH - 10;
 
     const renderStack = (
       lyr: Layer,
@@ -1757,6 +1754,11 @@ Promise.all([
         );
       }
 
+      const isErrorStack = stack.stepIds
+        .map((stepId) => traceTree.steps[stepId])
+        .every((step) => step.scene.type === "error");
+      const isEmptyStack = stack.stepIds.length === 0;
+
       // render downstream
       let maxX = curX + scenePadX;
       const nextStacks = getNextStacksInLevel(stack, stepsInStacks, defs);
@@ -1764,7 +1766,8 @@ Promise.all([
       // hacky thing to position unused escape routes or escape-route ghosts
       let lastConnectionJoint: Vec2 = [curX + scenePadX / 2, myY + sceneH / 2];
       if (nextStacks.length === 0) {
-        finalPosForConnectors.push([curX, myY + stackH / 2]);
+        if (!isEmptyStack && !isErrorStack)
+          finalPosForConnectors.push([curX, myY + stackH / 2]);
       }
       for (const [i, nextStack] of nextStacks.entries()) {
         if (
@@ -1777,19 +1780,16 @@ Promise.all([
             escapeRouteDropY,
           ]);
           renderEscapeRouteMark(lyr, markPos, undefined, true);
-          renderParchmentBox(lyrBelow, ...add(markPos, [-18, 7]), 36, 20, {
+          const h = 50;
+          const w = 60;
+          renderParchmentBox(lyrBelow, ...add(markPos, [-w / 2, 7]), w, h, {
             empty: true,
           });
-          maxY = Math.max(maxY, markPos[1]);
+          maxY = Math.max(maxY, markPos[1] + h - 10);
           continue;
         }
 
         if (i > 0) curY += scenePadY;
-
-        const isErrorStack = stack.stepIds
-          .map((stepId) => traceTree.steps[stepId])
-          .every((step) => step.scene.type === "error");
-        const isEmptyStack = stack.stepIds.length === 0;
 
         const child = renderStackAndDownstream(
           lyr,
@@ -1799,13 +1799,13 @@ Promise.all([
           curY,
           viewchart,
         );
+        for (const v of child.finalPosForConnector) {
+          if (!isEmptyStack && !isErrorStack) finalPosForConnectors.push(v);
+        }
         if (isEscapeRoute(nextStack.stackPath.final.frameId, flowchart)) {
           const x = curX + scenePadX + sceneW / 2;
           const y = myY - scenePadY + 10;
           renderEscapeDagger(lyrBelow, [x, y], curY - y);
-        }
-        for (const v of child.finalPosForConnector) {
-          if (!isEmptyStack && !isErrorStack) finalPosForConnectors.push(v);
         }
 
         // draw connector line
@@ -1835,15 +1835,15 @@ Promise.all([
       if (steps.some((step) => step.isStuck) && !frame.escapeRouteFrameId) {
         const markPos = add(lastConnectionJoint, [
           sceneW / 2 + scenePadX / 2,
-          escapeRouteDropY - 10,
+          escapeRouteDropY,
         ]);
         // render clickable escape route mark
-        finalPosForConnectors.push(markPos);
         renderEscapeRouteMark(lyr, markPos, () => {
           if (!frame.escapeRouteFrameId) {
             modifyFlowchart(flowchartId, (old) => addEscapeRoute(old, frameId));
           }
         });
+        finalPosForConnectors.push(markPos);
 
         lyr.save();
         const pos = add(markPos, v(15, 0));
