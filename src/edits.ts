@@ -20,7 +20,12 @@
 
 import { Action, Flowchart, Frame } from "./interpreter";
 
-export const makeId = () => Math.random() + "";
+export const nextIdForFlowchart = (fc: Flowchart) => {
+  for (let i = 1; ; i++) {
+    const id = `${fc.id}-${i}`;
+    if (!fc.frames[id]) return id;
+  }
+};
 
 export const appendFrameAfter = (
   fc: Flowchart,
@@ -28,7 +33,7 @@ export const appendFrameAfter = (
   id?: string,
 ) => {
   const newFc = structuredClone(fc);
-  id = id ?? makeId();
+  id = id ?? nextIdForFlowchart(fc);
   const newFrame = { id };
   newFc.arrows.push({ from: frameId, to: id });
   newFc.frames[id] = newFrame;
@@ -57,7 +62,7 @@ export const setActionOnFrameOrAfter = (
   let newFc = structuredClone(fc);
   const frame = newFc.frames[frameId];
   if (frame.action) {
-    const newFrameId = makeId();
+    const newFrameId = nextIdForFlowchart(fc);
     newFc = appendFrameAfter(fc, frameId, newFrameId);
     return setAction(newFc, newFrameId, action);
   } else {
@@ -68,7 +73,7 @@ export const setActionOnFrameOrAfter = (
 export const addEscapeRoute = (fc: Flowchart, frameId: string) => {
   const newFc = structuredClone(fc);
   const newFrame = {
-    id: Math.random() + "",
+    id: nextIdForFlowchart(fc),
     action: {
       type: "escape",
     },
