@@ -1052,8 +1052,8 @@ Promise.all([
 
     if (isOutlined) {
       lyr.save();
-      lyr.shadowColor = "white";
-      lyr.shadowBlur = 10;
+      // lyr.shadowColor = "white";
+      // lyr.shadowBlur = 10;
       lyr.beginPath();
       lyr.lineWidth = 4;
       lyr.strokeStyle = "white";
@@ -1531,11 +1531,12 @@ Promise.all([
         hoveredStackPathString = undefined;
       }
 
+      const stackH = 35;
       const layerToUse = hovered ? lyrAboveViewchart : lyr;
       layerToUse.do((lyr) => {
         for (const [stepIdx, step] of steps.entries()) {
           let targetX = curX;
-          let targetY = myY + stepIdx * 14;
+          let targetY = myY + (stepIdx / stack.stepIds.length) * stackH;
           if (hovered) {
             const stackFanX = sceneW + 10;
             const stackFanY = sceneH + 10;
