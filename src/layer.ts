@@ -30,15 +30,14 @@ const CTX_UNSAFE_PROPERTIES: (keyof CanvasRenderingContext2D)[] = [
 const includes = <T>(arr: T[], item: any): item is T => arr.includes(item);
 
 class LayerImpl {
-  private commands: (() => void)[] = [];
-  private layersBelow: Layer[] = []; // push onto this one, so later-added layers are above earlier layers
-  private layersAbove: Layer[] = []; // unshift onto this one, so later-added layers are below earlier layers
+  private commands: ((() => void) | LayerImpl)[] = [];
 
   private thisProxy: Layer;
 
   constructor(
     private ctx: CanvasRenderingContext2D,
     private drawable: boolean,
+    private spawnParent?: LayerImpl,
   ) {
     this.thisProxy = new Proxy<any>(this, {
       get: (target, prop) => {
@@ -75,12 +74,14 @@ class LayerImpl {
     });
   }
 
-  _draw(): void {
-    this.layersBelow.forEach((layer) => layer._draw());
+  private _draw(): void {
     for (const command of this.commands) {
-      command();
+      if (command instanceof LayerImpl) {
+        command._draw();
+      } else {
+        command();
+      }
     }
-    this.layersAbove.forEach((layer) => layer._draw());
   }
 
   draw(): void {
@@ -92,16 +93,25 @@ class LayerImpl {
     }
   }
 
-  below(): Layer {
+  spawnHere(): Layer {
     const lyr = LayerImpl.make(this.ctx, false);
-    this.layersBelow.push(lyr);
+    this.commands.push(lyr);
     return lyr;
   }
 
-  above(): Layer {
-    const lyr = LayerImpl.make(this.ctx, false);
-    this.layersAbove.unshift(lyr);
+  // TODO: do we want spawnAtEnd()?
+
+  spawnLater(): Layer {
+    const lyr = LayerImpl.make(this.ctx, false, this);
     return lyr;
+  }
+
+  place() {
+    if (this.spawnParent) {
+      this.spawnParent.commands.push(this);
+    } else {
+      throw new Error("Can't place a root layer");
+    }
   }
 
   do(f: (lyr: Layer) => void) {
@@ -113,16 +123,16 @@ class LayerImpl {
   // To get stuff out of LayerImpl, we use static methods (which have
   // access to private fields)
 
-  static make(lyr: CanvasRenderingContext2D, drawable: boolean): Layer {
-    return new LayerImpl(lyr, drawable).thisProxy;
+  static make(...args: ConstructorParameters<typeof LayerImpl>): Layer {
+    return new LayerImpl(...args).thisProxy;
   }
 
-  static commandCount(lyr: Layer): number {
-    return (
-      lyr.layersBelow.map(LayerImpl.commandCount).reduce((a, b) => a + b, 0) +
-      lyr.commands.length +
-      lyr.layersAbove.map(LayerImpl.commandCount).reduce((a, b) => a + b, 0)
-    );
+  static commandCount(lyr: LayerImpl): number {
+    return lyr.commands
+      .map((cmd) =>
+        cmd instanceof LayerImpl ? LayerImpl.commandCount(cmd) : 1,
+      )
+      .reduce((a, b) => a + b, 0);
   }
 }
 

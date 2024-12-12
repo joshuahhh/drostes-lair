@@ -778,7 +778,7 @@ Promise.all([
       );
     }
 
-    const lyrRemoval = lyr.above();
+    const lyrRemoval = lyr.spawnLater();
 
     // grid squares
     for (let [i, cell] of cellContents.entries()) {
@@ -884,6 +884,8 @@ Promise.all([
         side: "after",
       });
     }
+
+    lyrRemoval;
 
     return { maxY: pos[1] + cellSize };
   };
@@ -1059,7 +1061,7 @@ Promise.all([
 
     // This one will be drawn on the real canvas
     const lyrMain = layer(ctxReal);
-    const lyrAbove = lyrMain.above();
+    const lyrAbove = lyrMain.spawnLater();
 
     state = undoStack.at(-1)!;
     (window as any).state = state;
@@ -1154,8 +1156,8 @@ Promise.all([
       maxX: number;
       maxY: number;
     } => {
-      const lyrAbove = lyr.above();
-      const lyrBelow = lyr.below();
+      const lyrAbove = lyr.spawnLater();
+      const lyrBelow = lyr.spawnHere();
 
       renderFlowchartSigil(
         lyrAbove,
@@ -1209,6 +1211,8 @@ Promise.all([
       const start = add(topLeft, v(-scenePadX, sceneH / 2));
       const end = add(start, v(scenePadX, 0));
       renderConnectorLine(lyrBelow, start, end);
+
+      lyrAbove.place();
 
       return r;
     };
@@ -1376,12 +1380,8 @@ Promise.all([
               curX + Math.floor(howManyTimesDidModWrap(...modArgs)) * stackFanX;
             targetY = mod(...modArgs);
           }
-          // TODO: we spawn a new `below` layer for each scene so they
-          // will be stacked correctly even if they spawn their own
-          // sublayers. feels like this shouldn't be necessary; a
-          // breakdown of modularity?
           renderScene(
-            lyr.below(),
+            lyr,
             step,
             [
               interpTo(stackPathString + stepIdx + "x", targetX - pan[0]) +
@@ -1443,8 +1443,8 @@ Promise.all([
       initialPosForConnector: Vec2 | undefined;
       finalPosForConnector: Vec2[];
     } => {
-      const lyrAbove = lyr.above();
-      const lyrBelow = lyr.below();
+      const lyrAbove = lyr.spawnLater();
+      const lyrBelow = lyr.spawnHere();
 
       let curX = myX;
       let curY = myY;
@@ -1691,6 +1691,8 @@ Promise.all([
         lyr.fill();
       }
 
+      lyrAbove.place();
+
       return {
         maxX,
         maxY,
@@ -1703,13 +1705,14 @@ Promise.all([
     };
     const stepsInStacks = putStepsInStacks(traceTree);
     const viewchart = stepsInStacksToViewchart(stepsInStacks);
-    const lyrAboveViewchart = lyrMain.above();
+    const lyrAboveViewchart = lyrMain.spawnLater();
     const topLevel = renderViewchart(
       lyrMain,
       lyrAboveViewchart,
       viewchart,
       add(pan, v(100)),
     );
+    lyrAboveViewchart.place();
     // is there more than one final stack?
     const finalStacks = Object.values(viewchart.stackByFrameId).filter(
       (stack) => traceTree.finalStepIds.includes(stack.stepIds[0]),
@@ -1869,6 +1872,8 @@ Promise.all([
     if (false) {
       console.log("about to draw", getLayerCommandCount(lyrMain));
     }
+
+    lyrAbove.place();
     lyrMain.draw();
   }
 });
