@@ -22,7 +22,7 @@ export const examples = assertExtends<Record<string, UIState>>()({
       ]),
     },
   },
-  dominoesComplete: {
+  dominoesDone: {
     initialValue: {
       width: 4,
       height: 2,
