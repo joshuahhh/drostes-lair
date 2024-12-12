@@ -1407,6 +1407,7 @@ Promise.all([
       lyr: Layer,
       centerPos: Vec2,
       onClick?: Function,
+      disabled?: boolean,
     ) => {
       const markRadius = 13;
 
@@ -1414,12 +1415,11 @@ Promise.all([
       // the actual circle with texture because it caused perf issues
       // to draw the actual circle with a shadow.
       lyr.save();
-      lyr.shadowColor = `rgba(100,10,10,0.8)`;
-      // lyr.shadowOffsetY = 4;
-      lyr.shadowBlur = 15;
+      lyr.shadowColor = disabled ? "rgba(0,0,0,0.6)" : `rgba(100,10,10,0.7)`;
+      lyr.shadowOffsetY = 2;
+      lyr.shadowBlur = 10;
       lyr.beginPath();
       lyr.arc(...centerPos, markRadius, 0, 2 * Math.PI);
-      lyr.fillStyle = "red";
       lyr.fill();
       lyr.restore();
 
@@ -1432,7 +1432,11 @@ Promise.all([
       lyr.restore();
       const flickeringOpacity =
         Math.sin(t / 20) / 30 + 0.5 + Math.random() * 0.05;
-      lyr.fillStyle = `rgba(128,0,0,${flickeringOpacity})`;
+      lyr.fillStyle = disabled ? "gray" : `rgba(128,0,0,${flickeringOpacity})`;
+
+      lyr.lineWidth = 1;
+      lyr.strokeStyle = disabled ? "black" : `#24130D`;
+      lyr.stroke();
       lyr.fill();
 
       lyr.save();
@@ -1455,7 +1459,48 @@ Promise.all([
         );
       }
     };
-    const escapeRouteDropY = sceneH + 14;
+    const renderEscapeDagger = (lyr: Layer, topPos: Vec2, height: number) => {
+      const flickeringOpacity =
+        Math.sin(t / 20) / 30 + 0.5 + Math.random() * 0.05;
+      lyr.fillStyle = `rgba(162, 91, 79,${flickeringOpacity})`;
+      const x = topPos[0];
+      const y = topPos[1];
+      const w = 4.5;
+      const handleW = 15;
+      // handle
+      lyr.fillRect(
+        x - handleW / 2,
+        y + 7 + (Math.random() - 0.5),
+        handleW / 2 - w / 2,
+        w,
+      );
+      lyr.fillRect(
+        x + w / 2,
+        y + 7 + (Math.random() - 0.5),
+        handleW / 2 - w / 2,
+        w,
+      );
+      lyr.fillRect(
+        x - handleW / 2,
+        y + height - 25 + (Math.random() - 0.5),
+        handleW / 2 - w / 2,
+        w,
+      );
+      lyr.fillRect(
+        x + w / 2,
+        y + height - 25 + (Math.random() - 0.5),
+        handleW / 2 - w / 2,
+        w,
+      );
+      // blade
+      lyr.fillRect(
+        x - w / 2 + (Math.random() - 0.5),
+        y + (Math.random() - 0.5),
+        w,
+        height,
+      );
+    };
+    const escapeRouteDropY = sceneH;
 
     const renderStack = (
       lyr: Layer,
@@ -1623,7 +1668,7 @@ Promise.all([
       maxY = Math.max(maxY, renderStackResult.maxY);
       let label = getActionText(flowchart.frames[frameId].action);
       if (label.startsWith("call")) {
-        // special case to make call sigil look good for Elliot
+        // special case to make call sigil look good for Elliot's browser font rendering
         renderOutlinedText(renderStackResult.layerUsed, "call", [curX, myY], {
           textAlign: "left",
         });
@@ -1668,9 +1713,10 @@ Promise.all([
         });
       }
       if (isEscapeRoute(frameId, flowchart)) {
+        // render escape route mark on-top of escape route frame
         renderEscapeRouteMark(renderStackResult.layerUsed, [
-          myX - scenePadX / 2,
-          myY + sceneH / 2,
+          myX + sceneW / 2,
+          myY,
         ]);
       }
       curX = renderStackResult.maxX;
@@ -1713,29 +1759,15 @@ Promise.all([
           isEscapeRoute(nextStack.stackPath.final.frameId, flowchart) &&
           nextStack.stepIds.length === 0
         ) {
-          // don't draw it for real; just draw a mark below lastConnectionJoint
-          const markPos = add(lastConnectionJoint, [0, escapeRouteDropY]);
-          renderConnectorLine(lyrBelow, lastConnectionJoint, markPos);
-          renderEscapeRouteMark(lyr, markPos);
-
-          renderParchmentBox(lyrBelow, ...add(markPos, [10, -7]), 24, 14, {
+          // render disabled escape route mark
+          const markPos = add(lastConnectionJoint, [
+            sceneW / 2 + scenePadX / 2,
+            escapeRouteDropY,
+          ]);
+          renderEscapeRouteMark(lyr, markPos, undefined, true);
+          renderParchmentBox(lyrBelow, ...add(markPos, [-18, 7]), 36, 20, {
             empty: true,
           });
-
-          for (let i = 0; i < 1; i++) {
-            lyr.save();
-            lyr.beginPath();
-            lyr.arc(
-              markPos[0] + 13 + (i + 1) * 10,
-              markPos[1],
-              1.8,
-              0,
-              2 * Math.PI,
-            );
-            lyr.fillStyle = "#98433A";
-            lyr.fill();
-            lyr.restore();
-          }
           maxY = Math.max(maxY, markPos[1]);
           continue;
         }
@@ -1750,15 +1782,20 @@ Promise.all([
           curY,
           viewchart,
         );
+        if (isEscapeRoute(nextStack.stackPath.final.frameId, flowchart)) {
+          const x = curX + scenePadX + sceneW / 2;
+          const y = myY - scenePadY + 10;
+          renderEscapeDagger(lyrBelow, [x, y], curY - y);
+        }
         for (const v of child.finalPosForConnector)
           finalPosForConnectors.push(v);
 
         // draw connector line
-
         if (child.initialPosForConnector) {
           const start = [curX, myY + stackH / 2] as Vec2;
           const end = child.initialPosForConnector;
-          renderConnectorLine(lyrBelow, start, end);
+          if (!isEscapeRoute(nextStack.stackPath.final.frameId, flowchart))
+            renderConnectorLine(lyrBelow, start, end);
           lastConnectionJoint = add(child.initialPosForConnector, [
             -scenePadX / 2,
             0,
@@ -1772,13 +1809,18 @@ Promise.all([
 
       // do we need an escape route?
       if (steps.some((step) => step.isStuck) && !frame.escapeRouteFrameId) {
-        const markPos = add(lastConnectionJoint, [0, escapeRouteDropY]);
-        renderConnectorLine(lyr, lastConnectionJoint, markPos);
+        const markPos = add(lastConnectionJoint, [
+          sceneW / 2 + scenePadX / 2,
+          escapeRouteDropY - 10,
+        ]);
+        // render clickable escape route mark
+        finalPosForConnectors.push(markPos);
         renderEscapeRouteMark(lyr, markPos, () => {
           if (!frame.escapeRouteFrameId) {
             modifyFlowchart(flowchartId, (old) => addEscapeRoute(old, frameId));
           }
         });
+
         lyr.save();
         const pos = add(markPos, v(15, 0));
         lyr.translate(...pos);
@@ -1791,6 +1833,11 @@ Promise.all([
           color: "#A25848",
         });
         lyr.restore();
+
+        const x = curX + scenePadX + sceneW / 2;
+        const y = myY - scenePadY + 10;
+        renderEscapeDagger(lyrBelow, [x, y], markPos[1] - y);
+
         maxY = Math.max(maxY, markPos[1]);
       }
 
