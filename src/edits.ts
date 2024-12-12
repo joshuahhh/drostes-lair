@@ -18,7 +18,7 @@
 //     initialValue,
 //   );
 
-import { Action, Flowchart } from "./interpreter";
+import { Action, Flowchart, Frame } from "./interpreter";
 
 export const makeId = () => Math.random() + "";
 
@@ -69,7 +69,10 @@ export const addEscapeRoute = (fc: Flowchart, frameId: string) => {
   const newFc = structuredClone(fc);
   const newFrame = {
     id: Math.random() + "",
-  };
+    action: {
+      type: "escape",
+    },
+  } as Frame;
   newFc.frames[frameId].escapeRouteFrameId = newFrame.id;
   newFc.frames[newFrame.id] = newFrame;
   console.log(newFc);

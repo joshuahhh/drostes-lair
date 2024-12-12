@@ -21,6 +21,9 @@ export type Action =
       type: "start";
     }
   | {
+      type: "escape";
+    }
+  | {
       // this one won't be used in the real deal; we'll want to have
       // better ways than opaque functions to specify & show actions
       type: "test-func";
@@ -356,7 +359,7 @@ function performAction(
     }
   }
 
-  if (!action || action.type === "start") {
+  if (!action || action.type === "start" || action.type === "escape") {
     proceedWith([{ ...scene, actionAnnotation: undefined }]);
   } else if (action.type === "test-func") {
     proceedWith(action.func(scene));
@@ -973,6 +976,8 @@ export function getActionText(action?: Action): string {
     return "if";
   } else if (action.type === "start") {
     return "start";
+  } else if (action.type === "escape") {
+    return "";
   } else if (action.type === "workspace-pick") {
     return (
       "move " +
