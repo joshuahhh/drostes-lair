@@ -62,6 +62,23 @@ export type ActionAnnotation = {
   dst: [number, number];
 };
 
+export type ErrorAnnotation =
+  | { type: "scene"; scene: Scene & { type: "success" } }
+  | {
+      type: "workspace-pick-bad-source";
+      scene: Scene & { type: "success" };
+      source: number;
+    };
+
+export class ErrorWithAnnotation extends Error {
+  constructor(
+    message: string,
+    public annotation: ErrorAnnotation,
+  ) {
+    super(message);
+  }
+}
+
 export type Lens = {
   type: "domino-grid";
   dx: number;
@@ -142,6 +159,7 @@ export type Scene =
   | {
       type: "error";
       message: string;
+      errorAnnotation?: ErrorAnnotation;
     };
 
 export type SuccessfulStep = Step & { scene: { type: "success" } };
@@ -264,15 +282,22 @@ export function runAll(
         continuedSuccessfully = true;
       } catch (e) {
         // TODO: not sure this is the right place to output this...
+        let scene: Scene = { type: "error", message: "unknown" };
+        if (e instanceof ErrorWithAnnotation) {
+          scene = {
+            type: "error",
+            message: e.message,
+            errorAnnotation: e.annotation,
+          };
+        } else if (e instanceof Error) {
+          scene = { type: "error", message: e.message };
+        }
         const nextStep: Step = {
           id: `${step.id}→${nextFrameId}`,
           prevStepId: step.id,
           flowchartId,
           frameId: nextFrameId,
-          scene: {
-            type: "error",
-            message: (e as Error).message,
-          },
+          scene,
           caller,
         };
         traceTreeOut.steps[nextStep.id] = nextStep;
@@ -338,6 +363,13 @@ function performAction(
   } else if (action.type === "place-domino") {
     const { domino } = action;
     const { value } = scene;
+    const newScene: Scene = {
+      type: "success",
+      value: {
+        ...value,
+        dominoes: [...value.dominoes, action.domino],
+      },
+    };
     if (
       domino[0][0] < 0 ||
       domino[0][1] < 0 ||
@@ -348,17 +380,12 @@ function performAction(
       domino[1][0] >= value.width ||
       domino[1][1] >= value.height
     ) {
-      throw new Error("off the board");
+      throw new ErrorWithAnnotation("off the board", {
+        type: "scene",
+        scene: newScene,
+      });
     }
-    proceedWith([
-      {
-        type: "success",
-        value: {
-          ...value,
-          dominoes: [...value.dominoes, action.domino],
-        },
-      },
-    ]);
+    proceedWith([newScene]);
   } else if (action.type === "call") {
     // console.log("callDepth", callDepth);
     if (callDepth > 10) {
@@ -420,7 +447,11 @@ function performAction(
     const nextScenes = pickedIndices.map((pickedIndex) => {
       if (pickedIndex < 0 || pickedIndex >= sourceValue.length) {
         if (sourceValue.length === 0) {
-          throw new Error(`list is empty`);
+          throw new ErrorWithAnnotation(`list is empty`, {
+            type: "workspace-pick-bad-source",
+            scene: { type: "success", value },
+            source,
+          });
         } else {
           throw new Error(`off the list`);
         }
@@ -670,14 +701,15 @@ export function getCallerInfo(
  */
 
 export function topLevelValueForStep(
-  step: SuccessfulStep,
+  step: Step,
+  value: any,
   traceTree: TraceTree,
   defs: Definitions,
 ): unknown {
   if (step.caller) {
-    return topLevelValueForCall(step.scene.value, step.caller, traceTree, defs);
+    return topLevelValueForCall(value, step.caller, traceTree, defs);
   } else {
-    return step.scene.value;
+    return value;
   }
 }
 
@@ -689,17 +721,18 @@ function topLevelValueForCall(
 ): unknown {
   const callInfo = getCallerInfo(call, traceTree, defs);
   // BIG TODO: deal with missing lens
-  const lens = callInfo.frame.action.lens!;
-  const lensImpl = lenses[lens.type];
-  if (!lensImpl) {
-    throw new Error(`Lens type ${lens.type} not found`);
+  let value: any;
+  const lens = callInfo.frame.action.lens;
+  if (lens) {
+    const lensImpl = lenses[lens.type];
+    if (!lensImpl) {
+      throw new Error(`Lens type ${lens.type} not found`);
+    }
+    // figure out the value at this level by simulating early return
+    value = lensImpl.setPart(lens, callInfo.prevStep.scene.value, nestedValue);
+  } else {
+    value = nestedValue;
   }
-  // figure out the value at this level by simulating early return
-  const value = lensImpl.setPart(
-    lens,
-    callInfo.prevStep.scene.value,
-    nestedValue,
-  );
   // keep recursing if there's more to do
   if (callInfo.prevStep.caller) {
     return topLevelValueForCall(

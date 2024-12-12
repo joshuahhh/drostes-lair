@@ -8,7 +8,9 @@ import {
 } from "./edits";
 import {
   Action,
+  Definitions,
   Flowchart,
+  Frame,
   Scene,
   Stack,
   StackPath,
@@ -457,23 +459,27 @@ Promise.all([
     y: number,
     orientation: "h" | "v",
     justPlaced: boolean,
-    onClick?: () => void,
+    opts: {
+      onClick?: () => void;
+      isBad?: boolean;
+    } = {},
   ) => {
+    const { onClick, isBad } = opts;
+
     lyr.save();
-    const xywh = XYWH(
-      x - cellSize / 2 + dominoPadding,
-      y - cellSize / 2 + dominoPadding,
-      orientation === "h"
-        ? cellSize * 2 - dominoPadding * 2
-        : cellSize - dominoPadding * 2,
-      orientation === "v"
-        ? cellSize * 2 - dominoPadding * 2
-        : cellSize - dominoPadding * 2,
+    const xywh = expand(
+      XYWH(
+        x - cellSize / 2,
+        y - cellSize / 2,
+        orientation === "h" ? cellSize * 2 : cellSize,
+        orientation === "v" ? cellSize * 2 : cellSize,
+      ),
+      -dominoPadding,
     );
     if (justPlaced) {
       lyr.beginPath();
-      lyr.fillStyle = "#fce8a7";
-      lyr.shadowColor = "#fce8a7";
+      lyr.fillStyle = isBad ? `rgba(128,0,0,0.5)` : "#fce8a7";
+      lyr.shadowColor = isBad ? `rgba(128,0,0,0.5)` : "#fce8a7";
       lyr.shadowBlur = 8;
       lyr.rect(...expand(xywh, 2));
       lyr.fill();
@@ -591,6 +597,7 @@ Promise.all([
     }
 
     // dominoes
+    const lyrTop = lyr.spawnLater(); // so out-of-bounds dominoes go above the lens layers
     for (const domino of value.dominoes) {
       let justPlaced = false;
       if (action?.type === "place-domino") {
@@ -603,11 +610,18 @@ Promise.all([
       }
 
       const orientation = domino[0][0] === domino[1][0] ? "v" : "h";
+      const isBad =
+        domino[0][0] < 0 ||
+        domino[1][0] >= value.width ||
+        domino[0][1] < 0 ||
+        domino[1][1] >= value.height;
+
       renderDomino(
-        lyr,
+        justPlaced ? lyrTop : lyr,
         ...add(gridToXY(domino[0]), [cellSize / 2, cellSize / 2]),
         orientation,
         justPlaced,
+        { isBad },
       );
     }
 
@@ -647,6 +661,8 @@ Promise.all([
       lyr.strokeStyle = `hsl(${callHueSaturation} 50%)`;
       lyr.stroke();
     }
+
+    lyrTop.place();
   };
 
   const renderWorkspace = (
@@ -654,7 +670,10 @@ Promise.all([
     scene: Scene & { type: "success"; value: { contents: unknown[][] } },
     path: StackPath,
     pos: Vec2,
+    opts: { badSource?: number } = {},
   ) => {
+    const { badSource } = opts;
+
     const contents = scene.value.contents;
     let annotation = undefined;
     if (scene.actionAnnotation?.type === "workspace-pick") {
@@ -662,6 +681,7 @@ Promise.all([
     }
 
     const isDropTarget =
+      badSource === undefined &&
       path &&
       tool.type === "workspace-pick" &&
       stackPathToString(tool.stackPath) === stackPathToString(path);
@@ -689,8 +709,18 @@ Promise.all([
         idxInWorkspace,
         path,
         [pos[0] + 10, curY],
-        annotation?.src[0] === idxInWorkspace ? annotation?.src[1] : undefined,
-        annotation?.dst[0] === idxInWorkspace ? annotation?.dst[1] : undefined,
+        {
+          removalIdx:
+            annotation?.src[0] === idxInWorkspace
+              ? annotation?.src[1]
+              : undefined,
+          insertionIdx:
+            annotation?.dst[0] === idxInWorkspace
+              ? annotation?.dst[1]
+              : undefined,
+          isBad: badSource === idxInWorkspace,
+          interactable: badSource === undefined,
+        },
       );
       curY = maxY;
 
@@ -742,10 +772,17 @@ Promise.all([
     idxInWorkspace: number,
     path: StackPath | undefined,
     pos: Vec2,
-    removalIdx: number | undefined,
-    insertionIdx: number | undefined,
+    opt: {
+      removalIdx?: number;
+      insertionIdx?: number;
+      isBad?: boolean;
+      interactable?: boolean;
+    } = {},
   ): { maxY: number } => {
+    const { removalIdx, insertionIdx, isBad, interactable = true } = opt;
+
     const isDropTarget =
+      interactable &&
       path &&
       tool.type === "workspace-pick" &&
       stackPathToString(tool.stackPath) === stackPathToString(path);
@@ -802,14 +839,14 @@ Promise.all([
         }
         lyr.beginPath();
         lyr.lineWidth = 3;
-        lyr.strokeStyle = "#70665a";
+        lyr.strokeStyle = isBad ? `rgba(128,0,0,0.5)` : "#70665a";
         if (isRemoval) {
           lyr.setLineDash([4, 4]);
         }
         lyr.rect(...xywh);
         lyr.stroke();
         lyr.setLineDash([]);
-        if (!isRemoval && tool.type === "pointer" && path) {
+        if (interactable && !isRemoval && tool.type === "pointer" && path) {
           if (inXYWH(mouseX, mouseY, xywh)) {
             lyr.fillStyle = "rgba(255,200,0,0.4)";
             lyr.fill();
@@ -854,7 +891,7 @@ Promise.all([
     if (cellContents.length === 0) {
       lyr.beginPath();
       lyr.lineWidth = 3;
-      lyr.strokeStyle = "#70665a";
+      lyr.strokeStyle = isBad ? `rgba(128,0,0,0.5)` : "#70665a";
       lyr.moveTo(left, pos[1]);
       lyr.lineTo(left, pos[1] + cellSize);
       lyr.stroke();
@@ -885,7 +922,7 @@ Promise.all([
       });
     }
 
-    lyrRemoval;
+    lyrRemoval.place();
 
     return { maxY: pos[1] + cellSize };
   };
@@ -927,6 +964,53 @@ Promise.all([
     });
   };
 
+  const renderSceneValue = (
+    lyr: Layer,
+    step: Step,
+    value: any,
+    frame: Frame,
+    defs: Definitions,
+    topLeft: Vec2,
+  ) => {
+    value = topLevelValueForStep(step, value, traceTree, defs) as any;
+
+    lyr.save();
+    lyr.beginPath();
+    lyr.rect(...topLeft, sceneW, sceneH);
+    lyr.clip();
+
+    if (typeof value === "object" && value !== null && "dominoes" in value) {
+      renderDominoes(
+        lyr,
+        value as any,
+        stackPathForStep(step, traceTree),
+        frame.action,
+        topLeft,
+      );
+    } else if (
+      typeof value === "object" &&
+      value !== null &&
+      "type" in value &&
+      value.type === "workspace"
+    ) {
+      renderWorkspace(
+        lyr,
+        step.scene as any,
+        stackPathForStep(step, traceTree),
+        topLeft,
+      );
+    } else {
+      renderOutlinedText(
+        lyr,
+        JSON.stringify(value, null, 2) ?? "idk",
+        [topLeft[0] + 10, topLeft[1] + 10],
+        { textAlign: "left", textBaseline: "top" },
+      );
+    }
+
+    lyr.restore();
+  };
+
   const renderScene = (
     lyr: Layer,
     step: Step,
@@ -942,26 +1026,6 @@ Promise.all([
       onHover();
     }
 
-    if (step.scene.type === "error") {
-      // TODO: smaller box
-      renderParchmentBox(lyr, ...xywh, {
-        empty: true,
-      });
-      renderOutlinedText(
-        lyr,
-        step.scene.message,
-        [topleft[0] + 10, topleft[1] + 20],
-        {
-          textAlign: "left",
-          textBaseline: "top",
-          color: "#d66047",
-          size: 16,
-        },
-      );
-      return;
-    }
-    assertSuccessful(step);
-
     const isOutlined = traceTree.finalStepIds.includes(step.id);
 
     if (isOutlined) {
@@ -975,37 +1039,66 @@ Promise.all([
       lyr.stroke();
       lyr.restore();
     }
+    // if (step.scene.type === "error") {
+    //   lyr.save();
+    //   lyr.shadowColor = "white";
+    //   lyr.shadowBlur = 10;
+    //   lyr.beginPath();
+    //   lyr.lineWidth = 4;
+    //   lyr.strokeStyle = "#d66047";
+    //   lyr.rect(...xywh);
+    //   lyr.stroke();
+    //   lyr.restore();
+    // }
     renderParchmentBox(lyr, ...xywh);
 
-    const value = step.scene.value;
-    if (typeof value === "object" && value !== null && "dominoes" in value) {
-      const value = topLevelValueForStep(step, traceTree, defs) as any;
-      renderDominoes(
-        lyr,
-        value,
-        stackPathForStep(step, traceTree),
-        frame.action,
-        topleft,
-      );
-    } else if (
-      typeof value === "object" &&
-      value !== null &&
-      value.type === "workspace"
-    ) {
-      renderWorkspace(
-        lyr,
-        step.scene,
-        stackPathForStep(step, traceTree),
-        topleft,
-      );
-    } else {
+    if (step.scene.type === "error") {
+      const errorAnnotation = step.scene.errorAnnotation;
+      if (errorAnnotation) {
+        if (errorAnnotation.type === "workspace-pick-bad-source") {
+          renderWorkspace(
+            lyr,
+            errorAnnotation.scene,
+            stackPathForStep(step, traceTree),
+            topleft,
+            {
+              badSource: errorAnnotation.source,
+            },
+          );
+        }
+        if (errorAnnotation.type === "scene") {
+          renderSceneValue(
+            lyr,
+            step,
+            errorAnnotation.scene.value,
+            frame,
+            defs,
+            topleft,
+          );
+        }
+      }
+
+      lyr.do(() => {
+        const borderWidth = 4;
+        lyr.beginPath();
+        lyr.strokeStyle = `rgba(128,0,0,0.5)`;
+        lyr.lineWidth = borderWidth;
+        lyr.stroke;
+        lyr.rect(...expand(xywh, -borderWidth / 2));
+        lyr.stroke();
+      });
+
       renderOutlinedText(
         lyr,
-        JSON.stringify(value, null, 2) ?? "idk",
-        [topleft[0] + 10, topleft[1] + 10],
-        { textAlign: "left", textBaseline: "top" },
+        step.scene.message,
+        [topleft[0] + 10, topleft[1] + sceneH],
+        { textAlign: "left", color: "#e8816b" },
       );
+      return;
     }
+    assertSuccessful(step);
+
+    renderSceneValue(lyr, step, step.scene.value, frame, defs, topleft);
 
     if (tool.type === "purging-flame") {
       addClickHandler(xywh, () => {
@@ -1380,19 +1473,16 @@ Promise.all([
               curX + Math.floor(howManyTimesDidModWrap(...modArgs)) * stackFanX;
             targetY = mod(...modArgs);
           }
-          renderScene(
-            lyr,
-            step,
-            [
-              interpTo(stackPathString + stepIdx + "x", targetX - pan[0]) +
-                pan[0],
-              interpTo(stackPathString + stepIdx + "y", targetY - pan[1]) +
-                pan[1],
-            ],
-            () => {
-              hoveredStackPathString = stackPathString;
-            },
-          );
+
+          const xy: Vec2 = [
+            interpTo(stackPathString + stepIdx + "x", targetX - pan[0]) +
+              pan[0],
+            interpTo(stackPathString + stepIdx + "y", targetY - pan[1]) +
+              pan[1],
+          ];
+          renderScene(lyr, step, xy, () => {
+            hoveredStackPathString = stackPathString;
+          });
 
           if (stepIdx === 0) {
             // TODO: Only one step is used to determine size. This is
@@ -1756,8 +1846,6 @@ Promise.all([
         0,
         undefined,
         add([mouseX, mouseY], v(-cellSize / 2)),
-        undefined,
-        undefined,
       );
     } else if (tool.type === "purging-flame") {
       renderSpriteSheet(
@@ -1810,8 +1898,10 @@ Promise.all([
       c.height - 20 - (cellSize - dominoPadding * 2),
       "h",
       false,
-      () => {
-        tool = { type: "domino", orientation: "h" };
+      {
+        onClick: () => {
+          tool = { type: "domino", orientation: "h" };
+        },
       },
     );
     renderDomino(
@@ -1820,8 +1910,10 @@ Promise.all([
       c.height - 20 - (2 * cellSize - dominoPadding * 2),
       "v",
       false,
-      () => {
-        tool = { type: "domino", orientation: "v" };
+      {
+        onClick: () => {
+          tool = { type: "domino", orientation: "v" };
+        },
       },
     );
 
