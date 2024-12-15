@@ -377,7 +377,7 @@ async function main() {
     if (e.key >= "1" && e.key <= "9") {
       viewDepth = parseInt(e.key) - 1;
     }
-    if (e.key === "0") {
+    if (e.key === "0" && !(e.ctrlKey || e.metaKey)) {
       viewDepth = Infinity;
     }
   });
