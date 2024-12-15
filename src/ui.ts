@@ -1257,7 +1257,14 @@ async function main() {
     ctxReal.fillStyle = "rgba(255, 255, 255, 0.2)";
     ctxReal.fillRect(0, 0, c.width, c.height);
 
-    const renderConnectorLine = (lyr: Layer, start: Vec2, end: Vec2) => {
+    const renderConnectorLine = (
+      lyr: Layer,
+      start: Vec2,
+      end: Vec2,
+      opts: { dead?: boolean } = {},
+    ) => {
+      const { dead = false } = opts;
+
       const middleX = start[0] + (end[0] - start[0]) / 2;
       const paddedEndX = end[0] - 10;
       const jointX = Math.max(middleX, paddedEndX);
@@ -1271,7 +1278,11 @@ async function main() {
       lyr.lineTo(...[jointX, end[1]]);
       lyr.lineTo(...end);
       lyr.strokeStyle = "rgb(170, 113, 37)";
-      lyr.lineWidth = 5;
+      lyr.lineWidth = dead ? 2 : 5;
+      //// or maybe we want dashed lines?
+      // if (dead) {
+      //   lyr.setLineDash([4, 2]);
+      // }
       lyr.stroke();
       lyr.restore();
     };
@@ -1355,8 +1366,13 @@ async function main() {
       );
 
       // final connector lines, out of viewchart
-      for (const v of r.finalPosForConnector) {
-        renderConnectorLine(lyrBelow, v, [r.maxX, topLeft[1] + sceneH / 2]);
+      for (const v of r.finalPosForConnectors) {
+        renderConnectorLine(
+          lyrBelow,
+          v.pos,
+          [r.maxX, topLeft[1] + sceneH / 2],
+          { dead: v.dead },
+        );
       }
 
       // initial little connector line on the left
@@ -1637,7 +1653,7 @@ async function main() {
       maxX: number;
       maxY: number;
       initialPosForConnector: Vec2 | undefined;
-      finalPosForConnector: Vec2[];
+      finalPosForConnectors: { pos: Vec2; dead: boolean }[];
     } => {
       const lyrAbove = lyr.spawnLater();
       const lyrBelow = lyr.spawnHere();
@@ -1784,20 +1800,21 @@ async function main() {
         );
       }
 
-      const isErrorStack = stack.stepIds
+      const hasSuccess = stack.stepIds
         .map((stepId) => traceTree.steps[stepId])
-        .every((step) => step.scene.type === "error");
-      const isEmptyStack = stack.stepIds.length === 0;
+        .some((step) => step.scene.type === "success");
 
       // render downstream
       let maxX = curX + scenePadX;
       const nextStacks = getNextStacksInLevel(stack, stepsInStacks, defs);
-      const finalPosForConnectors: Vec2[] = [];
+      const finalPosForConnectors: { pos: Vec2; dead: boolean }[] = [];
       // hacky thing to position unused escape routes or escape-route ghosts
       let lastConnectionJoint: Vec2 = [curX + scenePadX / 2, myY + sceneH / 2];
       if (nextStacks.length === 0) {
-        if (!isEmptyStack && !isErrorStack)
-          finalPosForConnectors.push([curX, myY + stackH / 2]);
+        finalPosForConnectors.push({
+          pos: [curX, myY + stackH / 2],
+          dead: !hasSuccess,
+        });
       }
       for (const [i, nextStack] of nextStacks.entries()) {
         if (
@@ -1829,8 +1846,8 @@ async function main() {
           curY,
           viewchart,
         );
-        for (const v of child.finalPosForConnector) {
-          if (!isEmptyStack && !isErrorStack) finalPosForConnectors.push(v);
+        for (const v of child.finalPosForConnectors) {
+          finalPosForConnectors.push(v);
         }
         if (isEscapeRoute(nextStack.stackPath.final.frameId, flowchart)) {
           const x = curX + scenePadX + sceneW / 2;
@@ -1843,12 +1860,8 @@ async function main() {
           const start = [curX, myY + stackH / 2] as Vec2;
           const end = child.initialPosForConnector;
 
-          if (
-            !isEmptyStack &&
-            !isErrorStack &&
-            !isEscapeRoute(nextStack.stackPath.final.frameId, flowchart)
-          ) {
-            renderConnectorLine(lyrBelow, start, end);
+          if (!isEscapeRoute(nextStack.stackPath.final.frameId, flowchart)) {
+            renderConnectorLine(lyrBelow, start, end, { dead: !hasSuccess });
             lastConnectionJoint = add(child.initialPosForConnector, [
               -scenePadX / 2,
               0,
@@ -1873,7 +1886,7 @@ async function main() {
             modifyFlowchart(flowchartId, (old) => addEscapeRoute(old, frameId));
           }
         });
-        finalPosForConnectors.push(markPos);
+        finalPosForConnectors.push({ pos: markPos, dead: !hasSuccess });
 
         lyr.save();
         const pos = add(markPos, v(15, 0));
@@ -1913,7 +1926,7 @@ async function main() {
           myX,
           myY + (drewCallHole ? sceneH / 2 : stackH / 2),
         ],
-        finalPosForConnector: finalPosForConnectors,
+        finalPosForConnectors,
       };
     };
     const stepsInStacks = putStepsInStacks(traceTree);
