@@ -1566,8 +1566,9 @@ async function main() {
       let maxY = myY;
 
       const hovered =
-        inXYWH(mouseX, mouseY, [curX, myY, sceneW, sceneH]) ||
-        hoveredStackPathString === stackPathString;
+        (inXYWH(mouseX, mouseY, [curX, myY, sceneW, sceneH]) ||
+          hoveredStackPathString === stackPathString) &&
+        myY < c.height - sceneH; // weird stuff happens (inc. crash) if we hover a stack too close to bottom
 
       if (hovered) {
         hoveredStackPathString = undefined;
