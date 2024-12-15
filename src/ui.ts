@@ -44,7 +44,6 @@ import {
   fillRect,
   fillRectGradient,
   inXYWH,
-  loadAudio,
   loadImg,
   saveFile,
 } from "./ui_util";
@@ -247,16 +246,18 @@ resizeObserver.observe(cContainer);
 const ctxReal = c.getContext("2d")!;
 
 async function main() {
-  const [imgParchment, imgAsfault, imgCandleSheet, audAmbient] =
-    await Promise.all([
-      loadImg("./parchment.jpg"),
-      loadImg("./asfault.jpg"),
-      loadImg("./candle_sheet.png"),
-      loadAudio("./ambient.mp3"),
-    ]);
+  const [imgParchment, imgAsfault, imgCandleSheet] = await Promise.all([
+    loadImg("./parchment.jpg"),
+    loadImg("./asfault.jpg"),
+    loadImg("./candle_sheet.png"),
+  ]);
 
   const patternParchment = ctxReal.createPattern(imgParchment, "repeat")!;
   const patternAsfault = ctxReal.createPattern(imgAsfault, "repeat")!;
+
+  const backgroundMusic = new Audio("./ambient.mp3");
+  backgroundMusic.loop = true;
+  let isPlayingBackgroundMusic = false;
 
   const renderCandle = makeCandleRenderer(imgCandleSheet);
 
@@ -269,10 +270,6 @@ async function main() {
   const addClickHandler = (xywh: XYWH, callback: Function) => {
     _clickables.push({ xywh, callback });
   };
-
-  // start ambient audio
-  audAmbient.loop = true;
-  audAmbient.start();
 
   let tool:
     | { type: "pointer" }
@@ -2060,14 +2057,42 @@ async function main() {
       tool = { type: "purging-flame" };
     });
 
+    // the ear
+    lyrAbove.do(() => {
+      lyrAbove.fillStyle = isPlayingBackgroundMusic
+        ? "rgba(0, 0, 0, 1)"
+        : "rgba(0, 0, 0, 0.5)";
+      lyrAbove.textAlign = "right";
+      lyrAbove.textBaseline = "bottom";
+      lyrAbove.font = "35px serif";
+      lyrAbove.fillText("𓂈", c.width - 9, c.height - 35);
+    });
+    addClickHandler([c.width - 38, c.height - 69, 38, 30], async () => {
+      if (!isPlayingBackgroundMusic) {
+        try {
+          // On the first user interaction, try playing the audio
+          await backgroundMusic.play();
+          isPlayingBackgroundMusic = true;
+        } catch (error) {
+          console.error("Failed to start audio playback:", error);
+          isPlayingBackgroundMusic = false;
+        }
+      } else {
+        // If it was already playing, just pause it
+        backgroundMusic.pause();
+        isPlayingBackgroundMusic = false;
+      }
+    });
+
+    // the eye
     lyrAbove.do(() => {
       lyrAbove.fillStyle = "rgba(0, 0, 0, 1)";
       lyrAbove.textAlign = "right";
       lyrAbove.textBaseline = "bottom";
       lyrAbove.font = "20px serif";
-      lyrAbove.fillText("𓂀", c.width - 5, c.height - 5);
+      lyrAbove.fillText("𓂀", c.width - 8, c.height - 8);
     });
-    addClickHandler([c.width - 20, c.height - 20, 20, 20], () => {
+    addClickHandler([c.width - 38, c.height - 33, 38, 30], () => {
       window.location.href = "./credits.html";
     });
 
