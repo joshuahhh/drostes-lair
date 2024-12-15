@@ -382,7 +382,7 @@ export const examples = assertExtends<Record<string, UIState>>()({
   cardsBlank: {
     initialValue: {
       type: "workspace",
-      contents: [["K", "Q", "J", "A"], ["♠", "♣", "♦", "♥"], []],
+      contents: [["K", "Q", "J"], ["♠", "♣", "♦", "♥"], []],
     },
     initialFlowchartId: "♌︎",
     defs: {
@@ -400,7 +400,7 @@ export const examples = assertExtends<Record<string, UIState>>()({
     initialValue: {
       type: "workspace",
       contents: [
-        ["K", "Q", "J", "A"],
+        ["K", "Q", "J"],
         ["♠", "♣", "♦", "♥"],
       ],
     },
@@ -461,7 +461,7 @@ export const examples = assertExtends<Record<string, UIState>>()({
     initialValue: {
       type: "workspace",
       contents: [
-        ["K", "Q", "J", "A"],
+        ["K", "Q", "J"],
         ["♠", "♣", "♦", "♥"],
       ],
     },
@@ -521,7 +521,7 @@ export const examples = assertExtends<Record<string, UIState>>()({
     initialValue: {
       type: "workspace",
       contents: [
-        ["K", "Q", "J", "A"],
+        ["K", "Q", "J"],
         ["♠", "♣", "♦", "♥"],
       ],
     },
