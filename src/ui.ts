@@ -914,7 +914,9 @@ async function main() {
           lyr.font = "14px serif";
           lyr.textAlign = "center";
           lyr.textBaseline = "middle";
-          lyr.fillStyle = "rgba(0,0,0,0.8)";
+          lyr.fillStyle = ["♦", "♥"].includes(cell.value as string)
+            ? "rgba(200,0,0,0.8)"
+            : "rgba(0,0,0,0.8)";
           lyr.fillText(
             typeof cell.value === "string"
               ? cell.value
