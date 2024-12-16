@@ -499,7 +499,7 @@ function performAction(
         newWorkspace.splice(target.index + 1, 0, [pickedItem]);
         annotation = {
           type: "workspace-pick",
-          src: [source, pickedIndex],
+          src: [source >= target.index + 1 ? source + 1 : source, pickedIndex],
           dst: [target.index + 1, 0],
         };
       } else {

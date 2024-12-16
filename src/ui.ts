@@ -8,6 +8,7 @@ import {
 } from "./edits";
 import {
   Action,
+  ActionAnnotation,
   Definitions,
   Flowchart,
   Frame,
@@ -707,7 +708,9 @@ async function main() {
     const lyrTop = lyr.spawnLater(); // so drop target lines go above the contents
 
     const contents = scene.value.contents;
-    let annotation = undefined;
+    let annotation:
+      | (ActionAnnotation & { type: "workspace-pick" })
+      | undefined = undefined;
     if (scene.actionAnnotation?.type === "workspace-pick") {
       annotation = scene.actionAnnotation;
     }
