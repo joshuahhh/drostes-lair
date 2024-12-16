@@ -399,17 +399,22 @@ async function main() {
   let mouseY = 0;
   let mouseDown = false;
   let isDragging = false;
-  c.addEventListener("mousemove", (e) => {
+  c.addEventListener("pointermove", (e) => {
     // clientX/Y works better than offsetX/Y for Chrome/Safari compatibility.
 
     // add "feel good" numbers for the shape of the cursor
     mouseX = e.clientX + 7;
     mouseY = e.clientY + 3;
+
+    if (e.shiftKey || mouseDown) {
+      isDragging = true;
+      setPan(add(pan, [e.movementX, e.movementY]));
+    }
   });
-  c.addEventListener("mousedown", () => {
+  c.addEventListener("pointerdown", () => {
     mouseDown = true;
   });
-  c.addEventListener("mouseup", () => {
+  c.addEventListener("pointerup", () => {
     mouseDown = false;
     isDragging = false;
   });
@@ -1275,14 +1280,6 @@ async function main() {
       });
     }
   };
-
-  // panning
-  c.addEventListener("mousemove", (e) => {
-    if (e.shiftKey || mouseDown) {
-      isDragging = true;
-      setPan(add(pan, [e.movementX, e.movementY]));
-    }
-  });
 
   let lastEndTime = performance.now();
 
