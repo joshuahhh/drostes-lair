@@ -838,20 +838,23 @@ async function main() {
         stretch: 1,
         stretchMin: 0,
         stretchMax: 50,
-        padStart: 4,
+        padStart: 3,
         padEnd: 8,
         flip: (getSector(angle) % 2 === 0) !== angleAroundCenter > 0,
         straights: false,
       });
 
       lyrTop.do((lyr) => {
-        lyr.beginPath();
         lyr.lineWidth = 2;
         lyr.strokeStyle = "#fce8a7cc";
         lyr.fillStyle = "#fce8a7cc";
         lyr.shadowColor = "rgba(0,0,0,0.6)";
         lyr.shadowOffsetY = 2;
         lyr.shadowBlur = 10;
+
+        lyr.beginPath();
+        lyr.arc(...removalPt, 3, 0, Math.PI * 2);
+        lyr.fill();
 
         drawArrow(lyr, arrow, {
           headLength: Math.min(12, dist / 4),
