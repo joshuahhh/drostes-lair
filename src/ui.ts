@@ -112,6 +112,21 @@ const zodiacRankedInOrderOfCoolness = [
   "♏︎",
 ];
 
+const zodiacToBoring: Record<string, string> = {
+  "♌︎": "A",
+  "♋︎": "B",
+  "♈︎": "C",
+  "♉︎": "D",
+  "♊︎": "E",
+  "♍︎": "F",
+  "♎︎": "G",
+  "♐︎": "H",
+  "♑︎": "I",
+  "♒︎": "J",
+  "♓︎": "K",
+  "♏︎": "L",
+};
+
 let callHueSaturation = "249deg 37%";
 
 // Nested `act` calls are supposed to be batched – the nested calls
@@ -131,6 +146,8 @@ const act = (f: (stateYouCanChange: UIState) => void) => {
     f(curStateYouCanChange);
   }
 };
+
+let isBoring = false;
 
 // DEFAULT FLOWCHART RIGHT HERE BUDDY
 let undoStack: UIState[] = [examples.dominoesBlank];
@@ -384,6 +401,9 @@ async function main() {
     if (e.key === "0" && !(e.ctrlKey || e.metaKey)) {
       viewDepth = Infinity;
     }
+    if (e.key === "b" && (e.ctrlKey || e.metaKey)) {
+      isBoring = !isBoring;
+    }
   });
   window.addEventListener("keyup", (e) => {
     if (e.key === "Shift") {
@@ -457,9 +477,11 @@ async function main() {
     const xywh = [x, y, w, h] as const;
 
     lyr.save();
-    lyr.shadowColor = "rgba(0,0,0,1)";
-    lyr.shadowOffsetY = 4;
-    lyr.shadowBlur = 15;
+    if (!isBoring) {
+      lyr.shadowColor = "rgba(0,0,0,1)";
+      lyr.shadowOffsetY = 4;
+      lyr.shadowBlur = 15;
+    }
     if (empty) {
       lyr.globalAlpha = 0.3;
     }
@@ -468,7 +490,12 @@ async function main() {
       lyr.fillStyle = "black";
       lyr.fillRect(...xywh);
     }
-    lyr.drawImage(imgParchment, Math.random(), Math.random(), w, h, ...xywh);
+    if (isBoring) {
+      lyr.fillStyle = "#eee";
+      lyr.fillRect(...xywh);
+    } else {
+      lyr.drawImage(imgParchment, Math.random(), Math.random(), w, h, ...xywh);
+    }
     if (empty) {
       lyr.globalAlpha = 1;
       lyr.strokeStyle = "rgba(183,167,148)";
@@ -675,7 +702,7 @@ async function main() {
       lyr.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
       // use parchment fade or darkness fade?
       if (true) {
-        lyr.fillStyle = patternParchment;
+        lyr.fillStyle = isBoring ? "white" : patternParchment;
         patternParchment.setTransform(new DOMMatrix().translate(...pan, 0));
         lyr.globalAlpha = i === path.callPath.length - 1 ? 0.8 : 0.4;
       } else {
@@ -954,8 +981,10 @@ async function main() {
           lyr.save();
           lyr.beginPath();
           lyr.fillStyle = "#fce8a7";
-          lyr.shadowColor = "#fce8a7";
-          lyr.shadowBlur = 8;
+          if (!isBoring) {
+            lyr.shadowColor = "#fce8a7";
+            lyr.shadowBlur = 8;
+          }
           lyr.rect(...expand(xywh, 2));
           lyr.fill();
           lyr.restore();
@@ -1287,6 +1316,9 @@ async function main() {
     requestAnimationFrame(drawLoop);
     t++;
 
+    (window as any).isBoring = isBoring;
+    window.document.title = isBoring ? "Microsoft Lair 95" : "Droste's Lair";
+
     // oscillate around violet
     const hueRotation = 250 + Math.sin(t / 100) * 15;
     callHueSaturation = `${hueRotation.toFixed(2)}deg 37%`;
@@ -1318,8 +1350,9 @@ async function main() {
 
     _clickables = [];
 
-    c.style.cursor =
-      tool.type === "pointer"
+    c.style.cursor = isBoring
+      ? "default"
+      : tool.type === "pointer"
         ? mouseDown
           ? "url('./glove2.png'), pointer"
           : shiftHeld
@@ -1330,11 +1363,16 @@ async function main() {
           : "none";
 
     // draw background
-    ctxReal.fillStyle = patternAsfault;
-    patternAsfault.setTransform(new DOMMatrix().translate(...pan, 0));
-    ctxReal.fillRect(0, 0, c.width, c.height);
-    ctxReal.fillStyle = "rgba(255, 255, 255, 0.2)";
-    ctxReal.fillRect(0, 0, c.width, c.height);
+    if (isBoring) {
+      ctxReal.fillStyle = "white";
+      ctxReal.fillRect(0, 0, c.width, c.height);
+    } else {
+      ctxReal.fillStyle = patternAsfault;
+      patternAsfault.setTransform(new DOMMatrix().translate(...pan, 0));
+      ctxReal.fillRect(0, 0, c.width, c.height);
+      ctxReal.fillStyle = "rgba(255, 255, 255, 0.2)";
+      ctxReal.fillRect(0, 0, c.width, c.height);
+    }
 
     const renderConnectorLine = (
       lyr: Layer,
@@ -1350,8 +1388,10 @@ async function main() {
       lyr.save();
 
       lyr.beginPath();
-      lyr.globalAlpha = 0.2;
-      lyr.globalCompositeOperation = "screen";
+      if (!isBoring) {
+        lyr.globalAlpha = 0.2;
+        lyr.globalCompositeOperation = "screen";
+      }
       lyr.moveTo(...start);
       lyr.lineTo(...[jointX, start[1]]);
       lyr.lineTo(...[jointX, end[1]]);
@@ -1372,13 +1412,18 @@ async function main() {
       pos: Vec2,
       exists: boolean = true,
     ) => {
-      renderOutlinedText(lyr, flowchartId, pos, {
-        textAlign: "left",
-        textBaseline: "top",
-        size: 40,
-        family: "monospace",
-        color: `hsl(${callHueSaturation} 70% ${exists ? "" : "/ 50%"})`,
-      });
+      renderOutlinedText(
+        lyr,
+        isBoring ? (zodiacToBoring[flowchartId] ?? flowchartId) : flowchartId,
+        pos,
+        {
+          textAlign: "left",
+          textBaseline: "top",
+          size: 40,
+          family: "monospace",
+          color: `hsl(${callHueSaturation} 70% ${exists ? "" : "/ 50%"})`,
+        },
+      );
       if (tool.type === "pointer") {
         addClickHandler([...pos, 40, 40], () => {
           tool = { type: "call", flowchartId };
@@ -1475,8 +1520,19 @@ async function main() {
       const callPathStr = JSON.stringify(callPath);
       const w = interpTo(`inset-${callPathStr}-w`, maxX + callPad - curX);
       const h = interpTo(`inset-${callPathStr}-h`, maxY + callPad - curY);
-      lyr.fillStyle = `rgba(0, 0, 0, ${0.15 * callPath.length})`;
-      lyr.fillRect(curX, curY + callTopPad, w, h - callTopPad);
+      if (isBoring) {
+        lyr.strokeStyle = "black";
+        lyr.lineWidth = 1;
+        lyr.strokeRect(curX, curY, w, h);
+      } else {
+        lyr.fillStyle = `rgba(0, 0, 0, ${0.15 * callPath.length})`;
+        lyr.fillRect(curX, curY + callTopPad, w, h - callTopPad);
+      }
+
+      if (isBoring) {
+        return;
+      }
+
       // shadows (via gradients inset from the edges)
       // left
       fillRectGradient(
@@ -1547,9 +1603,11 @@ async function main() {
       // the actual circle with texture because it caused perf issues
       // to draw the actual circle with a shadow.
       lyr.save();
-      lyr.shadowColor = disabled ? "rgba(0,0,0,0.6)" : `rgba(100,10,10,0.7)`;
-      lyr.shadowOffsetY = 2;
-      lyr.shadowBlur = 10;
+      if (!isBoring) {
+        lyr.shadowColor = disabled ? "rgba(0,0,0,0.6)" : `rgba(100,10,10,0.7)`;
+        lyr.shadowOffsetY = 2;
+        lyr.shadowBlur = 10;
+      }
       lyr.beginPath();
       lyr.arc(...centerPos, markRadius, 0, 2 * Math.PI);
       lyr.fill();
@@ -1562,8 +1620,9 @@ async function main() {
       lyr.fillStyle = patternParchment;
       lyr.fill();
       lyr.restore();
-      const flickeringOpacity =
-        Math.sin(t / 20) / 30 + 0.5 + Math.random() * 0.05;
+      const flickeringOpacity = isBoring
+        ? 0.5
+        : Math.sin(t / 20) / 30 + 0.5 + Math.random() * 0.05;
       lyr.fillStyle = disabled ? "gray" : `rgba(128,0,0,${flickeringOpacity})`;
 
       lyr.lineWidth = 1;
@@ -1571,13 +1630,15 @@ async function main() {
       lyr.stroke();
       lyr.fill();
 
-      lyr.save();
-      lyr.fillStyle = "rgba(0, 0, 0, 0.8)";
-      lyr.font = "25px serif";
-      lyr.textAlign = "center";
-      lyr.textBaseline = "middle";
-      lyr.fillText("‡", ...add(centerPos, v(0, 1)));
-      lyr.restore();
+      if (!isBoring) {
+        lyr.save();
+        lyr.fillStyle = "rgba(0, 0, 0, 0.8)";
+        lyr.font = "25px serif";
+        lyr.textAlign = "center";
+        lyr.textBaseline = "middle";
+        lyr.fillText("‡", ...add(centerPos, v(0, 1)));
+        lyr.restore();
+      }
 
       if (onClick) {
         addClickHandler(
@@ -1592,42 +1653,45 @@ async function main() {
       }
     };
     const renderEscapeDagger = (lyr: Layer, topPos: Vec2, height: number) => {
-      const flickeringOpacity =
-        Math.sin(t / 20) / 30 + 0.5 + Math.random() * 0.05;
+      const flickeringOpacity = isBoring
+        ? 0.5
+        : Math.sin(t / 20) / 30 + 0.5 + Math.random() * 0.05;
       lyr.fillStyle = `rgba(162, 91, 79,${flickeringOpacity})`;
       const x = topPos[0];
       const y = topPos[1];
       const w = 4.5;
       const handleW = 15;
-      // handle
-      lyr.fillRect(
-        x - handleW / 2,
-        y + 7 + (Math.random() - 0.5),
-        handleW / 2 - w / 2,
-        w,
-      );
-      lyr.fillRect(
-        x + w / 2,
-        y + 7 + (Math.random() - 0.5),
-        handleW / 2 - w / 2,
-        w,
-      );
-      lyr.fillRect(
-        x - handleW / 2,
-        y + height - 25 + (Math.random() - 0.5),
-        handleW / 2 - w / 2,
-        w,
-      );
-      lyr.fillRect(
-        x + w / 2,
-        y + height - 25 + (Math.random() - 0.5),
-        handleW / 2 - w / 2,
-        w,
-      );
+      if (!isBoring) {
+        // handle
+        lyr.fillRect(
+          x - handleW / 2,
+          y + 7 + (Math.random() - 0.5),
+          handleW / 2 - w / 2,
+          w,
+        );
+        lyr.fillRect(
+          x + w / 2,
+          y + 7 + (Math.random() - 0.5),
+          handleW / 2 - w / 2,
+          w,
+        );
+        lyr.fillRect(
+          x - handleW / 2,
+          y + height - 25 + (Math.random() - 0.5),
+          handleW / 2 - w / 2,
+          w,
+        );
+        lyr.fillRect(
+          x + w / 2,
+          y + height - 25 + (Math.random() - 0.5),
+          handleW / 2 - w / 2,
+          w,
+        );
+      }
       // blade
       lyr.fillRect(
-        x - w / 2 + (Math.random() - 0.5),
-        y + (Math.random() - 0.5),
+        x - w / 2 + (isBoring ? 0 : Math.random() - 0.5),
+        y + (isBoring ? 0 : Math.random() - 0.5),
         w,
         height,
       );
@@ -1802,7 +1866,7 @@ async function main() {
       }
       maxY = Math.max(maxY, renderStackResult.maxY);
       let label = getActionText(flowchart.frames[frameId].action);
-      if (label.startsWith("call")) {
+      if (label.startsWith("call") && !isBoring) {
         // special case to make call sigil look good for Elliot's browser font rendering
         renderOutlinedText(renderStackResult.layerUsed, "call", [curX, myY], {
           textAlign: "left",
@@ -1819,6 +1883,9 @@ async function main() {
           },
         );
       } else {
+        if (isBoring) {
+          label = label.replace(flowchartId, zodiacToBoring[flowchartId] ?? "");
+        }
         renderOutlinedText(renderStackResult.layerUsed, label, [curX, myY], {
           textAlign: "left",
         });
@@ -1971,7 +2038,9 @@ async function main() {
         lyr.save();
         const pos = add(markPos, v(15, 0));
         lyr.translate(...pos);
-        lyr.scale(1 + Math.sin(t / 10) * 0.1, 1 + Math.sin(t / 10) * 0.1);
+        if (!isBoring) {
+          lyr.scale(1 + Math.sin(t / 10) * 0.1, 1 + Math.sin(t / 10) * 0.1);
+        }
         lyr.translate(...mul(-1, pos));
         renderOutlinedText(lyr, "!?", add(markPos, v(15, 0)), {
           textAlign: "left",
@@ -2050,11 +2119,17 @@ async function main() {
     } else if (tool.type === "domino") {
       renderDomino(lyrAbove, mouseX, mouseY, tool.orientation, false);
     } else if (tool.type === "call") {
-      renderOutlinedText(lyrAbove, tool.flowchartId, [mouseX, mouseY], {
-        size: 40,
-        color: `hsl(${callHueSaturation} 70%)`,
-        family: "monospace",
-      });
+      const { flowchartId } = tool;
+      renderOutlinedText(
+        lyrAbove,
+        isBoring ? (zodiacToBoring[flowchartId] ?? flowchartId) : flowchartId,
+        [mouseX, mouseY],
+        {
+          size: 40,
+          color: `hsl(${callHueSaturation} 70%)`,
+          family: "monospace",
+        },
+      );
     } else if (tool.type === "workspace-pick") {
       renderWorkspaceValue(
         lyrAbove,
@@ -2085,6 +2160,16 @@ async function main() {
       ...Object.values(state.defs.flowcharts).map((f) => f.id),
       zodiacRankedInOrderOfCoolness.find((z) => !state.defs.flowcharts[z])!,
     ];
+
+    if (isBoring) {
+      lyrAbove.save();
+      lyrAbove.beginPath();
+      lyrAbove.font = "italic bold 40px Verdana";
+      lyrAbove.textAlign = "left";
+      lyrAbove.textBaseline = "top";
+      lyrAbove.fillText("Microsoft Lair 95", 20, 20);
+      lyrAbove.restore();
+    }
 
     // render inventory drawer
     // 300
@@ -2134,7 +2219,11 @@ async function main() {
       },
     );
 
-    renderCandle(lyrAbove);
+    if (isBoring) {
+      // TODO: boring delete tool
+    } else {
+      renderCandle(lyrAbove);
+    }
 
     addClickHandler([c.width - 145, c.height - 160, 90, 130], () => {
       tool = { type: "purging-flame" };
@@ -2148,7 +2237,7 @@ async function main() {
       lyrAbove.textAlign = "right";
       lyrAbove.textBaseline = "bottom";
       lyrAbove.font = "35px serif";
-      lyrAbove.fillText("𓂈", c.width - 9, c.height - 35);
+      lyrAbove.fillText(isBoring ? "sound" : "𓂈", c.width - 9, c.height - 35);
     });
     addClickHandler([c.width - 38, c.height - 69, 38, 30], async () => {
       if (!isPlayingBackgroundMusic) {
@@ -2173,7 +2262,7 @@ async function main() {
       lyrAbove.textAlign = "right";
       lyrAbove.textBaseline = "bottom";
       lyrAbove.font = "20px serif";
-      lyrAbove.fillText("𓂀", c.width - 8, c.height - 8);
+      lyrAbove.fillText(isBoring ? "credits" : "𓂀", c.width - 8, c.height - 8);
     });
     addClickHandler([c.width - 38, c.height - 33, 38, 30], () => {
       window.location.href = "./credits.html";
