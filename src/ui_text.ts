@@ -1,3 +1,4 @@
+import { Layer } from "./layer";
 import { add, Vec2 } from "./vec2";
 
 export const strokeMultiline = (
@@ -26,7 +27,7 @@ export const fillMultiline = (
 };
 
 export const drawOutlinedText = (
-  ctx: CanvasRenderingContext2D,
+  lyr: Layer,
   text: string,
   pos: Vec2,
   opts: {
@@ -37,21 +38,42 @@ export const drawOutlinedText = (
     color?: string;
   } = {},
 ) => {
-  const {
-    textAlign = "center",
-    textBaseline = "middle",
-    size = 12,
-    family = "serif",
-    color = "#D9BE67",
-  } = opts;
+  lyr.withContext((ctx) => {
+    const {
+      textAlign = "center",
+      textBaseline = "middle",
+      size = 12,
+      family = "serif",
+      color = "#D9BE67",
+    } = opts;
 
-  ctx.font = `${size}px ${family}`;
-  ctx.textAlign = textAlign;
-  ctx.textBaseline = textBaseline;
+    ctx.font = `${size}px ${family}`;
+    ctx.textAlign = textAlign;
+    ctx.textBaseline = textBaseline;
 
-  ctx.strokeStyle = "#2B2B29";
-  ctx.lineWidth = 6;
-  strokeMultiline(ctx, text, ...add(pos, [0, 1]), size);
-  ctx.fillStyle = color;
-  fillMultiline(ctx, text, ...pos, size);
+    if ((window as any).isBoring) {
+      const width = ctx.measureText(text).width;
+      ctx.fillStyle = color;
+      ctx.fillRect(
+        pos[0] +
+          (textAlign === "center"
+            ? -width / 2
+            : textAlign === "right"
+              ? -width
+              : 0),
+        pos[1] + (textBaseline === "middle" ? -size / 2 : 0),
+        width,
+        size,
+      );
+
+      ctx.fillStyle = "#2B2B29";
+      fillMultiline(ctx, text, ...add(pos, [0, 1]), size);
+    } else {
+      ctx.strokeStyle = "#2B2B29";
+      ctx.lineWidth = 6;
+      strokeMultiline(ctx, text, ...add(pos, [0, 1]), size);
+      ctx.fillStyle = color;
+      fillMultiline(ctx, text, ...pos, size);
+    }
+  });
 };

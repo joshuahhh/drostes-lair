@@ -30,7 +30,8 @@ const CTX_UNSAFE_PROPERTIES: (keyof CanvasRenderingContext2D)[] = [
 const includes = <T>(arr: T[], item: any): item is T => arr.includes(item);
 
 class LayerImpl {
-  private commands: ((() => void) | LayerImpl)[] = [];
+  private commands: (((ctx: CanvasRenderingContext2D) => void) | LayerImpl)[] =
+    [];
 
   private thisProxy: Layer;
 
@@ -56,18 +57,18 @@ class LayerImpl {
 
         // Assume the property is a method, and return a function to capture calls
         return (...args: any[]) => {
-          this.commands.push(() => {
+          this.commands.push((ctx) => {
             // @ts-ignore
-            this.ctx[prop](...args);
+            ctx[prop](...args);
           });
         };
       },
 
       set: (_target, prop, value) => {
         // Capture property assignments
-        this.commands.push(() => {
+        this.commands.push((ctx) => {
           // @ts-ignore
-          this.ctx[prop] = value;
+          ctx[prop] = value;
         });
         return true;
       },
@@ -79,7 +80,7 @@ class LayerImpl {
       if (command instanceof LayerImpl) {
         command._draw();
       } else {
-        command();
+        command(this.ctx);
       }
     }
   }
@@ -118,6 +119,10 @@ class LayerImpl {
     this.thisProxy.save();
     f(this.thisProxy);
     this.thisProxy.restore();
+  }
+
+  withContext(f: (ctx: CanvasRenderingContext2D) => void) {
+    this.commands.push(f);
   }
 
   // To get stuff out of LayerImpl, we use static methods (which have
