@@ -111,3 +111,31 @@ export function saveFile(contents: Blob, fileName: string) {
 // can make Blob from contents with
 //   new Blob([contents], {type})
 // type is something funky like "application/json;charset=utf-8"
+
+export function drawArrow(
+  ctx: CanvasRenderingContext2D,
+  arrow: number[],
+  opts: { headLength?: number; headWidth?: number } = {},
+) {
+  const { headLength = 12, headWidth = 12 } = opts;
+
+  const [sx, sy, cx, cy, ex, ey, ae] = arrow;
+
+  // Draw the quadratic curve for the arrow line
+  ctx.beginPath();
+  ctx.moveTo(sx, sy);
+  ctx.quadraticCurveTo(cx, cy, ex, ey);
+  ctx.stroke();
+
+  // Draw the arrowhead as a polygon
+  ctx.save();
+  ctx.translate(ex, ey);
+  ctx.rotate(ae);
+  ctx.beginPath();
+  ctx.moveTo(-headLength, -headWidth / 2);
+  ctx.lineTo(0, 0);
+  ctx.lineTo(-headLength, headWidth / 2);
+  ctx.closePath();
+  ctx.fill();
+  ctx.restore();
+}

@@ -1,4 +1,5 @@
 import { detect as detectBrowser } from "detect-browser";
+import { getArrow } from "perfect-arrows";
 import {
   addEscapeRoute,
   appendFrameAfter,
@@ -41,15 +42,17 @@ import { UIState } from "./ui_state";
 import { renderOutlinedText } from "./ui_text";
 import {
   XYWH,
+  drawArrow,
   expand,
   fillRect,
   fillRectGradient,
   inXYWH,
   loadImg,
+  mm,
   saveFile,
 } from "./ui_util";
 import { assertNever, indexById } from "./util";
-import { Vec2, add, mul, v } from "./vec2";
+import { Vec2, add, angleBetween, distance, mul, v } from "./vec2";
 
 const browser = detectBrowser();
 
@@ -734,11 +737,14 @@ async function main() {
       );
     }
 
+    let removalXYWH: XYWH | undefined = undefined;
+    let insertionXYWH: XYWH | undefined = undefined;
+
     for (let [idxInWorkspace, item] of contents.entries()) {
       if (idxInWorkspace > 0) {
         curY += 5;
       }
-      const { maxY } = renderWorkspaceValue(
+      const result = renderWorkspaceValue(
         lyr,
         lyrTop,
         item,
@@ -758,7 +764,14 @@ async function main() {
           interactable: badSource === undefined,
         },
       );
-      curY = maxY;
+      curY = result.maxY;
+
+      if (result.removalXYWH) {
+        removalXYWH = result.removalXYWH;
+      }
+      if (result.insertionXYWH) {
+        insertionXYWH = result.insertionXYWH;
+      }
 
       if (isDropTarget) {
         curY += 5;
@@ -801,6 +814,52 @@ async function main() {
       });
     }
 
+    if (insertionXYWH && removalXYWH) {
+      const removalPt = mm(removalXYWH);
+      const insertionPt = mm(insertionXYWH);
+      const dist = distance(removalPt, insertionPt);
+      const angle = angleBetween(removalPt, insertionPt);
+
+      function getSector(a: number, s = 8) {
+        return Math.floor(s * (0.5 + ((a / (Math.PI * 2)) % s)));
+      }
+
+      const sceneCenter = add(pos, [sceneW / 2, sceneH / 2]);
+      const angleAroundCenter =
+        ((angleBetween(removalPt, sceneCenter) -
+          angleBetween(insertionPt, sceneCenter) +
+          Math.PI) %
+          (Math.PI * 2)) -
+        Math.PI;
+
+      // const arrow = getBoxToBoxArrow(...removalXYWH, ...insertionXYWH, {
+      const arrow = getArrow(...mm(removalXYWH), ...mm(insertionXYWH), {
+        bow: 0.1,
+        stretch: 1,
+        stretchMin: 0,
+        stretchMax: 50,
+        padStart: 4,
+        padEnd: 8,
+        flip: (getSector(angle) % 2 === 0) !== angleAroundCenter > 0,
+        straights: false,
+      });
+
+      lyrTop.do((lyr) => {
+        lyr.beginPath();
+        lyr.lineWidth = 2;
+        lyr.strokeStyle = "#fce8a7cc";
+        lyr.fillStyle = "#fce8a7cc";
+        lyr.shadowColor = "rgba(0,0,0,0.6)";
+        lyr.shadowOffsetY = 2;
+        lyr.shadowBlur = 10;
+
+        drawArrow(lyr, arrow, {
+          headLength: Math.min(12, dist / 4),
+          headWidth: 8,
+        });
+      });
+    }
+
     lyrTop.place();
   };
 
@@ -817,8 +876,15 @@ async function main() {
       isBad?: boolean;
       interactable?: boolean;
     } = {},
-  ): { maxY: number } => {
+  ): {
+    maxY: number;
+    removalXYWH: XYWH | undefined;
+    insertionXYWH: XYWH | undefined;
+  } => {
     const { removalIdx, insertionIdx, isBad, interactable = true } = opt;
+
+    let removalXYWH: XYWH | undefined = undefined;
+    let insertionXYWH: XYWH | undefined = undefined;
 
     const isDropTarget =
       interactable &&
@@ -871,9 +937,16 @@ async function main() {
       const cellPos = [left + cellSize * i, pos[1] + cellSize * 0] as const;
       const xywh = [...cellPos, cellSize, cellSize] as const;
 
+      if (isInsertion) {
+        insertionXYWH = xywh;
+      }
+      if (isRemoval) {
+        removalXYWH = xywh;
+      }
+
       (isRemoval ? lyrRemoval : lyr).do((lyr) => {
         // the box
-        if (isInsertion || isRemoval) {
+        if (isInsertion) {
           lyr.save();
           lyr.beginPath();
           lyr.fillStyle = "#fce8a7";
@@ -972,7 +1045,7 @@ async function main() {
 
     lyrRemoval.place();
 
-    return { maxY: pos[1] + cellSize };
+    return { maxY: pos[1] + cellSize, removalXYWH, insertionXYWH };
   };
 
   const renderDropTargetLine = (
