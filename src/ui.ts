@@ -1284,11 +1284,18 @@ async function main() {
 
   let lastEndTime = performance.now();
 
-  requestAnimationFrame(drawLoop);
+  requestAnimationFrame(drawLoopProtected);
 
   let t = 0;
+  function drawLoopProtected() {
+    requestAnimationFrame(drawLoopProtected);
+    try {
+      drawLoop();
+    } catch (e) {
+      pushState(examples.dominoesBlank);
+    }
+  }
   function drawLoop() {
-    requestAnimationFrame(drawLoop);
     t++;
 
     // oscillate around violet
