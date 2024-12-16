@@ -910,12 +910,13 @@ async function main() {
     }
 
     let cellContents: (
-      | { type: "item"; value: unknown; isAdded: boolean }
+      | { type: "item"; value: unknown; isAdded: boolean; idx: number }
       | { type: "removal" }
     )[] = value.map((item: unknown, idx: number) => ({
       type: "item",
       value: item,
       isAdded: insertionIdx === idx,
+      idx,
     }));
     if (removalIdx !== undefined) {
       cellContents.splice(
@@ -975,7 +976,7 @@ async function main() {
               tool = {
                 type: "workspace-pick",
                 source: idxInWorkspace,
-                index: i,
+                index: cell.idx,
                 stackPath: path,
                 value: cell.value,
               };
