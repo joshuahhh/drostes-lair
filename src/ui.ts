@@ -388,6 +388,7 @@ async function main() {
   window.addEventListener("keyup", (e) => {
     if (e.key === "Shift") {
       shiftHeld = false;
+      isDragging = false;
     }
     if (e.key === "Alt") {
       altHeld = false;
@@ -397,6 +398,7 @@ async function main() {
   let mouseX = 0;
   let mouseY = 0;
   let mouseDown = false;
+  let isDragging = false;
   c.addEventListener("mousemove", (e) => {
     // clientX/Y works better than offsetX/Y for Chrome/Safari compatibility.
 
@@ -409,16 +411,19 @@ async function main() {
   });
   c.addEventListener("mouseup", () => {
     mouseDown = false;
+    isDragging = false;
   });
   c.addEventListener("click", () => {
-    for (const { xywh, callback } of _clickables) {
-      if (inXYWH(mouseX, mouseY, xywh)) {
-        callback();
-        return; // only click one thing at a time
+    if (!isDragging) {
+      for (const { xywh, callback } of _clickables) {
+        if (inXYWH(mouseX, mouseY, xywh)) {
+          callback();
+          return; // only click one thing at a time
+        }
       }
+      tool = { type: "pointer" };
+      return true;
     }
-    tool = { type: "pointer" };
-    return true;
   });
   let draggedOver = false;
   c.addEventListener("dragover", (e) => {
@@ -1273,7 +1278,8 @@ async function main() {
 
   // panning
   c.addEventListener("mousemove", (e) => {
-    if (e.shiftKey) {
+    if (e.shiftKey || mouseDown) {
+      isDragging = true;
       setPan(add(pan, [e.movementX, e.movementY]));
     }
   });
@@ -1318,13 +1324,12 @@ async function main() {
 
     _clickables = [];
 
-    c.style.cursor =
-      tool.type === "pointer"
+    c.style.cursor = isDragging
+      ? "url('./glove1.png'), pointer"
+      : tool.type === "pointer"
         ? mouseDown
           ? "url('./glove2.png'), pointer"
-          : shiftHeld
-            ? "url('./glove1.png'), pointer"
-            : "url('./glove3.png'), pointer"
+          : "url('./glove3.png'), pointer"
         : tool.type === "dev-action"
           ? "help"
           : "none";
