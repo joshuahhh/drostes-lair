@@ -2,21 +2,40 @@
 <html lang="en">
   <head>
     <meta charset="UTF-8" />
-    <meta name="viewport" content="width=device-width, initial-scale=1.0" />
+    <meta
+      name="viewport"
+      content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no"
+    />
     <title>Droste's Lair</title>
     <style>
+      html,
       body {
         background-color: #1b1b19;
         margin: 0;
         height: 100dvh;
         overflow: hidden;
         overscroll-behavior: none;
+        touch-action: none;
+        position: relative;
+      }
+
+      * {
+        user-select: none;
+        -webkit-user-select: none;
+      }
+
+      #c-container {
+        position: absolute;
+        top: env(safe-area-inset-top);
+        bottom: env(safe-area-inset-bottom);
+        left: env(safe-area-inset-left);
+        right: env(safe-area-inset-right);
       }
     </style>
   </head>
   <body>
     <script type="module" src="/src/ui.ts"></script>
-    <div id="c-container" style="height: 100%">
+    <div id="c-container">
       <canvas id="c"></canvas>
     </div>
   </body>
