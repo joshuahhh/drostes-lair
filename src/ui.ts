@@ -268,14 +268,26 @@ async function main() {
   // don't touch this directly; use addClickHandler
   let _clickables: {
     xywh: XYWH;
-    callback: Function;
+    callback: () => void;
   }[] = [];
 
-  const addClickHandler = (xywh: XYWH, callback: Function) => {
+  const addClickHandler = (xywh: XYWH, callback: () => void) => {
     _clickables.push({ xywh, callback });
   };
 
-  let tool:
+  type InteractionState =
+    | { type: "not-dragging" }
+    // if we're dragging, the drag may be "unconfirmed" – not sure if
+    // it's a drag or a click (save the click callback for later)
+    | {
+        type: "unconfirmed";
+        startPos: Vec2;
+        callback: (() => void) | undefined;
+      }
+    | { type: "confirmed"; isPan: boolean; pointerType: string };
+  let ix: InteractionState = { type: "not-dragging" } as any;
+
+  type Tool =
     | { type: "pointer" }
     | { type: "domino"; orientation: "h" | "v" }
     | { type: "call"; flowchartId: string }
@@ -291,9 +303,8 @@ async function main() {
       }
     | {
         type: "dev-action";
-      } = {
-    type: "pointer",
-  };
+      };
+  let tool: Tool = { type: "pointer" };
 
   // set up cursor stuff
   let shiftHeld = false;
@@ -388,7 +399,6 @@ async function main() {
   window.addEventListener("keyup", (e) => {
     if (e.key === "Shift") {
       shiftHeld = false;
-      isDragging = false;
     }
     if (e.key === "Alt") {
       altHeld = false;
@@ -398,38 +408,76 @@ async function main() {
   let mouseX = 0;
   let mouseY = 0;
   let mouseOffsets: Vec2 = [0, 0];
+  let pointerType: string;
   let mouseDown = false;
-  let isDragging = false;
-  c.addEventListener("pointermove", (e) => {
+  const updateMouse = (e: PointerEvent) => {
     // clientX/Y works better than offsetX/Y for Chrome/Safari compatibility.
-
-    // add "feel good" numbers for the shape of the cursor
+    const dragOffset =
+      ix.type === "confirmed" && pointerType === "touch" ? 50 : 0;
     mouseX = e.clientX + mouseOffsets[0];
-    mouseY = e.clientY + mouseOffsets[1];
+    mouseY = e.clientY + mouseOffsets[1] - dragOffset;
+    pointerType = e.pointerType;
+  };
 
-    if (e.shiftKey || mouseDown) {
-      isDragging = true;
+  c.addEventListener("pointermove", (e) => {
+    updateMouse(e);
+
+    if (ix.type === "unconfirmed") {
+      if (distance(ix.startPos, [e.clientX, e.clientY]) > 4) {
+        if (ix.callback) {
+          ix.callback();
+          ix = { type: "confirmed", isPan: false, pointerType };
+        } else {
+          e;
+          ix = { type: "confirmed", isPan: true, pointerType };
+        }
+      }
+    }
+
+    if (shiftHeld || (ix.type === "confirmed" && ix.isPan)) {
       setPan(add(pan, [e.movementX, e.movementY]));
     }
   });
-  c.addEventListener("pointerdown", () => {
+  c.addEventListener("pointerdown", (e) => {
+    updateMouse(e);
     mouseDown = true;
+
+    const callback = _clickables.find(({ xywh }) =>
+      inXYWH(mouseX, mouseY, xywh),
+    )?.callback;
+    ix = { type: "unconfirmed", startPos: [mouseX, mouseY], callback };
   });
-  c.addEventListener("pointerup", () => {
+  c.addEventListener("pointerup", (e) => {
+    updateMouse(e);
     mouseDown = false;
-    isDragging = false;
-  });
-  c.addEventListener("click", () => {
-    if (!isDragging) {
-      for (const { xywh, callback } of _clickables) {
-        if (inXYWH(mouseX, mouseY, xywh)) {
-          callback();
-          return; // only click one thing at a time
-        }
+
+    if (ix.type === "unconfirmed") {
+      // a click!
+      if (ix.callback) {
+        ix.callback();
+      } else {
+        tool = { type: "pointer" };
       }
-      tool = { type: "pointer" };
-      return true;
+    } else if (ix.type === "confirmed") {
+      if (!ix.isPan) {
+        // a drag!
+        const callback = _clickables.find(({ xywh }) =>
+          inXYWH(mouseX, mouseY, xywh),
+        )?.callback;
+        if (callback) {
+          callback();
+        } else {
+          tool = { type: "pointer" };
+        }
+      } else {
+        // end of a pan; it's all good
+      }
+    } else if (ix.type === "not-dragging") {
+      // impossible! whatever
+    } else {
+      assertNever(ix);
     }
+    ix = { type: "not-dragging" };
   });
   let draggedOver = false;
   c.addEventListener("dragover", (e) => {
@@ -1329,15 +1377,16 @@ async function main() {
 
     _clickables = [];
 
-    const [cursorName, cursorStyle] = isDragging
-      ? ["glove1", "url('./glove1.png'), pointer"]
-      : tool.type === "pointer"
-        ? mouseDown
-          ? ["glove2", "url('./glove2.png'), pointer"]
-          : ["glove3", "url('./glove3.png'), pointer"]
-        : tool.type === "dev-action"
-          ? ["help", "help"]
-          : ["none", "none"];
+    const [cursorName, cursorStyle] =
+      shiftHeld || (ix.type === "confirmed" && ix.isPan)
+        ? ["glove1", "url('./glove1.png'), pointer"]
+        : tool.type === "pointer"
+          ? mouseDown
+            ? ["glove2", "url('./glove2.png'), pointer"]
+            : ["glove3", "url('./glove3.png'), pointer"]
+          : tool.type === "dev-action"
+            ? ["help", "help"]
+            : ["none", "none"];
     c.style.cursor = cursorStyle;
     mouseOffsets = cursorName.startsWith("glove") ? [7, 3] : [0, 0];
 
@@ -2065,42 +2114,6 @@ async function main() {
       );
     }
 
-    if (tool.type === "pointer") {
-      // handled by css cursor
-    } else if (tool.type === "domino") {
-      renderDomino(lyrAbove, mouseX, mouseY, tool.orientation, false);
-    } else if (tool.type === "call") {
-      renderOutlinedText(lyrAbove, tool.flowchartId, [mouseX, mouseY], {
-        size: 40,
-        color: `hsl(${callHueSaturation} 70%)`,
-        family: "monospace",
-      });
-    } else if (tool.type === "workspace-pick") {
-      renderWorkspaceValue(
-        lyrAbove,
-        undefined,
-        [tool.value],
-        0,
-        undefined,
-        add([mouseX, mouseY], v(-cellSize / 2)),
-      );
-    } else if (tool.type === "purging-flame") {
-      renderSpriteSheet(
-        lyrAbove,
-        imgCandleSheet,
-        1,
-        127,
-        10,
-        [100, 100],
-        [mouseX - 156, mouseY - 72],
-        [300, 300],
-      );
-    } else if (tool.type === "dev-action") {
-      // handled by css cursor
-    } else {
-      assertNever(tool);
-    }
-
     const flowchartIds = [
       ...Object.values(state.defs.flowcharts).map((f) => f.id),
       zodiacRankedInOrderOfCoolness.find((z) => !state.defs.flowcharts[z])!,
@@ -2200,6 +2213,114 @@ async function main() {
     });
 
     (window as any).DEBUG = false;
+
+    if (tool.type === "pointer") {
+      // handled by css cursor
+    } else if (tool.type === "domino") {
+      renderDomino(lyrAbove, mouseX, mouseY, tool.orientation, false);
+    } else if (tool.type === "call") {
+      renderOutlinedText(lyrAbove, tool.flowchartId, [mouseX, mouseY], {
+        size: 40,
+        color: `hsl(${callHueSaturation} 70%)`,
+        family: "monospace",
+      });
+    } else if (tool.type === "workspace-pick") {
+      renderWorkspaceValue(
+        lyrAbove,
+        undefined,
+        [tool.value],
+        0,
+        undefined,
+        add([mouseX, mouseY], v(-cellSize / 2)),
+      );
+    } else if (tool.type === "purging-flame") {
+      renderSpriteSheet(
+        lyrAbove,
+        imgCandleSheet,
+        1,
+        127,
+        10,
+        [100, 100],
+        [mouseX - 156, mouseY - 72],
+        [300, 300],
+      );
+    } else if (tool.type === "dev-action") {
+      // handled by css cursor
+    } else {
+      assertNever(tool);
+    }
+
+    if (tool.type === "pointer") {
+      // handled by css cursor
+    } else if (tool.type === "domino") {
+      renderDomino(lyrAbove, mouseX, mouseY, tool.orientation, false);
+    } else if (tool.type === "call") {
+      renderOutlinedText(lyrAbove, tool.flowchartId, [mouseX, mouseY], {
+        size: 40,
+        color: `hsl(${callHueSaturation} 70%)`,
+        family: "monospace",
+      });
+    } else if (tool.type === "workspace-pick") {
+      renderWorkspaceValue(
+        lyrAbove,
+        undefined,
+        [tool.value],
+        0,
+        undefined,
+        add([mouseX, mouseY], v(-cellSize / 2)),
+      );
+    } else if (tool.type === "purging-flame") {
+      renderSpriteSheet(
+        lyrAbove,
+        imgCandleSheet,
+        1,
+        127,
+        10,
+        [100, 100],
+        [mouseX - 156, mouseY - 72],
+        [300, 300],
+      );
+    } else if (tool.type === "dev-action") {
+      // handled by css cursor
+    } else {
+      assertNever(tool);
+    }
+
+    if (tool.type === "pointer") {
+      // handled by css cursor
+    } else if (tool.type === "domino") {
+      renderDomino(lyrAbove, mouseX, mouseY, tool.orientation, false);
+    } else if (tool.type === "call") {
+      renderOutlinedText(lyrAbove, tool.flowchartId, [mouseX, mouseY], {
+        size: 40,
+        color: `hsl(${callHueSaturation} 70%)`,
+        family: "monospace",
+      });
+    } else if (tool.type === "workspace-pick") {
+      renderWorkspaceValue(
+        lyrAbove,
+        undefined,
+        [tool.value],
+        0,
+        undefined,
+        add([mouseX, mouseY], v(-cellSize / 2)),
+      );
+    } else if (tool.type === "purging-flame") {
+      renderSpriteSheet(
+        lyrAbove,
+        imgCandleSheet,
+        1,
+        127,
+        10,
+        [100, 100],
+        [mouseX - 156, mouseY - 72],
+        [300, 300],
+      );
+    } else if (tool.type === "dev-action") {
+      // handled by css cursor
+    } else {
+      assertNever(tool);
+    }
 
     if (draggedOver) {
       lyrAbove.fillStyle = "rgba(128, 255, 128, 0.5)";
