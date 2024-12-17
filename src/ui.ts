@@ -1065,7 +1065,7 @@ async function main() {
           isDropTarget &&
           tool.type === "workspace-pick" &&
           tool.source === idxInWorkspace &&
-          tool.index === i
+          tool.index === cell.idx
         ) {
           lyr.fillStyle = "rgba(200,200,200,1)";
           lyr.fillRect(...xywh);
