@@ -1252,7 +1252,7 @@ async function main() {
 
     renderSceneValue(lyr, step, step.scene.value, frame, defs, topleft);
 
-    if (tool.type === "purging-flame") {
+    if (tool.type === "purging-flame" && frame.action?.type !== "start") {
       addClickHandler(xywh, () => {
         const { flowchartId, frameId } = step;
         modifyFlowchart(flowchartId, (old) => deleteFrame(old, frameId));
@@ -1906,17 +1906,25 @@ async function main() {
           isEscapeRoute(nextStack.stackPath.final.frameId, flowchart) &&
           nextStack.stepIds.length === 0
         ) {
-          // render disabled escape route mark
+          // render unused escape route mark
           const markPos = add(lastConnectionJoint, [
             sceneW / 2 + scenePadX / 2,
             escapeRouteDropY,
           ]);
           renderEscapeRouteMark(lyr, markPos, undefined, true);
-          const h = 50;
           const w = 60;
-          renderParchmentBox(lyrBelow, ...add(markPos, [-w / 2, 7]), w, h, {
+          const h = 50;
+          const xywh = [...add(markPos, [-w / 2, 7]), w, h] as const;
+          renderParchmentBox(lyrBelow, ...xywh, {
             empty: true,
           });
+          if (tool.type === "purging-flame") {
+            const { flowchartId, frameId } = nextStack.stackPath.final;
+            addClickHandler(xywh, () => {
+              modifyFlowchart(flowchartId, (old) => deleteFrame(old, frameId));
+              tool = { type: "pointer" };
+            });
+          }
           maxY = Math.max(maxY, markPos[1] + h - 10);
           continue;
         }
