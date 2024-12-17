@@ -355,7 +355,7 @@ async function main() {
     if (e.key === "h") {
       tool = { type: "domino", orientation: "h" };
     }
-    if (e.key === "v") {
+    if (e.key === "v" && !(e.ctrlKey || e.metaKey)) {
       tool = { type: "domino", orientation: "v" };
     }
     if (e.key === "Escape") {
@@ -397,14 +397,15 @@ async function main() {
 
   let mouseX = 0;
   let mouseY = 0;
+  let mouseOffsets: Vec2 = [0, 0];
   let mouseDown = false;
   let isDragging = false;
   c.addEventListener("pointermove", (e) => {
     // clientX/Y works better than offsetX/Y for Chrome/Safari compatibility.
 
     // add "feel good" numbers for the shape of the cursor
-    mouseX = e.clientX + 7;
-    mouseY = e.clientY + 3;
+    mouseX = e.clientX + mouseOffsets[0];
+    mouseY = e.clientY + mouseOffsets[1];
 
     if (e.shiftKey || mouseDown) {
       isDragging = true;
@@ -1321,15 +1322,17 @@ async function main() {
 
     _clickables = [];
 
-    c.style.cursor = isDragging
-      ? "url('./glove1.png'), pointer"
+    const [cursorName, cursorStyle] = isDragging
+      ? ["glove1", "url('./glove1.png'), pointer"]
       : tool.type === "pointer"
         ? mouseDown
-          ? "url('./glove2.png'), pointer"
-          : "url('./glove3.png'), pointer"
+          ? ["glove2", "url('./glove2.png'), pointer"]
+          : ["glove3", "url('./glove3.png'), pointer"]
         : tool.type === "dev-action"
-          ? "help"
-          : "none";
+          ? ["help", "help"]
+          : ["none", "none"];
+    c.style.cursor = cursorStyle;
+    mouseOffsets = cursorName.startsWith("glove") ? [7, 3] : [0, 0];
 
     // draw background
     ctxReal.fillStyle = patternAsfault;
