@@ -1065,6 +1065,7 @@ async function main() {
           isDropTarget &&
           tool.type === "workspace-pick" &&
           tool.source === idxInWorkspace &&
+          cell.type === "item" &&
           tool.index === cell.idx
         ) {
           lyr.fillStyle = "rgba(200,200,200,1)";
@@ -1599,7 +1600,7 @@ async function main() {
     const renderEscapeRouteMark = (
       lyr: Layer,
       centerPos: Vec2,
-      onClick?: Function,
+      onClick?: () => void,
       disabled?: boolean,
     ) => {
       const markRadius = 13;
