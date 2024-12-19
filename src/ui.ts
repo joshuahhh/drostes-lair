@@ -997,7 +997,7 @@ async function main() {
       const isInsertion = cell.type === "item" && cell.isAdded;
       const isRemoval = cell.type === "removal";
 
-      const cellPos = [left + cellSize * i, pos[1] + cellSize * 0] as const;
+      const cellPos = [left, pos[1] + cellSize * 0] as const;
       const xywh = [...cellPos, cellSize, cellSize] as const;
 
       if (isInsertion) {
@@ -1072,21 +1072,30 @@ async function main() {
           lyr.fillRect(...xywh);
         }
       });
+
+      left += cellSize;
     }
     if (cellContents.length === 0) {
+      const cellPos = [left, pos[1] + cellSize * 0] as const;
+      const xywh = [...cellPos, cellSize, cellSize] as const;
+
       lyr.beginPath();
       lyr.lineWidth = 3;
       lyr.strokeStyle = isBad ? `rgba(128,0,0,0.5)` : "#70665a";
-      lyr.moveTo(left, pos[1]);
-      lyr.lineTo(left, pos[1] + cellSize);
+      lyr.setLineDash([4, 4]);
+      lyr.rect(...xywh);
       lyr.stroke();
+      lyr.setLineDash([]);
+
+      left += cellSize;
     }
     if (isDropTarget && lyrTop) {
+      // replacement line
       renderDropTargetLine(
         lyrTop,
-        left + cellSize / 2,
+        pos[0] + cellSize / 4,
         pos[1] + cellSize / 2,
-        left + cellSize * value.length - cellSize / 2,
+        left - cellSize / 4,
         pos[1] + cellSize / 2,
         {
           type: "at",
@@ -1095,8 +1104,6 @@ async function main() {
         },
       );
     }
-
-    left += cellSize * value.length;
     left += 5;
 
     if (isDropTarget) {
@@ -1120,9 +1127,11 @@ async function main() {
     y2: number,
     target: (Action & { type: "workspace-pick" })["target"],
   ) => {
-    const xywh = [x1 - 3, y1 - 3, x2 - x1 + 6, y2 - y1 + 6] as const;
+    const lineXYWH = [x1, y1, x2 - x1, y2 - y1] as const;
+    const mouseXYWH = expand(lineXYWH, 5);
+
     lyr.save();
-    lyr.strokeStyle = inXYWH(mouseX, mouseY, xywh)
+    lyr.strokeStyle = inXYWH(mouseX, mouseY, mouseXYWH)
       ? "rgba(255,200,0,0.8)"
       : "#70665a";
     lyr.lineWidth = 3;
@@ -1132,7 +1141,8 @@ async function main() {
     lyr.lineTo(x2, y2);
     lyr.stroke();
     lyr.restore();
-    addClickHandler(xywh, () => {
+
+    addClickHandler(mouseXYWH, () => {
       if (tool.type === "workspace-pick") {
         const { source, index, stackPath } = tool;
         const { flowchartId, frameId } = stackPath.final;
@@ -1341,7 +1351,8 @@ async function main() {
     try {
       drawLoop();
     } catch (e) {
-      pushState(examples.dominoesBlank);
+      throw e;
+      // pushState(examples.dominoesBlank);
     }
   }
   function drawLoop() {
