@@ -407,15 +407,14 @@ async function main() {
 
   let mouseX = 0;
   let mouseY = 0;
-  let mouseOffsets: Vec2 = [0, 0];
   let pointerType: string;
   let mouseDown = false;
   const updateMouse = (e: PointerEvent) => {
     // clientX/Y works better than offsetX/Y for Chrome/Safari compatibility.
     const dragOffset =
       ix.type === "confirmed" && pointerType === "touch" ? 50 : 0;
-    mouseX = e.clientX + mouseOffsets[0];
-    mouseY = e.clientY + mouseOffsets[1] - dragOffset;
+    mouseX = e.clientX;
+    mouseY = e.clientY - dragOffset;
     pointerType = e.pointerType;
   };
 
@@ -1391,16 +1390,15 @@ async function main() {
 
     const [cursorName, cursorStyle] =
       shiftHeld || (ix.type === "confirmed" && ix.isPan)
-        ? ["glove1", "url('./glove1.png'), pointer"]
+        ? ["glove1", "url('./glove1.png') 7 3, pointer"]
         : tool.type === "pointer"
           ? mouseDown
-            ? ["glove2", "url('./glove2.png'), pointer"]
-            : ["glove3", "url('./glove3.png'), pointer"]
+            ? ["glove2", "url('./glove2.png') 7 3, pointer"]
+            : ["glove3", "url('./glove3.png') 7 3, pointer"]
           : tool.type === "dev-action"
             ? ["help", "help"]
             : ["none", "none"];
     c.style.cursor = cursorStyle;
-    mouseOffsets = cursorName.startsWith("glove") ? [7, 3] : [0, 0];
 
     // draw background
     ctxReal.fillStyle = patternAsfault;
@@ -2353,6 +2351,16 @@ async function main() {
       for (const clickable of _clickables) {
         lyrAbove.strokeRect(...clickable.xywh);
       }
+    }
+
+    // ix state debug
+    if (false) {
+      lyrAbove.do(() => {
+        lyrAbove.strokeStyle = "rgba(255, 0, 255, 1)";
+        lyrAbove.lineWidth = 4;
+        lyrAbove.fillStyle = "rgba(255, 0, 255, 1)";
+        lyrAbove.fillText(JSON.stringify(ix), 20, 20);
+      });
     }
 
     const endTime = performance.now();
