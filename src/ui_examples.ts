@@ -3,6 +3,129 @@ import { Flowchart } from "./interpreter";
 import { UIState } from "./ui_state";
 import { assertExtends, indexById } from "./util";
 
+const sierpinskiTest: UIState = {
+  initialValue: {
+    a: { a: null, b: null, c: null },
+    b: { a: null, b: null, c: null },
+    c: { a: null, b: null, c: null },
+  },
+  initialFlowchartId: "♌︎",
+  defs: {
+    flowcharts: {
+      "♌︎": {
+        id: "♌︎",
+        initialFrameId: "1",
+        frames: {
+          1: {
+            id: "1",
+            action: {
+              type: "start",
+            },
+            escapeRouteFrameId: "1-escape",
+          },
+          "1-escape": {
+            id: "3-escape",
+            action: {
+              type: "escape",
+            },
+          },
+          ac2: {
+            id: "ac2",
+            action: {
+              type: "add-triangle-edge",
+              edge: "ac",
+            },
+          },
+          ac3: {
+            id: "ac3",
+            action: {
+              type: "call",
+              flowchartId: "♌︎",
+              lens: {
+                type: "sierpinski-child",
+                child: "a",
+                rot: 0,
+              },
+            },
+          },
+          ac4: {
+            id: "ac4",
+            action: {
+              type: "call",
+              flowchartId: "♌︎",
+              lens: {
+                type: "sierpinski-child",
+                child: "c",
+                rot: 0,
+              },
+            },
+          },
+          abc2: {
+            id: "abc2",
+            action: {
+              type: "add-triangle-edge",
+              edge: "ab",
+            },
+          },
+          abc3: {
+            id: "abc3",
+            action: {
+              type: "add-triangle-edge",
+              edge: "bc",
+            },
+          },
+          abc4: {
+            id: "abc4",
+            action: {
+              type: "call",
+              flowchartId: "♌︎",
+              lens: {
+                type: "sierpinski-child",
+                child: "a",
+                rot: 1,
+              },
+            },
+          },
+          abc5: {
+            id: "abc5",
+            action: {
+              type: "call",
+              flowchartId: "♌︎",
+              lens: {
+                type: "sierpinski-child",
+                child: "b",
+                rot: 0,
+              },
+            },
+          },
+          abc6: {
+            id: "abc6",
+            action: {
+              type: "call",
+              flowchartId: "♌︎",
+              lens: {
+                type: "sierpinski-child",
+                child: "c",
+                rot: 2,
+              },
+            },
+          },
+        },
+        arrows: [
+          { from: "1", to: "ac2" },
+          { from: "ac2", to: "ac3" },
+          { from: "ac3", to: "ac4" },
+          { from: "1", to: "abc2" },
+          { from: "abc2", to: "abc3" },
+          { from: "abc3", to: "abc4" },
+          { from: "abc4", to: "abc5" },
+          { from: "abc5", to: "abc6" },
+        ],
+      },
+    },
+  },
+};
+
 export const examples = assertExtends<Record<string, UIState>>()({
   dominoesBlank: {
     initialValue: {
@@ -643,6 +766,15 @@ export const examples = assertExtends<Record<string, UIState>>()({
           ],
         },
       },
+    },
+  },
+  sierpinskiTest,
+  sierpinskiTestBig: {
+    ...sierpinskiTest,
+    initialValue: {
+      a: sierpinskiTest.initialValue,
+      b: sierpinskiTest.initialValue,
+      c: sierpinskiTest.initialValue,
     },
   },
 });
