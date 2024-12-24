@@ -1,3 +1,5 @@
+import { Vec2 } from "./vec2";
+
 /**
  * Properties that return (or directly are) values that don't depend
  * on context state. These can safely be proxied immediately to the
@@ -109,6 +111,18 @@ class LayerImpl {
   place() {
     if (this.spawnParent) {
       this.spawnParent.commands.push(this);
+    } else {
+      throw new Error("Can't place a root layer");
+    }
+  }
+
+  placeAt(pos: Vec2) {
+    // TODO: not sure about messing with spawnParent here
+    if (this.spawnParent) {
+      this.spawnParent.do((lyr) => {
+        lyr.translate(...pos);
+        this.place();
+      });
     } else {
       throw new Error("Can't place a root layer");
     }
