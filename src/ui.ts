@@ -212,6 +212,9 @@ if (hashParams["example"]) {
   }
 }
 
+undoStack = [examples.sierpinskiTest];
+redoStack = [];
+
 let viewDepth = Infinity;
 
 const persistentValuesById = new Map<string, number>();
@@ -609,6 +612,9 @@ async function main() {
         defs.flowcharts[segment.flowchartId].frames[segment.frameId];
       const action = frame.action as Action & { type: "call" };
       const lens = action.lens!; // TODO: what if not here
+      if (lens.type !== "domino-grid") {
+        throw new Error("domino grid got bad lens?");
+      }
       dx += lens.dx;
       dy += lens.dy;
     }
@@ -722,6 +728,9 @@ async function main() {
         defs.flowcharts[segment.flowchartId].frames[segment.frameId];
       const action = frame.action as Action & { type: "call" };
       const lens = action.lens!; // TODO: what if not here
+      if (lens.type !== "domino-grid") {
+        throw new Error("domino grid got bad lens?");
+      }
       x += lens.dx;
       y += lens.dy;
       width -= lens.dx;
@@ -1157,6 +1166,112 @@ async function main() {
     });
   };
 
+  type SierpinskiLensObj = {
+    a?: SierpinskiLensObj;
+    b?: SierpinskiLensObj;
+    c?: SierpinskiLensObj;
+  };
+
+  const drawSierpinski = (
+    lyr: Layer,
+    value: {
+      a: any;
+      b: any;
+      c: any;
+      ab: boolean;
+      bc: boolean;
+      ac: boolean;
+    } | null,
+    lensObj: SierpinskiLensObj | undefined,
+    isTop: boolean = false,
+  ): { w: number; h: number } => {
+    let fullW = 0;
+    let fullH = 0;
+    if (value !== null) {
+      // console.log(value, lensObj);
+      const { a, b, c, ab, bc, ac } = value;
+      const edgeLen = 20;
+      const eqH = (edgeLen * Math.sqrt(3)) / 2;
+      // const aLyr = lyr.spawnLater();
+      // const aSize =
+      //   a === null ? { w: 0, h: 0 } : drawSierpinski(aLyr, a, lensObj?.a);
+      // const bLyr = lyr.spawnLater();
+      // const bSize =
+      //   b === null ? { w: 0, h: 0 } : drawSierpinski(bLyr, b, lensObj?.b);
+      // const cLyr = lyr.spawnLater();
+      // const cSize =
+      //   c === null ? { w: 0, h: 0 } : drawSierpinski(cLyr, c, lensObj?.c);
+      const aLyr = lyr.spawnLater();
+      const aSize = drawSierpinski(aLyr, a, lensObj?.a);
+      const bLyr = lyr.spawnLater();
+      const bSize = drawSierpinski(bLyr, b, lensObj?.b);
+      const cLyr = lyr.spawnLater();
+      const cSize = drawSierpinski(cLyr, c, lensObj?.c);
+      fullW = aSize.w + edgeLen + cSize.w;
+      fullH = bSize.h + eqH + aSize.h;
+      lyr.do(() => {
+        aLyr.placeAt([0, bSize.h + eqH]);
+        bLyr.placeAt([(fullW - bSize.w) / 2, 0]);
+        cLyr.placeAt([fullW - cSize.w, bSize.h + eqH]);
+        lyr.do(() => {
+          lyr.beginPath();
+          lyr.lineWidth = ab ? 3 : 2;
+          lyr.moveTo((fullW - bSize.w) / 2, bSize.h);
+          lyr.lineTo((fullW - bSize.w) / 2 - edgeLen / 2, bSize.h + eqH);
+          lyr.strokeStyle = "#25221E";
+          lyr.globalAlpha = ab ? 1 : 0.4;
+          lyr.stroke();
+        });
+        lyr.do(() => {
+          lyr.beginPath();
+          lyr.lineWidth = bc ? 3 : 2;
+          lyr.moveTo((fullW + bSize.w) / 2, bSize.h);
+          lyr.lineTo((fullW + bSize.w) / 2 + edgeLen / 2, bSize.h + eqH);
+          lyr.strokeStyle = "#25221E";
+          lyr.globalAlpha = bc ? 1 : 0.4;
+          lyr.stroke();
+        });
+        lyr.do(() => {
+          lyr.beginPath();
+          lyr.lineWidth = ac ? 3 : 2;
+          lyr.moveTo(aSize.w, fullH);
+          lyr.lineTo(aSize.w + edgeLen, fullH);
+          lyr.strokeStyle = "#25221E";
+          lyr.globalAlpha = ac ? 1 : 0.4;
+          lyr.stroke();
+        });
+      });
+    }
+
+    lyr.do(() => {
+      if (lensObj && !isTop) {
+        lyr.do(() => {
+          const rect = expand([0, 0, fullW, fullH], 4);
+          // console.log(value, rect);
+          lyr.beginPath();
+          lyr.rect(...expand(rect, 10000));
+          lyr.rect(...rect);
+          // use parchment fade or darkness fade?
+          if (false) {
+            lyr.fillStyle = patternParchment;
+            patternParchment.setTransform(new DOMMatrix().translate(...pan, 0));
+            // lyr.globalAlpha = i === path.callPath.length - 1 ? 0.8 : 0.4;
+            lyr.globalAlpha = 0.4;
+          } else {
+            lyr.fillStyle = "rgba(0,0,0,0.4)";
+          }
+          lyr.fill("evenodd");
+          lyr.globalAlpha = 1;
+          lyr.beginPath();
+          lyr.strokeStyle = `hsl(${callHueSaturation} 50%)`;
+          lyr.lineWidth = 2;
+          lyr.strokeRect(...rect);
+        });
+      }
+    });
+    return { w: fullW, h: fullH };
+  };
+
   const drawSceneValue = (
     lyr: Layer,
     step: Step,
@@ -1197,6 +1312,35 @@ async function main() {
         stackPathForStep(step, traceTree),
         topLeft,
       );
+    } else if (
+      typeof value === "object" &&
+      value !== null &&
+      "a" in value &&
+      "b" in value &&
+      "c" in value
+    ) {
+      // compute lensy object thing
+      const path = stackPathForStep(step, traceTree);
+      let lensObj: SierpinskiLensObj = {};
+      let curLensObj = lensObj;
+      for (const segment of path.callPath) {
+        const frame =
+          defs.flowcharts[segment.flowchartId].frames[segment.frameId];
+        const action = frame.action as Action & { type: "call" };
+        const lens = action.lens!; // TODO: what if not here
+        if (lens.type !== "sierpinski-child") {
+          throw new Error("sierpinski triangle got bad lens?");
+        }
+        curLensObj = curLensObj[lens.child] = {};
+      }
+
+      const subLyr = lyr.spawnLater();
+      drawSierpinski(subLyr, value as any, lensObj, true);
+      lyr.do(() => {
+        lyr.translate(...topLeft);
+        lyr.translate(10, 10);
+        subLyr.place();
+      });
     } else {
       drawOutlinedText(
         lyr,

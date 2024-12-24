@@ -55,6 +55,10 @@ export type Action =
         | { type: "after"; index: number };
     }
   | {
+      type: "add-triangle-edge";
+      edge: "ab" | "bc" | "ac";
+    }
+  | {
       type: "dev-eval";
       code: string;
     };
@@ -82,11 +86,17 @@ export class ErrorWithAnnotation extends Error {
   }
 }
 
-export type Lens = {
-  type: "domino-grid";
-  dx: number;
-  dy: number;
-};
+export type Lens =
+  | {
+      type: "domino-grid";
+      dx: number;
+      dy: number;
+    }
+  | {
+      type: "sierpinski-child";
+      child: "a" | "b" | "c";
+      rot: 0 | 1 | 2;
+    };
 
 /**
  * If we're going to call one flowchart from another, we need to know
@@ -519,6 +529,13 @@ function performAction(
     const func = new Function("x", `return (${action.code})`);
     const result = func(scene.value);
     proceedWith([{ type: "success", value: result }]);
+  } else if (action.type === "add-triangle-edge") {
+    if (scene.value === null) {
+      throw new Error("not a triangle");
+    }
+    proceedWith([
+      { type: "success", value: { ...scene.value, [action.edge]: true } },
+    ]);
   } else {
     assertNever(action);
   }
@@ -569,7 +586,72 @@ const lenses: Record<string, LensImpl> = {
       };
     },
   },
+  "sierpinski-child": {
+    getPart(lens: Lens & { type: "sierpinski-child" }, value: SierpinskiValue) {
+      if (value === null) {
+        throw new Error("not a triangle");
+      }
+      return rotateSierpinski(value[lens.child], lens.rot);
+    },
+    setPart(
+      lens: Lens & { type: "sierpinski-child" },
+      value: SierpinskiValue,
+      part,
+    ) {
+      return {
+        ...value,
+        [lens.child]: rotateSierpinski(part, invertRot(lens.rot)),
+      };
+    },
+  },
 };
+
+type SierpinskiValue = {
+  a: SierpinskiValue;
+  b: SierpinskiValue;
+  c: SierpinskiValue;
+  ab: boolean;
+  bc: boolean;
+  ac: boolean;
+} | null;
+
+type SierpinskiRot = 0 | 1 | 2;
+
+function invertRot(rot: SierpinskiRot): SierpinskiRot {
+  return rot === 0 ? 0 : rot === 1 ? 2 : 1;
+}
+
+function rotateSierpinski(
+  value: SierpinskiValue,
+  rot: SierpinskiRot,
+): SierpinskiValue {
+  if (value === null) {
+    return null;
+  }
+  if (rot === 0) {
+    return value;
+  } else if (rot === 1) {
+    return {
+      a: rotateSierpinski(value.b, rot),
+      b: rotateSierpinski(value.c, rot),
+      c: rotateSierpinski(value.a, rot),
+      ab: value.bc,
+      bc: value.ac,
+      ac: value.ab,
+    };
+  } else if (rot === 2) {
+    return {
+      a: rotateSierpinski(value.c, rot),
+      b: rotateSierpinski(value.a, rot),
+      c: rotateSierpinski(value.b, rot),
+      ab: value.ac,
+      bc: value.ab,
+      ac: value.bc,
+    };
+  } else {
+    assertNever(rot);
+  }
+}
 
 /**
  * Convenience function to run a flowchart in a typical situation.
@@ -984,6 +1066,8 @@ export function getActionText(action?: Action): string {
     );
   } else if (action.type === "dev-eval") {
     return `evaluate ${action.code}`;
+  } else if (action.type === "add-triangle-edge") {
+    return `add edge "${action.edge}"`;
   }
   assertNever(action);
 }
