@@ -407,15 +407,14 @@ async function main() {
 
   let mouseX = 0;
   let mouseY = 0;
-  let mouseOffsets: Vec2 = [0, 0];
   let pointerType: string;
   let mouseDown = false;
   const updateMouse = (e: PointerEvent) => {
     // clientX/Y works better than offsetX/Y for Chrome/Safari compatibility.
     const dragOffset =
       ix.type === "confirmed" && pointerType === "touch" ? 50 : 0;
-    mouseX = e.clientX + mouseOffsets[0];
-    mouseY = e.clientY + mouseOffsets[1] - dragOffset;
+    mouseX = e.clientX;
+    mouseY = e.clientY - dragOffset;
     pointerType = e.pointerType;
   };
 
@@ -997,7 +996,7 @@ async function main() {
       const isInsertion = cell.type === "item" && cell.isAdded;
       const isRemoval = cell.type === "removal";
 
-      const cellPos = [left + cellSize * i, pos[1] + cellSize * 0] as const;
+      const cellPos = [left, pos[1] + cellSize * 0] as const;
       const xywh = [...cellPos, cellSize, cellSize] as const;
 
       if (isInsertion) {
@@ -1065,27 +1064,37 @@ async function main() {
           isDropTarget &&
           tool.type === "workspace-pick" &&
           tool.source === idxInWorkspace &&
+          cell.type === "item" &&
           tool.index === cell.idx
         ) {
           lyr.fillStyle = "rgba(200,200,200,1)";
           lyr.fillRect(...xywh);
         }
       });
+
+      left += cellSize;
     }
     if (cellContents.length === 0) {
+      const cellPos = [left, pos[1] + cellSize * 0] as const;
+      const xywh = [...cellPos, cellSize, cellSize] as const;
+
       lyr.beginPath();
       lyr.lineWidth = 3;
       lyr.strokeStyle = isBad ? `rgba(128,0,0,0.5)` : "#70665a";
-      lyr.moveTo(left, pos[1]);
-      lyr.lineTo(left, pos[1] + cellSize);
+      lyr.setLineDash([4, 4]);
+      lyr.rect(...xywh);
       lyr.stroke();
+      lyr.setLineDash([]);
+
+      left += cellSize;
     }
     if (isDropTarget && lyrTop) {
+      // replacement line
       renderDropTargetLine(
         lyrTop,
-        left + cellSize / 2,
+        pos[0] + cellSize / 4,
         pos[1] + cellSize / 2,
-        left + cellSize * value.length - cellSize / 2,
+        left - cellSize / 4,
         pos[1] + cellSize / 2,
         {
           type: "at",
@@ -1094,8 +1103,6 @@ async function main() {
         },
       );
     }
-
-    left += cellSize * value.length;
     left += 5;
 
     if (isDropTarget) {
@@ -1119,9 +1126,11 @@ async function main() {
     y2: number,
     target: (Action & { type: "workspace-pick" })["target"],
   ) => {
-    const xywh = [x1 - 3, y1 - 3, x2 - x1 + 6, y2 - y1 + 6] as const;
+    const lineXYWH = [x1, y1, x2 - x1, y2 - y1] as const;
+    const mouseXYWH = expand(lineXYWH, 5);
+
     lyr.save();
-    lyr.strokeStyle = inXYWH(mouseX, mouseY, xywh)
+    lyr.strokeStyle = inXYWH(mouseX, mouseY, mouseXYWH)
       ? "rgba(255,200,0,0.8)"
       : "#70665a";
     lyr.lineWidth = 3;
@@ -1131,7 +1140,8 @@ async function main() {
     lyr.lineTo(x2, y2);
     lyr.stroke();
     lyr.restore();
-    addClickHandler(xywh, () => {
+
+    addClickHandler(mouseXYWH, () => {
       if (tool.type === "workspace-pick") {
         const { source, index, stackPath } = tool;
         const { flowchartId, frameId } = stackPath.final;
@@ -1340,7 +1350,8 @@ async function main() {
     try {
       drawLoop();
     } catch (e) {
-      pushState(examples.dominoesBlank);
+      throw e;
+      // pushState(examples.dominoesBlank);
     }
   }
   function drawLoop() {
@@ -1379,16 +1390,15 @@ async function main() {
 
     const [cursorName, cursorStyle] =
       shiftHeld || (ix.type === "confirmed" && ix.isPan)
-        ? ["glove1", "url('./glove1.png'), pointer"]
+        ? ["glove1", "url('./glove1.png') 7 3, pointer"]
         : tool.type === "pointer"
           ? mouseDown
-            ? ["glove2", "url('./glove2.png'), pointer"]
-            : ["glove3", "url('./glove3.png'), pointer"]
+            ? ["glove2", "url('./glove2.png') 7 3, pointer"]
+            : ["glove3", "url('./glove3.png') 7 3, pointer"]
           : tool.type === "dev-action"
             ? ["help", "help"]
             : ["none", "none"];
     c.style.cursor = cursorStyle;
-    mouseOffsets = cursorName.startsWith("glove") ? [7, 3] : [0, 0];
 
     // draw background
     ctxReal.fillStyle = patternAsfault;
@@ -1599,7 +1609,7 @@ async function main() {
     const renderEscapeRouteMark = (
       lyr: Layer,
       centerPos: Vec2,
-      onClick?: Function,
+      onClick?: () => void,
       disabled?: boolean,
     ) => {
       const markRadius = 13;
@@ -2341,6 +2351,16 @@ async function main() {
       for (const clickable of _clickables) {
         lyrAbove.strokeRect(...clickable.xywh);
       }
+    }
+
+    // ix state debug
+    if (false) {
+      lyrAbove.do(() => {
+        lyrAbove.strokeStyle = "rgba(255, 0, 255, 1)";
+        lyrAbove.lineWidth = 4;
+        lyrAbove.fillStyle = "rgba(255, 0, 255, 1)";
+        lyrAbove.fillText(JSON.stringify(ix), 20, 20);
+      });
     }
 
     const endTime = performance.now();
