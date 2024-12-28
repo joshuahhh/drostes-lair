@@ -25,7 +25,7 @@ export const fillMultiline = (
     ctx.fillText(lines[i], x, y + i * lineheight);
 };
 
-export const renderOutlinedText = (
+export const drawOutlinedText = (
   ctx: CanvasRenderingContext2D,
   text: string,
   pos: Vec2,

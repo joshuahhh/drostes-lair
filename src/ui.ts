@@ -36,10 +36,10 @@ import {
 } from "./interpreter";
 import { Layer, getLayerCommandCount, layer } from "./layer";
 import { howManyTimesDidModWrap, mod } from "./number";
-import { makeCandleRenderer, renderSpriteSheet } from "./ui_candle";
+import { drawSpriteSheet, makeCandleRenderer } from "./ui_candle";
 import { examples } from "./ui_examples";
 import { UIState } from "./ui_state";
-import { renderOutlinedText } from "./ui_text";
+import { drawOutlinedText } from "./ui_text";
 import {
   XYWH,
   drawArrow,
@@ -263,7 +263,7 @@ async function main() {
   backgroundMusic.loop = true;
   let isPlayingBackgroundMusic = false;
 
-  const renderCandle = makeCandleRenderer(imgCandleSheet);
+  const drawCandle = makeCandleRenderer(imgCandleSheet);
 
   // don't touch this directly; use addClickHandler
   let _clickables: {
@@ -503,7 +503,7 @@ async function main() {
     setPan(add(pan, [-e.deltaX, -e.deltaY]));
   });
 
-  const renderParchmentBox = (
+  const drawParchmentBox = (
     lyr: Layer,
     x: number,
     y: number,
@@ -541,7 +541,7 @@ async function main() {
   const cellSize = 20;
   const dominoPadding = 5;
 
-  const renderDomino = (
+  const drawDomino = (
     lyr: Layer,
     x: number,
     y: number,
@@ -585,7 +585,7 @@ async function main() {
     lyr.restore();
   };
 
-  const renderDominoes = (
+  const drawDominoes = (
     lyr: Layer,
     value: {
       width: number;
@@ -704,7 +704,7 @@ async function main() {
         domino[0][1] < 0 ||
         domino[1][1] >= value.height;
 
-      renderDomino(
+      drawDomino(
         justPlaced ? lyrTop : lyr,
         ...add(gridToXY(domino[0]), [cellSize / 2, cellSize / 2]),
         orientation,
@@ -753,7 +753,7 @@ async function main() {
     lyrTop.place();
   };
 
-  const renderWorkspace = (
+  const drawWorkspace = (
     lyr: Layer,
     scene: Scene & { type: "success"; value: { contents: unknown[][] } },
     path: StackPath,
@@ -785,7 +785,7 @@ async function main() {
     let curY = pos[1] + 10;
 
     if (isDropTarget) {
-      renderDropTargetLine(
+      drawDropTargetLine(
         lyrTop,
         pos[0] + 10,
         curY - 5,
@@ -802,7 +802,7 @@ async function main() {
       if (idxInWorkspace > 0) {
         curY += 5;
       }
-      const result = renderWorkspaceValue(
+      const result = drawWorkspaceValue(
         lyr,
         lyrTop,
         item,
@@ -833,7 +833,7 @@ async function main() {
 
       if (isDropTarget) {
         curY += 5;
-        renderDropTargetLine(
+        drawDropTargetLine(
           lyrTop,
           pos[0] + 10,
           curY,
@@ -924,7 +924,7 @@ async function main() {
     lyrTop.place();
   };
 
-  const renderWorkspaceValue = (
+  const drawWorkspaceValue = (
     lyr: Layer,
     lyrTop: Layer | undefined,
     value: unknown[],
@@ -956,7 +956,7 @@ async function main() {
     let left = pos[0];
 
     if (isDropTarget && lyrTop) {
-      renderDropTargetLine(
+      drawDropTargetLine(
         lyrTop,
         left - 5,
         pos[1],
@@ -1090,7 +1090,7 @@ async function main() {
     }
     if (isDropTarget && lyrTop) {
       // replacement line
-      renderDropTargetLine(
+      drawDropTargetLine(
         lyrTop,
         pos[0] + cellSize / 4,
         pos[1] + cellSize / 2,
@@ -1106,7 +1106,7 @@ async function main() {
     left += 5;
 
     if (isDropTarget) {
-      renderDropTargetLine(lyr, left, pos[1], left, pos[1] + cellSize, {
+      drawDropTargetLine(lyr, left, pos[1], left, pos[1] + cellSize, {
         type: "at",
         index: idxInWorkspace,
         side: "after",
@@ -1118,7 +1118,7 @@ async function main() {
     return { maxY: pos[1] + cellSize, removalXYWH, insertionXYWH };
   };
 
-  const renderDropTargetLine = (
+  const drawDropTargetLine = (
     lyr: Layer,
     x1: number,
     y1: number,
@@ -1158,7 +1158,7 @@ async function main() {
     });
   };
 
-  const renderSceneValue = (
+  const drawSceneValue = (
     lyr: Layer,
     step: Step,
     value: any,
@@ -1174,7 +1174,7 @@ async function main() {
     lyr.clip();
 
     if (typeof value === "object" && value !== null && "dominoes" in value) {
-      renderDominoes(
+      drawDominoes(
         lyr,
         value as any,
         stackPathForStep(step, traceTree),
@@ -1187,8 +1187,8 @@ async function main() {
       "type" in value &&
       value.type === "workspace"
     ) {
-      // TODO: renderSceneValue is a big mess
-      renderWorkspace(
+      // TODO: drawSceneValue is a big mess
+      drawWorkspace(
         lyr,
         {
           type: "success",
@@ -1199,7 +1199,7 @@ async function main() {
         topLeft,
       );
     } else {
-      renderOutlinedText(
+      drawOutlinedText(
         lyr,
         JSON.stringify(value, null, 2) ?? "idk",
         [topLeft[0] + 10, topLeft[1] + 10],
@@ -1210,7 +1210,7 @@ async function main() {
     lyr.restore();
   };
 
-  const renderScene = (
+  const drawScene = (
     lyr: Layer,
     step: Step,
     topleft: Vec2,
@@ -1249,7 +1249,7 @@ async function main() {
     //   lyr.stroke();
     //   lyr.restore();
     // }
-    renderParchmentBox(lyr, ...xywh);
+    drawParchmentBox(lyr, ...xywh);
     lyr.do(() => {
       const borderWidth = 1;
       lyr.beginPath();
@@ -1264,7 +1264,7 @@ async function main() {
       const errorAnnotation = step.scene.errorAnnotation;
       if (errorAnnotation) {
         if (errorAnnotation.type === "workspace-pick-bad-source") {
-          renderWorkspace(
+          drawWorkspace(
             lyr,
             errorAnnotation.scene,
             stackPathForStep(step, traceTree),
@@ -1275,7 +1275,7 @@ async function main() {
           );
         }
         if (errorAnnotation.type === "scene") {
-          renderSceneValue(
+          drawSceneValue(
             lyr,
             step,
             errorAnnotation.scene.value,
@@ -1298,7 +1298,7 @@ async function main() {
         lyr.stroke();
       });
 
-      renderOutlinedText(
+      drawOutlinedText(
         lyr,
         step.scene.message,
         [topleft[0] + sceneW, topleft[1] + sceneH],
@@ -1308,7 +1308,7 @@ async function main() {
     }
     assertSuccessful(step);
 
-    renderSceneValue(lyr, step, step.scene.value, frame, defs, topleft);
+    drawSceneValue(lyr, step, step.scene.value, frame, defs, topleft);
 
     if (tool.type === "purging-flame" && frame.action?.type !== "start") {
       addClickHandler(xywh, () => {
@@ -1407,7 +1407,7 @@ async function main() {
     ctxReal.fillStyle = "rgba(255, 255, 255, 0.2)";
     ctxReal.fillRect(0, 0, c.width, c.height);
 
-    const renderConnectorLine = (
+    const drawConnectorLine = (
       lyr: Layer,
       start: Vec2,
       end: Vec2,
@@ -1437,13 +1437,13 @@ async function main() {
       lyr.restore();
     };
 
-    const renderFlowchartSigil = (
+    const drawFlowchartSigil = (
       lyr: Layer,
       flowchartId: string,
       pos: Vec2,
       exists: boolean = true,
     ) => {
-      renderOutlinedText(lyr, flowchartId, pos, {
+      drawOutlinedText(lyr, flowchartId, pos, {
         textAlign: "left",
         textBaseline: "top",
         size: 40,
@@ -1457,13 +1457,13 @@ async function main() {
       }
     };
 
-    // render trace
+    // draw trace
     const scenePadX = 20;
     const scenePadY = 40;
     const callPad = 20;
     const callTopPad = 20;
 
-    const renderViewchart = (
+    const drawViewchart = (
       lyr: Layer,
       lyrAboveViewchart: Layer,
       viewchart: Viewchart,
@@ -1475,7 +1475,7 @@ async function main() {
       const lyrAbove = lyr.spawnLater();
       const lyrBelow = lyr.spawnHere();
 
-      renderFlowchartSigil(
+      drawFlowchartSigil(
         lyrAbove,
         viewchart.flowchartId,
         add(topLeft, [0, -60]),
@@ -1507,7 +1507,7 @@ async function main() {
 
       const flowchart = defs.flowcharts[viewchart.flowchartId];
       const initialStack = viewchart.stackByFrameId[flowchart.initialFrameId];
-      const r = renderStackAndDownstream(
+      const r = drawStackAndDownstream(
         lyr,
         lyrAboveViewchart,
         initialStack,
@@ -1517,25 +1517,22 @@ async function main() {
 
       // final connector lines, out of viewchart
       for (const v of r.finalPosForConnectors) {
-        renderConnectorLine(
-          lyrBelow,
-          v.pos,
-          [r.maxX, topLeft[1] + sceneH / 2],
-          { dead: v.dead },
-        );
+        drawConnectorLine(lyrBelow, v.pos, [r.maxX, topLeft[1] + sceneH / 2], {
+          dead: v.dead,
+        });
       }
 
       // initial little connector line on the left
       const start = add(topLeft, v(-scenePadX, sceneH / 2));
       const end = add(start, v(scenePadX, 0));
-      renderConnectorLine(lyrBelow, start, end);
+      drawConnectorLine(lyrBelow, start, end);
 
       lyrAbove.place();
 
       return r;
     };
 
-    const renderInset = (
+    const drawInset = (
       lyr: Layer,
       callPath: StackPathSegment[],
       curX: number,
@@ -1606,7 +1603,7 @@ async function main() {
       );
     };
 
-    const renderEscapeRouteMark = (
+    const drawEscapeRouteMark = (
       lyr: Layer,
       centerPos: Vec2,
       onClick?: () => void,
@@ -1662,7 +1659,7 @@ async function main() {
         );
       }
     };
-    const renderEscapeDagger = (lyr: Layer, topPos: Vec2, height: number) => {
+    const drawEscapeDagger = (lyr: Layer, topPos: Vec2, height: number) => {
       const flickeringOpacity =
         Math.sin(t / 20) / 30 + 0.5 + Math.random() * 0.05;
       lyr.fillStyle = `rgba(162, 91, 79,${flickeringOpacity})`;
@@ -1705,7 +1702,7 @@ async function main() {
     };
     const escapeRouteDropY = sceneH - 10;
 
-    const renderStack = (
+    const drawStack = (
       lyr: Layer,
       lyrAboveViewchart: Layer,
       stack: Stack,
@@ -1752,7 +1749,7 @@ async function main() {
             interpTo(stackPathString + stepIdx + "y", targetY - pan[1]) +
               pan[1],
           ];
-          renderScene(lyr, step, xy, () => {
+          drawScene(lyr, step, xy, () => {
             hoveredStackPathString = stackPathString;
           });
 
@@ -1764,8 +1761,8 @@ async function main() {
           }
         }
         if (stack.stepIds.length > 1) {
-          // render number of steps in stack
-          renderOutlinedText(
+          // draw number of steps in stack
+          drawOutlinedText(
             lyr,
             `${stack.stepIds.length}`,
             [curX + sceneW, myY],
@@ -1779,7 +1776,7 @@ async function main() {
         if (stack.stepIds.length === 0) {
           const w = 60;
           const h = 50;
-          renderParchmentBox(lyr, curX, myY, w, h, {
+          drawParchmentBox(lyr, curX, myY, w, h, {
             empty: true,
           });
           maxX = Math.max(maxX, curX + w);
@@ -1793,7 +1790,7 @@ async function main() {
     /**
      * returns maximum X & Y values reached
      */
-    const renderStackAndDownstream = (
+    const drawStackAndDownstream = (
       lyr: Layer,
       lyrAboveViewchart: Layer,
       stack: Stack,
@@ -1819,7 +1816,7 @@ async function main() {
       const frame = flowchart.frames[frameId];
       const steps = stack.stepIds.map((stepId) => traceTree.steps[stepId]);
 
-      // render call, if any
+      // draw call, if any
       // curX is lhs of call hole
       let drewCallHole = false;
       if (frame.action?.type === "call") {
@@ -1827,7 +1824,7 @@ async function main() {
           | Viewchart
           | undefined;
         if (childViewchart) {
-          const child = renderViewchart(
+          const child = drawViewchart(
             lyrAbove,
             lyrAboveViewchart,
             childViewchart,
@@ -1835,7 +1832,7 @@ async function main() {
           );
           maxY = Math.max(maxY, child.maxY + callPad);
 
-          renderInset(
+          drawInset(
             lyrBelow,
             childViewchart.callPath,
             curX,
@@ -1852,34 +1849,34 @@ async function main() {
         }
       }
 
-      // render stack
+      // draw stack
       // curX is now lhs of stack
       const stackPathString = stackPathToString(stack.stackPath);
       // TODO: returning layerUsed feels bad to me
-      const renderStackResult = renderStack(
+      const drawStackResult = drawStack(
         lyr,
         lyrAboveViewchart,
         stack,
         curX,
         myY,
       );
-      const stackH = renderStackResult.maxY - myY;
+      const stackH = drawStackResult.maxY - myY;
       if (drewCallHole) {
-        renderConnectorLine(
+        drawConnectorLine(
           lyr,
           [curX - scenePadX, curY + stackH / 2],
           [curX, curY + stackH / 2],
         );
       }
-      maxY = Math.max(maxY, renderStackResult.maxY);
+      maxY = Math.max(maxY, drawStackResult.maxY);
       let label = getActionText(flowchart.frames[frameId].action);
       if (label.startsWith("call")) {
         // special case to make call sigil look good for Elliot's browser font rendering
-        renderOutlinedText(renderStackResult.layerUsed, "call", [curX, myY], {
+        drawOutlinedText(drawStackResult.layerUsed, "call", [curX, myY], {
           textAlign: "left",
         });
-        renderOutlinedText(
-          renderStackResult.layerUsed,
+        drawOutlinedText(
+          drawStackResult.layerUsed,
           label.slice("call".length),
           [curX + 10, myY],
           {
@@ -1890,7 +1887,7 @@ async function main() {
           },
         );
       } else {
-        renderOutlinedText(renderStackResult.layerUsed, label, [curX, myY], {
+        drawOutlinedText(drawStackResult.layerUsed, label, [curX, myY], {
           textAlign: "left",
         });
       }
@@ -1919,13 +1916,10 @@ async function main() {
         });
       }
       if (isEscapeRoute(frameId, flowchart)) {
-        // render escape route mark on-top of escape route frame
-        renderEscapeRouteMark(renderStackResult.layerUsed, [
-          myX + sceneW / 2,
-          myY,
-        ]);
+        // draw escape route mark on-top of escape route frame
+        drawEscapeRouteMark(drawStackResult.layerUsed, [myX + sceneW / 2, myY]);
       }
-      curX = renderStackResult.maxX;
+      curX = drawStackResult.maxX;
 
       const buttonRadius = 20;
 
@@ -1955,7 +1949,7 @@ async function main() {
         .map((stepId) => traceTree.steps[stepId])
         .some((step) => step.scene.type === "success");
 
-      // render downstream
+      // draw downstream
       let maxX = curX + scenePadX;
       const nextStacks = getNextStacksInLevel(stack, stepsInStacks, defs);
       const finalPosForConnectors: { pos: Vec2; dead: boolean }[] = [];
@@ -1972,16 +1966,16 @@ async function main() {
           isEscapeRoute(nextStack.stackPath.final.frameId, flowchart) &&
           nextStack.stepIds.length === 0
         ) {
-          // render unused escape route mark
+          // draw unused escape route mark
           const markPos = add(lastConnectionJoint, [
             sceneW / 2 + scenePadX / 2,
             escapeRouteDropY,
           ]);
-          renderEscapeRouteMark(lyr, markPos, undefined, true);
+          drawEscapeRouteMark(lyr, markPos, undefined, true);
           const w = 60;
           const h = 50;
           const xywh = [...add(markPos, [-w / 2, 7]), w, h] as const;
-          renderParchmentBox(lyrBelow, ...xywh, {
+          drawParchmentBox(lyrBelow, ...xywh, {
             empty: true,
           });
           if (tool.type === "purging-flame") {
@@ -1997,7 +1991,7 @@ async function main() {
 
         if (i > 0) curY += scenePadY;
 
-        const child = renderStackAndDownstream(
+        const child = drawStackAndDownstream(
           lyr,
           lyrAboveViewchart,
           nextStack,
@@ -2011,7 +2005,7 @@ async function main() {
         if (isEscapeRoute(nextStack.stackPath.final.frameId, flowchart)) {
           const x = curX + scenePadX + sceneW / 2;
           const y = myY - scenePadY + 10;
-          renderEscapeDagger(lyrBelow, [x, y], curY - y);
+          drawEscapeDagger(lyrBelow, [x, y], curY - y);
         }
 
         // draw connector line
@@ -2020,7 +2014,7 @@ async function main() {
           const end = child.initialPosForConnector;
 
           if (!isEscapeRoute(nextStack.stackPath.final.frameId, flowchart)) {
-            renderConnectorLine(lyrBelow, start, end, { dead: !hasSuccess });
+            drawConnectorLine(lyrBelow, start, end, { dead: !hasSuccess });
             lastConnectionJoint = add(child.initialPosForConnector, [
               -scenePadX / 2,
               0,
@@ -2039,8 +2033,8 @@ async function main() {
           sceneW / 2 + scenePadX / 2,
           escapeRouteDropY,
         ]);
-        // render clickable escape route mark
-        renderEscapeRouteMark(lyr, markPos, () => {
+        // draw clickable escape route mark
+        drawEscapeRouteMark(lyr, markPos, () => {
           if (!frame.escapeRouteFrameId) {
             modifyFlowchart(flowchartId, (old) => addEscapeRoute(old, frameId));
           }
@@ -2052,7 +2046,7 @@ async function main() {
         lyr.translate(...pos);
         lyr.scale(1 + Math.sin(t / 10) * 0.1, 1 + Math.sin(t / 10) * 0.1);
         lyr.translate(...mul(-1, pos));
-        renderOutlinedText(lyr, "!?", add(markPos, v(15, 0)), {
+        drawOutlinedText(lyr, "!?", add(markPos, v(15, 0)), {
           textAlign: "left",
           textBaseline: "middle",
           size: 20,
@@ -2062,7 +2056,7 @@ async function main() {
 
         const x = curX + scenePadX + sceneW / 2;
         const y = myY - scenePadY + 10;
-        renderEscapeDagger(lyrBelow, [x, y], markPos[1] - y);
+        drawEscapeDagger(lyrBelow, [x, y], markPos[1] - y);
 
         maxY = Math.max(maxY, markPos[1]);
       }
@@ -2091,7 +2085,7 @@ async function main() {
     const stepsInStacks = putStepsInStacks(traceTree);
     const viewchart = stepsInStacksToViewchart(stepsInStacks);
     const lyrAboveViewchart = lyrMain.spawnLater();
-    const topLevel = renderViewchart(
+    const topLevel = drawViewchart(
       lyrMain,
       lyrAboveViewchart,
       viewchart,
@@ -2104,12 +2098,12 @@ async function main() {
     );
     if (finalStacks.length > 1) {
       const extraX = 100;
-      renderConnectorLine(
+      drawConnectorLine(
         lyrMain,
         [topLevel.maxX, pan[1] + sceneW / 2 + 100],
         [topLevel.maxX + extraX, pan[1] + sceneW / 2 + 100],
       );
-      renderStack(
+      drawStack(
         lyrMain,
         lyrAboveViewchart,
         {
@@ -2129,10 +2123,10 @@ async function main() {
       zodiacRankedInOrderOfCoolness.find((z) => !state.defs.flowcharts[z])!,
     ];
 
-    // render inventory drawer
+    // draw inventory drawer
     // 300
     const drawerWidth = 320 + 50 * flowchartIds.length;
-    renderParchmentBox(
+    drawParchmentBox(
       lyrAbove,
       c.width - drawerWidth,
       c.height - 80,
@@ -2144,7 +2138,7 @@ async function main() {
     );
 
     for (const [i, flowchartId] of flowchartIds.entries()) {
-      renderFlowchartSigil(
+      drawFlowchartSigil(
         lyrAbove,
         flowchartId,
         [c.width - 340 - 50 * (flowchartIds.length - 1 - i), c.height - 60],
@@ -2152,7 +2146,7 @@ async function main() {
       );
     }
 
-    renderDomino(
+    drawDomino(
       lyrAbove,
       c.width - 270,
       c.height - 20 - (cellSize - dominoPadding * 2),
@@ -2164,7 +2158,7 @@ async function main() {
         },
       },
     );
-    renderDomino(
+    drawDomino(
       lyrAbove,
       c.width - 220,
       c.height - 20 - (2 * cellSize - dominoPadding * 2),
@@ -2177,7 +2171,7 @@ async function main() {
       },
     );
 
-    renderCandle(lyrAbove);
+    drawCandle(lyrAbove);
 
     addClickHandler([c.width - 145, c.height - 160, 90, 130], () => {
       tool = { type: "purging-flame" };
@@ -2227,15 +2221,15 @@ async function main() {
     if (tool.type === "pointer") {
       // handled by css cursor
     } else if (tool.type === "domino") {
-      renderDomino(lyrAbove, mouseX, mouseY, tool.orientation, false);
+      drawDomino(lyrAbove, mouseX, mouseY, tool.orientation, false);
     } else if (tool.type === "call") {
-      renderOutlinedText(lyrAbove, tool.flowchartId, [mouseX, mouseY], {
+      drawOutlinedText(lyrAbove, tool.flowchartId, [mouseX, mouseY], {
         size: 40,
         color: `hsl(${callHueSaturation} 70%)`,
         family: "monospace",
       });
     } else if (tool.type === "workspace-pick") {
-      renderWorkspaceValue(
+      drawWorkspaceValue(
         lyrAbove,
         undefined,
         [tool.value],
@@ -2244,7 +2238,7 @@ async function main() {
         add([mouseX, mouseY], v(-cellSize / 2)),
       );
     } else if (tool.type === "purging-flame") {
-      renderSpriteSheet(
+      drawSpriteSheet(
         lyrAbove,
         imgCandleSheet,
         1,
@@ -2263,15 +2257,15 @@ async function main() {
     if (tool.type === "pointer") {
       // handled by css cursor
     } else if (tool.type === "domino") {
-      renderDomino(lyrAbove, mouseX, mouseY, tool.orientation, false);
+      drawDomino(lyrAbove, mouseX, mouseY, tool.orientation, false);
     } else if (tool.type === "call") {
-      renderOutlinedText(lyrAbove, tool.flowchartId, [mouseX, mouseY], {
+      drawOutlinedText(lyrAbove, tool.flowchartId, [mouseX, mouseY], {
         size: 40,
         color: `hsl(${callHueSaturation} 70%)`,
         family: "monospace",
       });
     } else if (tool.type === "workspace-pick") {
-      renderWorkspaceValue(
+      drawWorkspaceValue(
         lyrAbove,
         undefined,
         [tool.value],
@@ -2280,7 +2274,7 @@ async function main() {
         add([mouseX, mouseY], v(-cellSize / 2)),
       );
     } else if (tool.type === "purging-flame") {
-      renderSpriteSheet(
+      drawSpriteSheet(
         lyrAbove,
         imgCandleSheet,
         1,
@@ -2299,15 +2293,15 @@ async function main() {
     if (tool.type === "pointer") {
       // handled by css cursor
     } else if (tool.type === "domino") {
-      renderDomino(lyrAbove, mouseX, mouseY, tool.orientation, false);
+      drawDomino(lyrAbove, mouseX, mouseY, tool.orientation, false);
     } else if (tool.type === "call") {
-      renderOutlinedText(lyrAbove, tool.flowchartId, [mouseX, mouseY], {
+      drawOutlinedText(lyrAbove, tool.flowchartId, [mouseX, mouseY], {
         size: 40,
         color: `hsl(${callHueSaturation} 70%)`,
         family: "monospace",
       });
     } else if (tool.type === "workspace-pick") {
-      renderWorkspaceValue(
+      drawWorkspaceValue(
         lyrAbove,
         undefined,
         [tool.value],
@@ -2316,7 +2310,7 @@ async function main() {
         add([mouseX, mouseY], v(-cellSize / 2)),
       );
     } else if (tool.type === "purging-flame") {
-      renderSpriteSheet(
+      drawSpriteSheet(
         lyrAbove,
         imgCandleSheet,
         1,
@@ -2365,7 +2359,7 @@ async function main() {
 
     const endTime = performance.now();
     if (false) {
-      renderOutlinedText(
+      drawOutlinedText(
         lyrAbove,
         `${Math.round(endTime - lastEndTime)}ms`,
         [10, 10],

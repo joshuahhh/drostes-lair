@@ -1,4 +1,4 @@
-import { renderOutlinedText } from "./ui_text";
+import { drawOutlinedText } from "./ui_text";
 
 // hand-tuned candle flicker frame machine
 const incCandleTime = (t: number) => {
@@ -12,7 +12,7 @@ const incCandleTime = (t: number) => {
   return t + 1;
 };
 
-export const renderSpriteSheet = (
+export const drawSpriteSheet = (
   ctx: CanvasRenderingContext2D,
   img: HTMLImageElement,
   frame: number,
@@ -45,7 +45,7 @@ export const makeCandleRenderer = (imgCandleSheet: HTMLImageElement) => {
 
   const render = (ctx: CanvasRenderingContext2D) => {
     // render candle
-    renderSpriteSheet(
+    drawSpriteSheet(
       ctx,
       imgCandleSheet,
       t,
@@ -63,13 +63,13 @@ export const makeCandleRenderer = (imgCandleSheet: HTMLImageElement) => {
       ctx.save();
       ctx.rotate(Math.random() / 500);
       ctx.globalAlpha = 0.12 + Math.random() / 40;
-      renderOutlinedText(
+      drawOutlinedText(
         ctx,
         `I've asked the device to do a terrible thing...`,
         [400, 30],
       );
-      renderOutlinedText(ctx, `Oh God, what have I computed?`, [590, 230]);
-      renderOutlinedText(
+      drawOutlinedText(ctx, `Oh God, what have I computed?`, [590, 230]);
+      drawOutlinedText(
         ctx,
         `Neither God nor Computer can save me now`,
         [300, 770],
