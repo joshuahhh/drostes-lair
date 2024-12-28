@@ -1,4 +1,4 @@
-import { expect, test } from "vitest";
+import { assert, expect, test } from "vitest";
 import { dominoFlowchart } from "./dominoes.ex";
 import {
   getFinalValues,
@@ -261,27 +261,28 @@ test("framePathForStep & topLevelValueForStep work", () => {
   const { traceTree, defs } = runHelper([dominoFlowchart], initialValue);
   const someStep =
     traceTree.steps[
-      "*→one-domino-1→one-domino-2↓fc1→one-domino-1→one-domino-2↓fc1→one-domino-1"
+      "*→one-domino-1→one-domino-2↓♌︎→one-domino-1→one-domino-2↓♌︎→one-domino-1"
     ];
 
   expect(stackPathForStep(someStep, traceTree)).toEqual({
     callPath: [
       {
-        flowchartId: "fc1",
+        flowchartId: "♌︎",
         frameId: "one-domino-2",
       },
       {
-        flowchartId: "fc1",
+        flowchartId: "♌︎",
         frameId: "one-domino-2",
       },
     ],
     final: {
-      flowchartId: "fc1",
+      flowchartId: "♌︎",
       frameId: "one-domino-1",
     },
   });
 
   // at this point, we've placed one domino in the 2x2 sub-grid:
+  assert(someStep.scene.type === "success");
   expect(someStep.scene.value).toMatchInlineSnapshot(`
     {
       "dominoes": [
@@ -303,7 +304,12 @@ test("framePathForStep & topLevelValueForStep work", () => {
 
   // the "top-level value" is on the full 2x4 grid and has three
   // dominos (from two higher call levels):
-  const topLevelValue = topLevelValueForStep(someStep, traceTree, defs);
+  const topLevelValue = topLevelValueForStep(
+    someStep,
+    someStep.scene.value,
+    traceTree,
+    defs,
+  );
   expect(topLevelValue).toMatchInlineSnapshot(`
     {
       "dominoes": [

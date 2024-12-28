@@ -2,9 +2,11 @@ import { expect, test } from "vitest";
 import {
   Flowchart,
   Viewchart,
+  putStepsInStacks,
   runHelper,
   scenesByFrame,
-  traceTreeToViewchart,
+  stepsInStacksToViewchart,
+  success,
 } from "./interpreter";
 import { twoCallsInARowFlowcharts } from "./interpreter.ex";
 import { indexById } from "./util";
@@ -21,11 +23,7 @@ test("runAll works with a simple flowchart", () => {
             id: "2",
             action: {
               type: "test-func",
-              func: ({ value: x }) => [
-                {
-                  value: x + 1,
-                },
-              ],
+              func: ({ value: x }) => [success(x + 1)],
             },
           },
         ]),
@@ -47,6 +45,7 @@ test("runAll works with a simple flowchart", () => {
           "id": "*",
           "prevStepId": undefined,
           "scene": {
+            "type": "success",
             "value": 3,
           },
         },
@@ -57,6 +56,7 @@ test("runAll works with a simple flowchart", () => {
           "id": "*→2",
           "prevStepId": "*",
           "scene": {
+            "type": "success",
             "value": 4,
           },
         },
@@ -67,11 +67,13 @@ test("runAll works with a simple flowchart", () => {
     {
       "1": [
         {
+          "type": "success",
           "value": 3,
         },
       ],
       "2": [
         {
+          "type": "success",
           "value": 4,
         },
       ],
@@ -91,33 +93,21 @@ test("runAll works with NFA split & merge", () => {
             id: "2",
             action: {
               type: "test-func",
-              func: ({ value: [x, y] }) => [
-                {
-                  value: x + y,
-                },
-              ],
+              func: ({ value: [x, y] }) => [success(x + y)],
             },
           },
           {
             id: "3",
             action: {
               type: "test-func",
-              func: ({ value: [x, y] }) => [
-                {
-                  value: x * y,
-                },
-              ],
+              func: ({ value: [x, y] }) => [success(x * y)],
             },
           },
           {
             id: "4",
             action: {
               type: "test-func",
-              func: ({ value: x }) => [
-                {
-                  value: x + 1,
-                },
-              ],
+              func: ({ value: x }) => [success(x + 1)],
             },
           },
         ]),
@@ -145,6 +135,7 @@ test("runAll works with NFA split & merge", () => {
           "id": "*",
           "prevStepId": undefined,
           "scene": {
+            "type": "success",
             "value": [
               3,
               4,
@@ -158,6 +149,7 @@ test("runAll works with NFA split & merge", () => {
           "id": "*→2",
           "prevStepId": "*",
           "scene": {
+            "type": "success",
             "value": 7,
           },
         },
@@ -168,6 +160,7 @@ test("runAll works with NFA split & merge", () => {
           "id": "*→2→4",
           "prevStepId": "*→2",
           "scene": {
+            "type": "success",
             "value": 8,
           },
         },
@@ -178,6 +171,7 @@ test("runAll works with NFA split & merge", () => {
           "id": "*→3",
           "prevStepId": "*",
           "scene": {
+            "type": "success",
             "value": 12,
           },
         },
@@ -188,6 +182,7 @@ test("runAll works with NFA split & merge", () => {
           "id": "*→3→4",
           "prevStepId": "*→3",
           "scene": {
+            "type": "success",
             "value": 13,
           },
         },
@@ -198,6 +193,7 @@ test("runAll works with NFA split & merge", () => {
     {
       "1": [
         {
+          "type": "success",
           "value": [
             3,
             4,
@@ -206,19 +202,23 @@ test("runAll works with NFA split & merge", () => {
       ],
       "2": [
         {
+          "type": "success",
           "value": 7,
         },
       ],
       "3": [
         {
+          "type": "success",
           "value": 12,
         },
       ],
       "4": [
         {
+          "type": "success",
           "value": 8,
         },
         {
+          "type": "success",
           "value": 13,
         },
       ],
@@ -238,25 +238,14 @@ test("runAll works with SIMD split & merge", () => {
             id: "2",
             action: {
               type: "test-func",
-              func: ({ value: [x, y] }) => [
-                {
-                  value: x + y,
-                },
-                {
-                  value: x * y,
-                },
-              ],
+              func: ({ value: [x, y] }) => [success(x + y), success(x * y)],
             },
           },
           {
             id: "3",
             action: {
               type: "test-func",
-              func: ({ value: x }) => [
-                {
-                  value: x + 1,
-                },
-              ],
+              func: ({ value: x }) => [success(x + 1)],
             },
           },
         ]),
@@ -282,6 +271,7 @@ test("runAll works with SIMD split & merge", () => {
           "id": "*",
           "prevStepId": undefined,
           "scene": {
+            "type": "success",
             "value": [
               3,
               4,
@@ -295,6 +285,7 @@ test("runAll works with SIMD split & merge", () => {
           "id": "*→2[0]",
           "prevStepId": "*",
           "scene": {
+            "type": "success",
             "value": 7,
           },
         },
@@ -305,6 +296,7 @@ test("runAll works with SIMD split & merge", () => {
           "id": "*→2[0]→3",
           "prevStepId": "*→2[0]",
           "scene": {
+            "type": "success",
             "value": 8,
           },
         },
@@ -315,6 +307,7 @@ test("runAll works with SIMD split & merge", () => {
           "id": "*→2[1]",
           "prevStepId": "*",
           "scene": {
+            "type": "success",
             "value": 12,
           },
         },
@@ -325,6 +318,7 @@ test("runAll works with SIMD split & merge", () => {
           "id": "*→2[1]→3",
           "prevStepId": "*→2[1]",
           "scene": {
+            "type": "success",
             "value": 13,
           },
         },
@@ -335,6 +329,7 @@ test("runAll works with SIMD split & merge", () => {
     {
       "1": [
         {
+          "type": "success",
           "value": [
             3,
             4,
@@ -343,17 +338,21 @@ test("runAll works with SIMD split & merge", () => {
       ],
       "2": [
         {
+          "type": "success",
           "value": 7,
         },
         {
+          "type": "success",
           "value": 12,
         },
       ],
       "3": [
         {
+          "type": "success",
           "value": 8,
         },
         {
+          "type": "success",
           "value": 13,
         },
       ],
@@ -388,11 +387,7 @@ test("runAll works with a single call", () => {
             id: "2",
             action: {
               type: "test-func",
-              func: ({ value: x }) => [
-                {
-                  value: x + 10,
-                },
-              ],
+              func: ({ value: x }) => [success(x + 10)],
             },
           },
         ]),
@@ -414,6 +409,7 @@ test("runAll works with a single call", () => {
           "id": "*",
           "prevStepId": undefined,
           "scene": {
+            "type": "success",
             "value": 3,
           },
         },
@@ -427,6 +423,8 @@ test("runAll works with a single call", () => {
           "id": "*→2↓fc2",
           "prevStepId": "*",
           "scene": {
+            "actionAnnotation": undefined,
+            "type": "success",
             "value": 3,
           },
         },
@@ -440,6 +438,7 @@ test("runAll works with a single call", () => {
           "id": "*→2↓fc2→2",
           "prevStepId": "*→2↓fc2",
           "scene": {
+            "type": "success",
             "value": 13,
           },
         },
@@ -450,6 +449,8 @@ test("runAll works with a single call", () => {
           "id": "*→2↓fc2→2↑fc1→2",
           "prevStepId": "*→2↓fc2→2",
           "scene": {
+            "actionAnnotation": undefined,
+            "type": "success",
             "value": 13,
           },
         },
@@ -460,11 +461,14 @@ test("runAll works with a single call", () => {
     {
       "1": [
         {
+          "type": "success",
           "value": 3,
         },
       ],
       "2": [
         {
+          "actionAnnotation": undefined,
+          "type": "success",
           "value": 13,
         },
       ],
@@ -487,6 +491,7 @@ test("runAll works with two calls in a row", () => {
           "id": "*",
           "prevStepId": undefined,
           "scene": {
+            "type": "success",
             "value": 3,
           },
         },
@@ -500,6 +505,8 @@ test("runAll works with two calls in a row", () => {
           "id": "*→2↓fc2",
           "prevStepId": "*",
           "scene": {
+            "actionAnnotation": undefined,
+            "type": "success",
             "value": 3,
           },
         },
@@ -513,6 +520,7 @@ test("runAll works with two calls in a row", () => {
           "id": "*→2↓fc2→2",
           "prevStepId": "*→2↓fc2",
           "scene": {
+            "type": "success",
             "value": 13,
           },
         },
@@ -523,6 +531,8 @@ test("runAll works with two calls in a row", () => {
           "id": "*→2↓fc2→2↑fc1→2",
           "prevStepId": "*→2↓fc2→2",
           "scene": {
+            "actionAnnotation": undefined,
+            "type": "success",
             "value": 13,
           },
         },
@@ -536,6 +546,8 @@ test("runAll works with two calls in a row", () => {
           "id": "*→2↓fc2→2↑fc1→2→3↓fc2",
           "prevStepId": "*→2↓fc2→2↑fc1→2",
           "scene": {
+            "actionAnnotation": undefined,
+            "type": "success",
             "value": 13,
           },
         },
@@ -549,6 +561,7 @@ test("runAll works with two calls in a row", () => {
           "id": "*→2↓fc2→2↑fc1→2→3↓fc2→2",
           "prevStepId": "*→2↓fc2→2↑fc1→2→3↓fc2",
           "scene": {
+            "type": "success",
             "value": 23,
           },
         },
@@ -559,6 +572,8 @@ test("runAll works with two calls in a row", () => {
           "id": "*→2↓fc2→2↑fc1→2→3↓fc2→2↑fc1→3",
           "prevStepId": "*→2↓fc2→2↑fc1→2→3↓fc2→2",
           "scene": {
+            "actionAnnotation": undefined,
+            "type": "success",
             "value": 23,
           },
         },
@@ -569,16 +584,21 @@ test("runAll works with two calls in a row", () => {
     {
       "1": [
         {
+          "type": "success",
           "value": 3,
         },
       ],
       "2": [
         {
+          "actionAnnotation": undefined,
+          "type": "success",
           "value": 13,
         },
       ],
       "3": [
         {
+          "actionAnnotation": undefined,
+          "type": "success",
           "value": 23,
         },
       ],
@@ -599,19 +619,11 @@ test("runAll works with test-cond", () => {
           func: ({ value: x }) => x > 0,
           then: {
             type: "test-func",
-            func: ({ value: x }) => [
-              {
-                value: x + 1,
-              },
-            ],
+            func: ({ value: x }) => [success(x + 1)],
           },
           else: {
             type: "test-func",
-            func: ({ value: x }) => [
-              {
-                value: x - 1,
-              },
-            ],
+            func: ({ value: x }) => [success(x - 1)],
           },
         },
       },
@@ -632,6 +644,7 @@ test("runAll works with test-cond", () => {
           "id": "*",
           "prevStepId": undefined,
           "scene": {
+            "type": "success",
             "value": 3,
           },
         },
@@ -642,6 +655,7 @@ test("runAll works with test-cond", () => {
           "id": "*→2",
           "prevStepId": "*",
           "scene": {
+            "type": "success",
             "value": 4,
           },
         },
@@ -662,6 +676,7 @@ test("runAll works with test-cond", () => {
           "id": "*",
           "prevStepId": undefined,
           "scene": {
+            "type": "success",
             "value": -3,
           },
         },
@@ -672,6 +687,7 @@ test("runAll works with test-cond", () => {
           "id": "*→2",
           "prevStepId": "*",
           "scene": {
+            "type": "success",
             "value": -4,
           },
         },
@@ -680,77 +696,148 @@ test("runAll works with test-cond", () => {
   `);
 });
 
-test("traceTreeToViewchart works with two calls in a row", () => {
+test("stepsInStacksToViewchart works with two calls in a row", () => {
   const { traceTree } = runHelper(twoCallsInARowFlowcharts, 3);
-  const viewchart = traceTreeToViewchart(traceTree);
-  expect(viewchart).toEqual({
-    flowchartId: "fc1",
-    stackByFrameId: {
-      "1": {
-        stackPath: {
-          callPath: [],
-          final: { flowchartId: "fc1", frameId: "1" },
-        },
-        stepIds: ["*"],
-      },
-      "2": {
-        stackPath: {
-          callPath: [],
-          final: { flowchartId: "fc1", frameId: "2" },
-        },
-        stepIds: ["*→2↓fc2→2↑fc1→2"],
-      },
-      "3": {
-        stackPath: {
-          callPath: [],
-          final: { flowchartId: "fc1", frameId: "3" },
-        },
-        stepIds: ["*→2↓fc2→2↑fc1→2→3↓fc2→2↑fc1→3"],
-      },
-    },
-    callViewchartsByFrameId: {
-      "2": {
-        flowchartId: "fc2",
-        stackByFrameId: {
-          "1": {
-            stackPath: {
-              callPath: [{ flowchartId: "fc1", frameId: "2" }],
-              final: { flowchartId: "fc2", frameId: "1" },
+  const stepsInStacks = putStepsInStacks(traceTree);
+  const viewchart = stepsInStacksToViewchart(stepsInStacks);
+  expect(viewchart).toMatchInlineSnapshot(`
+    {
+      "callPath": [],
+      "callViewchartsByFrameId": {
+        "2": {
+          "callPath": [
+            {
+              "flowchartId": "fc1",
+              "frameId": "2",
             },
-            stepIds: ["*→2↓fc2"],
-          },
-          "2": {
-            stackPath: {
-              callPath: [{ flowchartId: "fc1", frameId: "2" }],
-              final: { flowchartId: "fc2", frameId: "2" },
+          ],
+          "callViewchartsByFrameId": {},
+          "flowchartId": "fc2",
+          "stackByFrameId": {
+            "1": {
+              "stackPath": {
+                "callPath": [
+                  {
+                    "flowchartId": "fc1",
+                    "frameId": "2",
+                  },
+                ],
+                "final": {
+                  "flowchartId": "fc2",
+                  "frameId": "1",
+                },
+              },
+              "stepIds": [
+                "*→2↓fc2",
+              ],
             },
-            stepIds: ["*→2↓fc2→2"],
-          },
-        },
-        callViewchartsByFrameId: {},
-      },
-      "3": {
-        flowchartId: "fc2",
-        stackByFrameId: {
-          "1": {
-            stackPath: {
-              callPath: [{ flowchartId: "fc1", frameId: "3" }],
-              final: { flowchartId: "fc2", frameId: "1" },
+            "2": {
+              "stackPath": {
+                "callPath": [
+                  {
+                    "flowchartId": "fc1",
+                    "frameId": "2",
+                  },
+                ],
+                "final": {
+                  "flowchartId": "fc2",
+                  "frameId": "2",
+                },
+              },
+              "stepIds": [
+                "*→2↓fc2→2",
+              ],
             },
-            stepIds: ["*→2↓fc2→2↑fc1→2→3↓fc2"],
-          },
-          "2": {
-            stackPath: {
-              callPath: [{ flowchartId: "fc1", frameId: "3" }],
-              final: { flowchartId: "fc2", frameId: "2" },
-            },
-            stepIds: ["*→2↓fc2→2↑fc1→2→3↓fc2→2"],
           },
         },
-        callViewchartsByFrameId: {},
+        "3": {
+          "callPath": [
+            {
+              "flowchartId": "fc1",
+              "frameId": "3",
+            },
+          ],
+          "callViewchartsByFrameId": {},
+          "flowchartId": "fc2",
+          "stackByFrameId": {
+            "1": {
+              "stackPath": {
+                "callPath": [
+                  {
+                    "flowchartId": "fc1",
+                    "frameId": "3",
+                  },
+                ],
+                "final": {
+                  "flowchartId": "fc2",
+                  "frameId": "1",
+                },
+              },
+              "stepIds": [
+                "*→2↓fc2→2↑fc1→2→3↓fc2",
+              ],
+            },
+            "2": {
+              "stackPath": {
+                "callPath": [
+                  {
+                    "flowchartId": "fc1",
+                    "frameId": "3",
+                  },
+                ],
+                "final": {
+                  "flowchartId": "fc2",
+                  "frameId": "2",
+                },
+              },
+              "stepIds": [
+                "*→2↓fc2→2↑fc1→2→3↓fc2→2",
+              ],
+            },
+          },
+        },
       },
-    },
-  });
+      "flowchartId": "fc1",
+      "stackByFrameId": {
+        "1": {
+          "stackPath": {
+            "callPath": [],
+            "final": {
+              "flowchartId": "fc1",
+              "frameId": "1",
+            },
+          },
+          "stepIds": [
+            "*",
+          ],
+        },
+        "2": {
+          "stackPath": {
+            "callPath": [],
+            "final": {
+              "flowchartId": "fc1",
+              "frameId": "2",
+            },
+          },
+          "stepIds": [
+            "*→2↓fc2→2↑fc1→2",
+          ],
+        },
+        "3": {
+          "stackPath": {
+            "callPath": [],
+            "final": {
+              "flowchartId": "fc1",
+              "frameId": "3",
+            },
+          },
+          "stepIds": [
+            "*→2↓fc2→2↑fc1→2→3↓fc2→2↑fc1→3",
+          ],
+        },
+      },
+    }
+  `);
   function countStacks(viewchart: Viewchart) {
     let count = Object.values(viewchart.stackByFrameId).length;
     for (const frameId in viewchart.callViewchartsByFrameId) {

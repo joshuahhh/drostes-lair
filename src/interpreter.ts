@@ -28,7 +28,7 @@ export type Action =
       // better ways than opaque functions to specify & show actions
       type: "test-func";
       label?: string;
-      func: (input: Scene) => Scene[];
+      func: (input: Scene & { type: "success" }) => Scene[];
     }
   | {
       type: "place-domino";
@@ -42,7 +42,7 @@ export type Action =
   | {
       // another fake one
       type: "test-cond";
-      func: (input: Scene) => boolean;
+      func: (input: Scene & { type: "success" }) => boolean;
       then: Action | undefined;
       else: Action | undefined;
     }
@@ -595,7 +595,11 @@ export function runHelper(flowcharts: Flowchart[], value: any) {
     }
     throw e;
   }
-  return { traceTree, initStepId: initStep.id, defs };
+  return { traceTree, initStepId: initStep.id, defs, flowchart };
+}
+
+export function success(value: any): Scene {
+  return { type: "success", value };
 }
 
 export function getFinalValues(traceTree: TraceTree): any[] {
@@ -908,23 +912,16 @@ export type Viewchart = {
   callPath: StackPathSegment[];
 };
 
-// in the UI, we use reference equality on stacks, so we don't want
-// to run putStepsInStacks every time. for that reason, this is a
-// dangerous function. (ideally, I guess we wouldn't use reference
-// equality in the UI)
-
-// export function traceTreeToViewchart(traceTree: TraceTree): Viewchart {
-//   const stacks = putStepsInStacks(traceTree);
-//   return traceTreeToViewchartHelper([], stacks);
-// }
-
 export function stepsInStacksToViewchart(
   stepsInStacks: StepsInStacks,
 ): Viewchart {
-  return traceTreeToViewchartHelper([], Object.values(stepsInStacks.stacks));
+  return stepsInStacksToViewchartHelper(
+    [],
+    Object.values(stepsInStacks.stacks),
+  );
 }
 
-function traceTreeToViewchartHelper(
+function stepsInStacksToViewchartHelper(
   callPath: StackPathSegment[],
   stacks: Stack[],
 ): Viewchart {
@@ -953,7 +950,7 @@ function traceTreeToViewchartHelper(
   }
   for (const [callFrameId, stacks] of Object.entries(stacksByCallFrameId)) {
     const nextCallPath = [...callPath, { flowchartId, frameId: callFrameId }];
-    callViewchartsByFrameId[callFrameId] = traceTreeToViewchartHelper(
+    callViewchartsByFrameId[callFrameId] = stepsInStacksToViewchartHelper(
       nextCallPath,
       stacks,
     );

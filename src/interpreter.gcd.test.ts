@@ -1,5 +1,5 @@
 import { expect, test } from "vitest";
-import { Flowchart, runHelper } from "./interpreter";
+import { Flowchart, runHelper, success } from "./interpreter";
 import { indexById } from "./util";
 
 test("runAll works with recursion (gcd!)", () => {
@@ -15,19 +15,11 @@ test("runAll works with recursion (gcd!)", () => {
           func: ({ value: [a, b] }) => a < b,
           then: {
             type: "test-func",
-            func: ({ value: [a, b] }) => [
-              {
-                value: [a, b - a],
-              },
-            ],
+            func: ({ value: [a, b] }) => [success([a, b - a])],
           },
           else: {
             type: "test-func",
-            func: ({ value: [a, b] }) => [
-              {
-                value: [a - b, b],
-              },
-            ],
+            func: ({ value: [a, b] }) => [success([a - b, b])],
           },
         },
       },
@@ -63,6 +55,7 @@ test("runAll works with recursion (gcd!)", () => {
           "id": "*",
           "prevStepId": undefined,
           "scene": {
+            "type": "success",
             "value": [
               252,
               105,
@@ -76,6 +69,7 @@ test("runAll works with recursion (gcd!)", () => {
           "id": "*→2",
           "prevStepId": "*",
           "scene": {
+            "type": "success",
             "value": [
               147,
               105,
@@ -92,6 +86,8 @@ test("runAll works with recursion (gcd!)", () => {
           "id": "*→2→3↓fc1",
           "prevStepId": "*→2",
           "scene": {
+            "actionAnnotation": undefined,
+            "type": "success",
             "value": [
               147,
               105,
@@ -108,6 +104,7 @@ test("runAll works with recursion (gcd!)", () => {
           "id": "*→2→3↓fc1→2",
           "prevStepId": "*→2→3↓fc1",
           "scene": {
+            "type": "success",
             "value": [
               42,
               105,
@@ -124,6 +121,8 @@ test("runAll works with recursion (gcd!)", () => {
           "id": "*→2→3↓fc1→2→3↓fc1",
           "prevStepId": "*→2→3↓fc1→2",
           "scene": {
+            "actionAnnotation": undefined,
+            "type": "success",
             "value": [
               42,
               105,
@@ -140,6 +139,7 @@ test("runAll works with recursion (gcd!)", () => {
           "id": "*→2→3↓fc1→2→3↓fc1→2",
           "prevStepId": "*→2→3↓fc1→2→3↓fc1",
           "scene": {
+            "type": "success",
             "value": [
               42,
               63,
@@ -156,6 +156,8 @@ test("runAll works with recursion (gcd!)", () => {
           "id": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1",
           "prevStepId": "*→2→3↓fc1→2→3↓fc1→2",
           "scene": {
+            "actionAnnotation": undefined,
+            "type": "success",
             "value": [
               42,
               63,
@@ -172,6 +174,7 @@ test("runAll works with recursion (gcd!)", () => {
           "id": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2",
           "prevStepId": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1",
           "scene": {
+            "type": "success",
             "value": [
               42,
               21,
@@ -188,6 +191,8 @@ test("runAll works with recursion (gcd!)", () => {
           "id": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1",
           "prevStepId": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2",
           "scene": {
+            "actionAnnotation": undefined,
+            "type": "success",
             "value": [
               42,
               21,
@@ -204,6 +209,7 @@ test("runAll works with recursion (gcd!)", () => {
           "id": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2",
           "prevStepId": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1",
           "scene": {
+            "type": "success",
             "value": [
               21,
               21,
@@ -220,6 +226,8 @@ test("runAll works with recursion (gcd!)", () => {
           "id": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1",
           "prevStepId": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2",
           "scene": {
+            "actionAnnotation": undefined,
+            "type": "success",
             "value": [
               21,
               21,
@@ -236,6 +244,7 @@ test("runAll works with recursion (gcd!)", () => {
           "id": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2",
           "prevStepId": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1",
           "scene": {
+            "type": "success",
             "value": [
               0,
               21,
@@ -252,6 +261,8 @@ test("runAll works with recursion (gcd!)", () => {
           "id": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3",
           "prevStepId": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2",
           "scene": {
+            "actionAnnotation": undefined,
+            "type": "success",
             "value": [
               0,
               21,
@@ -268,6 +279,8 @@ test("runAll works with recursion (gcd!)", () => {
           "id": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↑fc1→3",
           "prevStepId": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3",
           "scene": {
+            "actionAnnotation": undefined,
+            "type": "success",
             "value": [
               0,
               21,
@@ -284,6 +297,8 @@ test("runAll works with recursion (gcd!)", () => {
           "id": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↑fc1→3↑fc1→3",
           "prevStepId": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↑fc1→3",
           "scene": {
+            "actionAnnotation": undefined,
+            "type": "success",
             "value": [
               0,
               21,
@@ -300,6 +315,8 @@ test("runAll works with recursion (gcd!)", () => {
           "id": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↑fc1→3↑fc1→3↑fc1→3",
           "prevStepId": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↑fc1→3↑fc1→3",
           "scene": {
+            "actionAnnotation": undefined,
+            "type": "success",
             "value": [
               0,
               21,
@@ -316,6 +333,8 @@ test("runAll works with recursion (gcd!)", () => {
           "id": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↑fc1→3↑fc1→3↑fc1→3↑fc1→3",
           "prevStepId": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↑fc1→3↑fc1→3↑fc1→3",
           "scene": {
+            "actionAnnotation": undefined,
+            "type": "success",
             "value": [
               0,
               21,
@@ -329,6 +348,8 @@ test("runAll works with recursion (gcd!)", () => {
           "id": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↑fc1→3↑fc1→3↑fc1→3↑fc1→3↑fc1→3",
           "prevStepId": "*→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↓fc1→2→3↑fc1→3↑fc1→3↑fc1→3↑fc1→3",
           "scene": {
+            "actionAnnotation": undefined,
+            "type": "success",
             "value": [
               0,
               21,
