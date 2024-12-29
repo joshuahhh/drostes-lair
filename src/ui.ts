@@ -1168,6 +1168,7 @@ async function main() {
   };
 
   type SierpinskiLensObj = {
+    rot: 0 | 1 | 2;
     a?: SierpinskiLensObj;
     b?: SierpinskiLensObj;
     c?: SierpinskiLensObj;
@@ -1250,6 +1251,9 @@ async function main() {
           const rect = expand([0, 0, fullW, fullH], 4);
           // console.log(value, rect);
           lyr.beginPath();
+          lyr.translate(fullW / 2, (2 * fullH) / 3);
+          lyr.rotate((lensObj.rot * (2 * Math.PI)) / 3);
+          lyr.translate(-fullW / 2, (-2 * fullH) / 3);
           lyr.rect(...expand(rect, 10000));
           lyr.rect(...rect);
           // use parchment fade or darkness fade?
@@ -1322,7 +1326,7 @@ async function main() {
     ) {
       // compute lensy object thing
       const path = stackPathForStep(step, traceTree);
-      let lensObj: SierpinskiLensObj = {};
+      let lensObj: SierpinskiLensObj = { rot: 0 };
       let curLensObj = lensObj;
       for (const segment of path.callPath) {
         const frame =
@@ -1332,7 +1336,7 @@ async function main() {
         if (lens.type !== "sierpinski-child") {
           throw new Error("sierpinski triangle got bad lens?");
         }
-        curLensObj = curLensObj[lens.child] = {};
+        curLensObj = curLensObj[lens.child] = { rot: lens.rot };
       }
 
       const subLyr = lyr.spawnLater();
