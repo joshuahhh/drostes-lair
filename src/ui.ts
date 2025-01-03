@@ -253,7 +253,15 @@ const interpTo = (
   return newValue;
 };
 
-let hoveredStackId = undefined as string | undefined;
+let hoveredStackInfo = undefined as
+  | undefined
+  | {
+      stackId: string;
+      flowchartId: string;
+      frameId: string;
+      relMouseX: number;
+      relMouseY: number;
+    };
 
 // globals for communication are the best
 let state: UIState;
@@ -271,10 +279,20 @@ resizeObserver.observe(cContainer);
 const ctxReal = c.getContext("2d")!;
 
 async function main() {
-  const [imgParchment, imgAsfault, imgCandleSheet] = await Promise.all([
+  const [
+    imgParchment,
+    imgAsfault,
+    imgCandleSheet,
+    imgGlove1,
+    imgGlove2,
+    imgGlove3,
+  ] = await Promise.all([
     loadImg("./parchment.jpg"),
     loadImg("./asfault.jpg"),
     loadImg("./candle_sheet.png"),
+    loadImg("./glove1.png"),
+    loadImg("./glove2.png"),
+    loadImg("./glove3.png"),
   ]);
 
   const patternParchment = ctxReal.createPattern(imgParchment, "repeat")!;
@@ -1817,11 +1835,12 @@ async function main() {
       const hovered =
         stackId &&
         (inXYWH(mouseX, mouseY, [curX, myY, sceneW, sceneH]) ||
-          hoveredStackId === stackId) &&
+          hoveredStackInfo?.stackId === stack.id) &&
         myY < c.height - sceneH; // weird stuff happens (inc. crash) if we hover a stack too close to bottom
 
       if (hovered) {
-        hoveredStackId = undefined;
+        // reset so we can detect if we're still hovering
+        hoveredStackInfo = undefined;
       }
 
       const stackH = scenePadY - 5;
@@ -1848,7 +1867,13 @@ async function main() {
             interpTo(`${step.id} y`, targetY - pan[1]) + pan[1],
           ];
           drawStep(lyr, step, stack, xy, () => {
-            hoveredStackId = stackId;
+            hoveredStackInfo = {
+              stackId: stack.id,
+              flowchartId: step.flowchartId,
+              frameId: step.frameId,
+              relMouseX: mouseX - curX,
+              relMouseY: mouseY - myY,
+            };
           });
 
           if (stepIdx === 0) {
@@ -1876,6 +1901,24 @@ async function main() {
           maxY = Math.max(maxY, myY + h);
         }
       });
+
+      const { flowchartId, frameId } = stack;
+      if (
+        hoveredStackInfo &&
+        hoveredStackInfo.stackId !== stackId &&
+        hoveredStackInfo.flowchartId === flowchartId &&
+        hoveredStackInfo.frameId === frameId
+      ) {
+        lyrAbove.globalAlpha = 0.5;
+        lyrAbove.drawImage(
+          imgGlove3,
+          curX + Math.min(hoveredStackInfo.relMouseX, sceneW),
+          myY + Math.min(hoveredStackInfo.relMouseY, sceneH),
+          imgGlove1.width,
+          imgGlove1.height,
+        );
+        lyrAbove.globalAlpha = 1;
+      }
 
       return { maxX, maxY, layerUsed: layerToUse };
     };
