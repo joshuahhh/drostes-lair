@@ -417,6 +417,9 @@ async function main() {
     mouseY = e.clientY - dragOffset;
     pointerType = e.pointerType;
   };
+  const hoveredClickable = () => {
+    return _clickables.find(({ xywh }) => inXYWH(mouseX, mouseY, xywh));
+  };
 
   c.addEventListener("pointermove", (e) => {
     updateMouse(e);
@@ -441,9 +444,7 @@ async function main() {
     updateMouse(e);
     mouseDown = true;
 
-    const callback = _clickables.find(({ xywh }) =>
-      inXYWH(mouseX, mouseY, xywh),
-    )?.callback;
+    const callback = hoveredClickable()?.callback;
     ix = { type: "unconfirmed", startPos: [mouseX, mouseY], callback };
   });
   c.addEventListener("pointerup", (e) => {
@@ -460,9 +461,7 @@ async function main() {
     } else if (ix.type === "confirmed") {
       if (!ix.isPan) {
         // a drag!
-        const callback = _clickables.find(({ xywh }) =>
-          inXYWH(mouseX, mouseY, xywh),
-        )?.callback;
+        const callback = hoveredClickable()?.callback;
         if (callback) {
           callback();
         } else {
