@@ -2305,31 +2305,33 @@ async function main() {
     });
 
     // the ear
-    lyrAbove.do(() => {
-      lyrAbove.fillStyle = isPlayingBackgroundMusic
-        ? "rgba(0, 0, 0, 1)"
-        : "rgba(0, 0, 0, 0.5)";
-      lyrAbove.textAlign = "right";
-      lyrAbove.textBaseline = "bottom";
-      lyrAbove.font = "35px serif";
-      lyrAbove.fillText(isBoring ? "sound" : "𓂈", c.width - 9, c.height - 35);
-    });
-    addClickHandler([c.width - 38, c.height - 69, 38, 30], async () => {
-      if (!isPlayingBackgroundMusic) {
-        try {
-          // On the first user interaction, try playing the audio
-          await backgroundMusic.play();
-          isPlayingBackgroundMusic = true;
-        } catch (error) {
-          console.error("Failed to start audio playback:", error);
+    if (!isBoring) {
+      lyrAbove.do(() => {
+        lyrAbove.fillStyle = isPlayingBackgroundMusic
+          ? "rgba(0, 0, 0, 1)"
+          : "rgba(0, 0, 0, 0.5)";
+        lyrAbove.textAlign = "right";
+        lyrAbove.textBaseline = "bottom";
+        lyrAbove.font = "35px serif";
+        lyrAbove.fillText("𓂈", c.width - 9, c.height - 35);
+      });
+      addClickHandler([c.width - 38, c.height - 69, 38, 30], async () => {
+        if (!isPlayingBackgroundMusic) {
+          try {
+            // On the first user interaction, try playing the audio
+            await backgroundMusic.play();
+            isPlayingBackgroundMusic = true;
+          } catch (error) {
+            console.error("Failed to start audio playback:", error);
+            isPlayingBackgroundMusic = false;
+          }
+        } else {
+          // If it was already playing, just pause it
+          backgroundMusic.pause();
           isPlayingBackgroundMusic = false;
         }
-      } else {
-        // If it was already playing, just pause it
-        backgroundMusic.pause();
-        isPlayingBackgroundMusic = false;
-      }
-    });
+      });
+    }
 
     // the eye
     lyrAbove.do(() => {
