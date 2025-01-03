@@ -759,7 +759,7 @@ async function main() {
       lyr.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
       // use parchment fade or darkness fade?
       if (true) {
-        lyr.fillStyle = isBoring ? "white" : patternParchment;
+        lyr.fillStyle = isBoring ? "#eee" : patternParchment;
         patternParchment.setTransform(new DOMMatrix().translate(...pan, 0));
         lyr.globalAlpha = i === path.callPath.length - 1 ? 0.8 : 0.4;
       } else {
@@ -1278,15 +1278,6 @@ async function main() {
     //   lyr.restore();
     // }
     drawParchmentBox(lyr, ...xywh);
-    lyr.do(() => {
-      const borderWidth = 1;
-      lyr.beginPath();
-      lyr.strokeStyle = `#675E53`;
-      lyr.lineWidth = borderWidth;
-      lyr.stroke;
-      lyr.rect(...expand(xywh, -borderWidth / 2));
-      lyr.stroke();
-    });
 
     if (step.scene.type === "error") {
       const errorAnnotation = step.scene.errorAnnotation;
@@ -1337,6 +1328,18 @@ async function main() {
     assertSuccessful(step);
 
     drawSceneValue(lyr, step, step.scene.value, frame, defs, topleft);
+
+    if (isBoring) {
+      lyr.do(() => {
+        const borderWidth = 1;
+        lyr.beginPath();
+        lyr.strokeStyle = `#675E53`;
+        lyr.lineWidth = borderWidth;
+        lyr.stroke;
+        lyr.rect(...expand(xywh, -borderWidth / 2));
+        lyr.stroke();
+      });
+    }
 
     if (tool.type === "purging-flame" && frame.action?.type !== "start") {
       addClickHandler(xywh, () => {
