@@ -1910,12 +1910,13 @@ async function main() {
         hoveredStackInfo.frameId === frameId
       ) {
         lyrAbove.globalAlpha = 0.5;
+        const scale = 0.7;
         lyrAbove.drawImage(
           imgGlove3,
           curX + Math.min(hoveredStackInfo.relMouseX, sceneW),
           myY + Math.min(hoveredStackInfo.relMouseY, sceneH),
-          imgGlove1.width,
-          imgGlove1.height,
+          imgGlove1.width * scale,
+          imgGlove1.height * scale,
         );
         lyrAbove.globalAlpha = 1;
       }
