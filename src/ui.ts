@@ -10,29 +10,25 @@ import {
 import {
   Action,
   ActionAnnotation,
+  Call,
   Definitions,
   Flowchart,
   Frame,
   Scene,
-  Stack,
-  StackPath,
-  StackPathSegment,
   Step,
   SuccessfulStep,
   TraceTree,
   Viewchart,
+  ViewchartStack,
   assertSuccessful,
   getActionText,
-  getNextStacksInLevel,
+  getCallPath,
   isEscapeRoute,
   makeTraceTree,
-  putStepsInStacks,
   runAll,
-  stackPathForStep,
-  stackPathToString,
-  stepsInStacksToViewchart,
   stringifyEqual,
   topLevelValueForStep,
+  traceTreeToViewchart,
 } from "./interpreter";
 import { Layer, getLayerCommandCount, layer } from "./layer";
 import { howManyTimesDidModWrap, mod } from "./number";
@@ -44,14 +40,12 @@ import {
   XYWH,
   drawArrow,
   expand,
-  fillRect,
-  fillRectGradient,
   inXYWH,
   loadImg,
   mm,
   saveFile,
 } from "./ui_util";
-import { assertNever, indexById } from "./util";
+import { assertNever, indexById, truthy } from "./util";
 import { Vec2, add, angleBetween, distance, mul, v } from "./vec2";
 
 const browser = detectBrowser();
@@ -131,6 +125,8 @@ const act = (f: (stateYouCanChange: UIState) => void) => {
     f(curStateYouCanChange);
   }
 };
+
+let mode: "stacked" | "unstacked" = "unstacked";
 
 // DEFAULT FLOWCHART RIGHT HERE BUDDY
 let undoStack: UIState[] = [examples.dominoesBlank];
@@ -231,7 +227,7 @@ const interpTo = (
   return newValue;
 };
 
-let hoveredStackPathString = undefined as string | undefined;
+let hoveredStackId = undefined as string | undefined;
 
 // globals for communication are the best
 let state: UIState;
@@ -295,7 +291,10 @@ async function main() {
         type: "workspace-pick";
         source: number;
         index: number;
-        stackPath: StackPath;
+        // TODO: very redundant
+        flowchartId: string;
+        frameId: string;
+        stepId: string;
         value: unknown;
       }
     | {
@@ -394,6 +393,9 @@ async function main() {
     }
     if (e.key === "0" && !(e.ctrlKey || e.metaKey)) {
       viewDepth = Infinity;
+    }
+    if (e.key === "m") {
+      mode = mode === "stacked" ? "unstacked" : "stacked";
     }
   });
   window.addEventListener("keyup", (e) => {
@@ -591,7 +593,9 @@ async function main() {
       height: number;
       dominoes: [[number, number], [number, number]][];
     },
-    path: StackPath,
+    flowchartId: string,
+    frameId: string,
+    callPath: Call[],
     action: Action | undefined,
     pos: Vec2,
   ) => {
@@ -604,7 +608,7 @@ async function main() {
     // precompute overall offset of the bottom call
     let dx = 0;
     let dy = 0;
-    for (const segment of path.callPath) {
+    for (const segment of callPath) {
       const frame =
         defs.flowcharts[segment.flowchartId].frames[segment.frameId];
       const action = frame.action as Action & { type: "call" };
@@ -628,7 +632,6 @@ async function main() {
         if (tool.type === "domino") {
           const { orientation } = tool;
           addClickHandler(xywh, () => {
-            const { flowchartId, frameId } = path.final;
             modifyFlowchart(flowchartId, (old) =>
               setActionOnFrameOrAfter(old, frameId, {
                 type: "place-domino",
@@ -644,7 +647,6 @@ async function main() {
         if (tool.type === "call") {
           const callFlowchartId = tool.flowchartId;
           addClickHandler(xywh, () => {
-            const { flowchartId, frameId } = path.final;
             act(() => {
               ensureFlowchartExists(callFlowchartId);
               modifyFlowchart(flowchartId, (old) =>
@@ -717,7 +719,7 @@ async function main() {
     let y = 0;
     let width = value.width;
     let height = value.height;
-    for (const [i, segment] of path.callPath.entries()) {
+    for (const [i, segment] of callPath.entries()) {
       const frame =
         defs.flowcharts[segment.flowchartId].frames[segment.frameId];
       const action = frame.action as Action & { type: "call" };
@@ -734,7 +736,7 @@ async function main() {
       if (true) {
         lyr.fillStyle = patternParchment;
         patternParchment.setTransform(new DOMMatrix().translate(...pan, 0));
-        lyr.globalAlpha = i === path.callPath.length - 1 ? 0.8 : 0.4;
+        lyr.globalAlpha = i === callPath.length - 1 ? 0.8 : 0.4;
       } else {
         lyr.fillStyle = "rgba(0,0,0,0.4)";
       }
@@ -755,7 +757,9 @@ async function main() {
   const drawWorkspace = (
     lyr: Layer,
     scene: Scene & { type: "success"; value: { contents: unknown[][] } },
-    path: StackPath,
+    flowchartId: string,
+    frameId: string,
+    stepId: string,
     pos: Vec2,
     opts: { badSource?: number } = {},
   ) => {
@@ -777,9 +781,9 @@ async function main() {
 
     const isDropTarget =
       badSource === undefined &&
-      path &&
+      stepId &&
       tool.type === "workspace-pick" &&
-      stackPathToString(tool.stackPath) === stackPathToString(path);
+      tool.stepId === stepId;
 
     let curY = pos[1] + 10;
 
@@ -806,7 +810,7 @@ async function main() {
         lyrTop,
         item,
         idxInWorkspace,
-        path,
+        traceTree.steps[stepId],
         [pos[0] + 10, curY],
         {
           removalIdx:
@@ -857,7 +861,6 @@ async function main() {
         lyr.restore();
       }
       addClickHandler(xywh, () => {
-        const { flowchartId, frameId } = path.final;
         act(() => {
           ensureFlowchartExists(callFlowchartId);
           modifyFlowchart(flowchartId, (old) =>
@@ -928,7 +931,7 @@ async function main() {
     lyrTop: Layer | undefined,
     value: unknown[],
     idxInWorkspace: number,
-    path: StackPath | undefined,
+    step: Step | undefined,
     pos: Vec2,
     opt: {
       removalIdx?: number;
@@ -948,9 +951,9 @@ async function main() {
 
     const isDropTarget =
       interactable &&
-      path &&
+      step &&
       tool.type === "workspace-pick" &&
-      stackPathToString(tool.stackPath) === stackPathToString(path);
+      tool.stepId === step.id;
 
     let left = pos[0];
 
@@ -1026,7 +1029,7 @@ async function main() {
         lyr.rect(...xywh);
         lyr.stroke();
         lyr.setLineDash([]);
-        if (interactable && !isRemoval && tool.type === "pointer" && path) {
+        if (interactable && !isRemoval && tool.type === "pointer" && step) {
           if (inXYWH(mouseX, mouseY, xywh)) {
             lyr.fillStyle = "rgba(255,200,0,0.4)";
             lyr.fill();
@@ -1037,7 +1040,9 @@ async function main() {
                 type: "workspace-pick",
                 source: idxInWorkspace,
                 index: cell.idx,
-                stackPath: path,
+                flowchartId: step.flowchartId,
+                frameId: step.frameId,
+                stepId: step.id,
                 value: cell.value,
               };
             });
@@ -1142,8 +1147,7 @@ async function main() {
 
     addClickHandler(mouseXYWH, () => {
       if (tool.type === "workspace-pick") {
-        const { source, index, stackPath } = tool;
-        const { flowchartId, frameId } = stackPath.final;
+        const { source, index, flowchartId, frameId } = tool;
         modifyFlowchart(flowchartId, (old) =>
           setActionOnFrameOrAfter(old, frameId, {
             type: "workspace-pick",
@@ -1165,6 +1169,9 @@ async function main() {
     defs: Definitions,
     topLeft: Vec2,
   ) => {
+    const { flowchartId, frameId } = step;
+    const callPath = getCallPath(step, traceTree);
+
     value = topLevelValueForStep(step, value, traceTree, defs) as any;
 
     lyr.save();
@@ -1176,7 +1183,9 @@ async function main() {
       drawDominoes(
         lyr,
         value as any,
-        stackPathForStep(step, traceTree),
+        flowchartId,
+        frameId,
+        callPath,
         frame.action,
         topLeft,
       );
@@ -1194,7 +1203,9 @@ async function main() {
           value,
           actionAnnotation: (step.scene as any).actionAnnotation,
         },
-        stackPathForStep(step, traceTree),
+        flowchartId,
+        frameId,
+        step.id,
         topLeft,
       );
     } else {
@@ -1266,7 +1277,9 @@ async function main() {
           drawWorkspace(
             lyr,
             errorAnnotation.scene,
-            stackPathForStep(step, traceTree),
+            step.flowchartId,
+            step.frameId,
+            step.id,
             topleft,
             {
               badSource: errorAnnotation.source,
@@ -1458,7 +1471,7 @@ async function main() {
 
     // draw trace
     const scenePadX = 20;
-    const scenePadY = 40;
+    const scenePadY = mode === "stacked" ? 40 : 15;
     const callPad = 20;
     const callTopPad = 20;
 
@@ -1467,6 +1480,7 @@ async function main() {
       lyrAboveViewchart: Layer,
       viewchart: Viewchart,
       topLeft: Vec2,
+      mode: "stacked" | "unstacked",
     ): {
       maxX: number;
       maxY: number;
@@ -1480,32 +1494,32 @@ async function main() {
         add(topLeft, [0, -60]),
       );
 
-      if (viewchart.callPath.length > viewDepth) {
-        // TODO: we're backwards-engineering the padding put around
-        // the viewchart; this is dumb
-        lyr.save();
-        for (let i = -1; i < 2; i++) {
-          lyr.beginPath();
-          lyr.arc(
-            topLeft[0] + sceneW / 2 - callPad + i * 20,
-            topLeft[1] + sceneH / 2 - callPad,
-            5,
-            0,
-            Math.PI * 2,
-          );
-          lyr.globalAlpha = 0.5;
-          lyr.fillStyle = patternParchment;
-          lyr.fill();
-        }
-        lyr.restore();
-        return {
-          maxX: topLeft[0] + sceneW - callPad,
-          maxY: topLeft[1] + sceneH - 2 * callPad - 2 * callTopPad,
-        };
-      }
+      // TODO: figure out depth filtering
+      // if (viewchart.callPath.length > viewDepth) {
+      //   // TODO: we're backwards-engineering the padding put around
+      //   // the viewchart; this is dumb
+      //   lyr.save();
+      //   for (let i = -1; i < 2; i++) {
+      //     lyr.beginPath();
+      //     lyr.arc(
+      //       topLeft[0] + sceneW / 2 - callPad + i * 20,
+      //       topLeft[1] + sceneH / 2 - callPad,
+      //       5,
+      //       0,
+      //       Math.PI * 2,
+      //     );
+      //     lyr.globalAlpha = 0.5;
+      //     lyr.fillStyle = patternParchment;
+      //     lyr.fill();
+      //   }
+      //   lyr.restore();
+      //   return {
+      //     maxX: topLeft[0] + sceneW - callPad,
+      //     maxY: topLeft[1] + sceneH - 2 * callPad - 2 * callTopPad,
+      //   };
+      // }
 
-      const flowchart = defs.flowcharts[viewchart.flowchartId];
-      const initialStack = viewchart.stackByFrameId[flowchart.initialFrameId];
+      const initialStack = viewchart.initialStack;
       const r = drawStackAndDownstream(
         lyr,
         lyrAboveViewchart,
@@ -1516,9 +1530,16 @@ async function main() {
 
       // final connector lines, out of viewchart
       for (const v of r.finalPosForConnectors) {
-        drawConnectorLine(lyrBelow, v.pos, [r.maxX, topLeft[1] + sceneH / 2], {
-          dead: v.dead,
-        });
+        drawConnectorLine(
+          lyrBelow,
+          v.pos,
+          mode === "stacked"
+            ? [r.maxX, topLeft[1] + sceneH / 2]
+            : [r.maxX, v.pos[1]],
+          {
+            dead: v.dead,
+          },
+        );
       }
 
       // initial little connector line on the left
@@ -1531,76 +1552,76 @@ async function main() {
       return r;
     };
 
-    const drawInset = (
-      lyr: Layer,
-      callPath: StackPathSegment[],
-      curX: number,
-      curY: number,
-      maxX: number,
-      maxY: number,
-    ) => {
-      const callPathStr = JSON.stringify(callPath);
-      const w = interpTo(`inset-${callPathStr}-w`, maxX + callPad - curX);
-      const h = interpTo(`inset-${callPathStr}-h`, maxY + callPad - curY);
-      lyr.fillStyle = `rgba(0, 0, 0, ${0.15 * callPath.length})`;
-      lyr.fillRect(curX, curY + callTopPad, w, h - callTopPad);
-      // shadows (via gradients inset from the edges)
-      // left
-      fillRectGradient(
-        lyr,
-        curX,
-        curY + 10,
-        15,
-        h - 10,
-        "rgba(0,0,0,0.7)",
-        "rgba(0,0,0,0)",
-        "H",
-      );
-      // right
-      fillRectGradient(
-        lyr,
-        curX + w,
-        curY + 10,
-        -15,
-        h - 10,
-        "rgba(0,0,0,0.7)",
-        "rgba(0,0,0,0)",
-        "H",
-      );
-      // bottom
-      fillRectGradient(
-        lyr,
-        curX,
-        curY + h,
-        w,
-        -5,
-        "rgba(0,0,0,0.2)",
-        "rgba(0,0,0,0)",
-        "V",
-      );
-      // top
-      fillRect(lyr, curX, curY, w, 20, "rgba(0,0,0,0.4)");
-      fillRectGradient(
-        lyr,
-        curX,
-        curY + 20,
-        w,
-        -10,
-        "rgba(0,0,0,0.7)",
-        "rgba(0,0,0,0)",
-        "V",
-      );
-      fillRectGradient(
-        lyr,
-        curX,
-        curY + 20,
-        w,
-        10,
-        "rgba(0,0,0,0.8)",
-        "rgba(0,0,0,0)",
-        "V",
-      );
-    };
+    // const drawInset = (
+    //   lyr: Layer,
+    //   callPath: StackPathSegment[],
+    //   curX: number,
+    //   curY: number,
+    //   maxX: number,
+    //   maxY: number,
+    // ) => {
+    //   const callPathStr = JSON.stringify(callPath);
+    //   const w = interpTo(`inset-${callPathStr}-w`, maxX + callPad - curX);
+    //   const h = interpTo(`inset-${callPathStr}-h`, maxY + callPad - curY);
+    //   lyr.fillStyle = `rgba(0, 0, 0, ${0.15 * callPath.length})`;
+    //   lyr.fillRect(curX, curY + callTopPad, w, h - callTopPad);
+    //   // shadows (via gradients inset from the edges)
+    //   // left
+    //   fillRectGradient(
+    //     lyr,
+    //     curX,
+    //     curY + 10,
+    //     15,
+    //     h - 10,
+    //     "rgba(0,0,0,0.7)",
+    //     "rgba(0,0,0,0)",
+    //     "H",
+    //   );
+    //   // right
+    //   fillRectGradient(
+    //     lyr,
+    //     curX + w,
+    //     curY + 10,
+    //     -15,
+    //     h - 10,
+    //     "rgba(0,0,0,0.7)",
+    //     "rgba(0,0,0,0)",
+    //     "H",
+    //   );
+    //   // bottom
+    //   fillRectGradient(
+    //     lyr,
+    //     curX,
+    //     curY + h,
+    //     w,
+    //     -5,
+    //     "rgba(0,0,0,0.2)",
+    //     "rgba(0,0,0,0)",
+    //     "V",
+    //   );
+    //   // top
+    //   fillRect(lyr, curX, curY, w, 20, "rgba(0,0,0,0.4)");
+    //   fillRectGradient(
+    //     lyr,
+    //     curX,
+    //     curY + 20,
+    //     w,
+    //     -10,
+    //     "rgba(0,0,0,0.7)",
+    //     "rgba(0,0,0,0)",
+    //     "V",
+    //   );
+    //   fillRectGradient(
+    //     lyr,
+    //     curX,
+    //     curY + 20,
+    //     w,
+    //     10,
+    //     "rgba(0,0,0,0.8)",
+    //     "rgba(0,0,0,0)",
+    //     "V",
+    //   );
+    // };
 
     const drawEscapeRouteMark = (
       lyr: Layer,
@@ -1704,31 +1725,32 @@ async function main() {
     const drawStack = (
       lyr: Layer,
       lyrAboveViewchart: Layer,
-      stack: Stack,
+      stack: ViewchartStack,
       curX: number,
       myY: number,
     ): { maxX: number; maxY: number; layerUsed: Layer } => {
-      const stackPathString = stackPathToString(stack.stackPath);
-      const steps = stack.stepIds.map((stepId) => traceTree.steps[stepId]);
+      const stackId = stack.steps[0]?.id as string | undefined;
+      const steps = stack.steps;
 
       let maxX = curX;
       let maxY = myY;
 
       const hovered =
+        stackId &&
         (inXYWH(mouseX, mouseY, [curX, myY, sceneW, sceneH]) ||
-          hoveredStackPathString === stackPathString) &&
+          hoveredStackId === stackId) &&
         myY < c.height - sceneH; // weird stuff happens (inc. crash) if we hover a stack too close to bottom
 
       if (hovered) {
-        hoveredStackPathString = undefined;
+        hoveredStackId = undefined;
       }
 
-      const stackH = 35;
+      const stackH = scenePadY - 5;
       const layerToUse = hovered ? lyrAboveViewchart : lyr;
       layerToUse.do((lyr) => {
         for (const [stepIdx, step] of steps.entries()) {
           let targetX = curX;
-          let targetY = myY + (stepIdx / stack.stepIds.length) * stackH;
+          let targetY = myY + (stepIdx / stack.steps.length) * stackH;
           if (hovered) {
             const stackFanX = sceneW + 10;
             const stackFanY = sceneH + 10;
@@ -1743,13 +1765,11 @@ async function main() {
           }
 
           const xy: Vec2 = [
-            interpTo(stackPathString + stepIdx + "x", targetX - pan[0]) +
-              pan[0],
-            interpTo(stackPathString + stepIdx + "y", targetY - pan[1]) +
-              pan[1],
+            interpTo(step.id + "x", targetX - pan[0]) + pan[0],
+            interpTo(step.id + "y", targetY - pan[1]) + pan[1],
           ];
           drawScene(lyr, step, xy, () => {
-            hoveredStackPathString = stackPathString;
+            hoveredStackId = stackId;
           });
 
           if (stepIdx === 0) {
@@ -1759,20 +1779,15 @@ async function main() {
             maxY = Math.max(maxY, myY + sceneH);
           }
         }
-        if (stack.stepIds.length > 1) {
+        if (stack.steps.length > 1) {
           // draw number of steps in stack
-          drawOutlinedText(
-            lyr,
-            `${stack.stepIds.length}`,
-            [curX + sceneW, myY],
-            {
-              textAlign: "right",
-              size: 20,
-              color: "#BDAA94",
-            },
-          );
+          drawOutlinedText(lyr, `${stack.steps.length}`, [curX + sceneW, myY], {
+            textAlign: "right",
+            size: 20,
+            color: "#BDAA94",
+          });
         }
-        if (stack.stepIds.length === 0) {
+        if (stack.steps.length === 0) {
           const w = 60;
           const h = 50;
           drawParchmentBox(lyr, curX, myY, w, h, {
@@ -1792,7 +1807,7 @@ async function main() {
     const drawStackAndDownstream = (
       lyr: Layer,
       lyrAboveViewchart: Layer,
-      stack: Stack,
+      stack: ViewchartStack,
       myX: number,
       myY: number,
       viewchart: Viewchart,
@@ -1810,47 +1825,46 @@ async function main() {
 
       let maxY = myY;
 
-      const { flowchartId, frameId } = stack.stackPath.final;
+      const { flowchartId, frameId } = stack;
       const flowchart = defs.flowcharts[flowchartId];
       const frame = flowchart.frames[frameId];
-      const steps = stack.stepIds.map((stepId) => traceTree.steps[stepId]);
+      const steps = stack.steps;
 
       // draw call, if any
       // curX is lhs of call hole
       let drewCallHole = false;
-      if (frame.action?.type === "call") {
-        const childViewchart = viewchart.callViewchartsByFrameId[frameId] as
-          | Viewchart
-          | undefined;
-        if (childViewchart) {
-          const child = drawViewchart(
-            lyrAbove,
-            lyrAboveViewchart,
-            childViewchart,
-            [curX + callPad, curY + callPad + callTopPad],
-          );
-          maxY = Math.max(maxY, child.maxY + callPad);
+      // if (frame.action?.type === "call") {
+      //   const childViewchart = viewchart.callViewchartsByFrameId[frameId] as
+      //     | Viewchart
+      //     | undefined;
+      //   if (childViewchart) {
+      //     const child = drawViewchart(
+      //       lyrAbove,
+      //       lyrAboveViewchart,
+      //       childViewchart,
+      //       [curX + callPad, curY + callPad + callTopPad],
+      //     );
+      //     maxY = Math.max(maxY, child.maxY + callPad);
 
-          drawInset(
-            lyrBelow,
-            childViewchart.callPath,
-            curX,
-            curY,
-            child.maxX - callPad,
-            child.maxY + callPad,
-          );
+      //     drawInset(
+      //       lyrBelow,
+      //       childViewchart.callPath,
+      //       curX,
+      //       curY,
+      //       child.maxX - callPad,
+      //       child.maxY + callPad,
+      //     );
 
-          // TODO: think about this spacing; seems like call stack
-          // should be more attached to call hole?
-          curX = child.maxX + callPad;
+      //     // TODO: think about this spacing; seems like call stack
+      //     // should be more attached to call hole?
+      //     curX = child.maxX + callPad;
 
-          drewCallHole = true;
-        }
-      }
+      //     drewCallHole = true;
+      //   }
+      // }
 
       // draw stack
       // curX is now lhs of stack
-      const stackPathString = stackPathToString(stack.stackPath);
       // TODO: returning layerUsed feels bad to me
       const drawStackResult = drawStack(
         lyr,
@@ -1944,13 +1958,14 @@ async function main() {
         );
       }
 
-      const hasSuccess = stack.stepIds
-        .map((stepId) => traceTree.steps[stepId])
-        .some((step) => step.scene.type === "success");
+      const hasSuccess = steps.some((step) => step.scene.type === "success");
 
       // draw downstream
       let maxX = curX + scenePadX;
-      const nextStacks = getNextStacksInLevel(stack, stepsInStacks, defs);
+      // TODO: enable drawing calls!
+      const nextStacks = stack.nextNodes
+        .map((node) => (node.type === "stack" ? node : null))
+        .filter(truthy);
       const finalPosForConnectors: { pos: Vec2; dead: boolean }[] = [];
       // hacky thing to position unused escape routes or escape-route ghosts
       let lastConnectionJoint: Vec2 = [curX + scenePadX / 2, myY + sceneH / 2];
@@ -1962,8 +1977,8 @@ async function main() {
       }
       for (const [i, nextStack] of nextStacks.entries()) {
         if (
-          isEscapeRoute(nextStack.stackPath.final.frameId, flowchart) &&
-          nextStack.stepIds.length === 0
+          isEscapeRoute(nextStack.frameId, flowchart) &&
+          nextStack.steps.length === 0
         ) {
           // draw unused escape route mark
           const markPos = add(lastConnectionJoint, [
@@ -1978,7 +1993,7 @@ async function main() {
             empty: true,
           });
           if (tool.type === "purging-flame") {
-            const { flowchartId, frameId } = nextStack.stackPath.final;
+            const { flowchartId, frameId } = nextStack;
             addClickHandler(xywh, () => {
               modifyFlowchart(flowchartId, (old) => deleteFrame(old, frameId));
               tool = { type: "pointer" };
@@ -2001,7 +2016,7 @@ async function main() {
         for (const v of child.finalPosForConnectors) {
           finalPosForConnectors.push(v);
         }
-        if (isEscapeRoute(nextStack.stackPath.final.frameId, flowchart)) {
+        if (isEscapeRoute(nextStack.frameId, flowchart)) {
           const x = curX + scenePadX + sceneW / 2;
           const y = myY - scenePadY + 10;
           drawEscapeDagger(lyrBelow, [x, y], curY - y);
@@ -2012,7 +2027,7 @@ async function main() {
           const start = [curX, myY + stackH / 2] as Vec2;
           const end = child.initialPosForConnector;
 
-          if (!isEscapeRoute(nextStack.stackPath.final.frameId, flowchart)) {
+          if (!isEscapeRoute(nextStack.frameId, flowchart)) {
             drawConnectorLine(lyrBelow, start, end, { dead: !hasSuccess });
             lastConnectionJoint = add(child.initialPosForConnector, [
               -scenePadX / 2,
@@ -2081,41 +2096,44 @@ async function main() {
         finalPosForConnectors,
       };
     };
-    const stepsInStacks = putStepsInStacks(traceTree);
-    const viewchart = stepsInStacksToViewchart(stepsInStacks);
+    console.log("trace tree", traceTree);
+    const viewchart = traceTreeToViewchart(traceTree, defs, mode, initStep.id);
+    console.log("viewchart", viewchart);
     const lyrAboveViewchart = lyrMain.spawnLater();
     const topLevel = drawViewchart(
       lyrMain,
       lyrAboveViewchart,
       viewchart,
       add(pan, v(100)),
+      mode,
     );
     lyrAboveViewchart.place();
     // is there more than one final stack?
-    const finalStacks = Object.values(viewchart.stackByFrameId).filter(
-      (stack) => traceTree.finalStepIds.includes(stack.stepIds[0]),
-    );
-    if (finalStacks.length > 1) {
-      const extraX = 100;
-      drawConnectorLine(
-        lyrMain,
-        [topLevel.maxX, pan[1] + sceneW / 2 + 100],
-        [topLevel.maxX + extraX, pan[1] + sceneW / 2 + 100],
-      );
-      drawStack(
-        lyrMain,
-        lyrAboveViewchart,
-        {
-          stackPath: {
-            callPath: [],
-            final: { flowchartId: state.initialFlowchartId, frameId: "FINAL" },
-          },
-          stepIds: traceTree.finalStepIds,
-        },
-        topLevel.maxX + extraX,
-        pan[1] + 100,
-      );
-    }
+    // TODO: figure out final stacks
+    // const finalStacks = Object.values(viewchart.stackByFrameId).filter(
+    //   (stack) => traceTree.finalStepIds.includes(stack.stepIds[0]),
+    // );
+    // if (finalStacks.length > 1) {
+    //   const extraX = 100;
+    //   drawConnectorLine(
+    //     lyrMain,
+    //     [topLevel.maxX, pan[1] + sceneW / 2 + 100],
+    //     [topLevel.maxX + extraX, pan[1] + sceneW / 2 + 100],
+    //   );
+    //   drawStack(
+    //     lyrMain,
+    //     lyrAboveViewchart,
+    //     {
+    //       stackPath: {
+    //         callPath: [],
+    //         final: { flowchartId: state.initialFlowchartId, frameId: "FINAL" },
+    //       },
+    //       stepIds: traceTree.finalStepIds,
+    //     },
+    //     topLevel.maxX + extraX,
+    //     pan[1] + 100,
+    //   );
+    // }
 
     const flowchartIds = [
       ...Object.values(state.defs.flowcharts).map((f) => f.id),

@@ -143,6 +143,7 @@ export type Call = {
   // 1. The input to the call
   prevStepId: string;
   // 2. The call that was made
+  flowchartId: string;
   frameId: string;
 };
 
@@ -423,6 +424,7 @@ function performAction(
       scene: callScene,
       caller: {
         prevStepId: step.id,
+        flowchartId,
         frameId,
       },
     };
@@ -634,46 +636,16 @@ export function scenesByFrame(
   );
 }
 
-/**
- * A StackPath corresponds to a stack in the UI. `callPath` is a
- * containment path thru nested call boxes, and `final` identifies
- * where the stack is within the innermost call box.
- */
-export type StackPath = {
-  callPath: StackPathSegment[];
-  final: StackPathSegment;
-};
-export type StackPathSegment = {
-  flowchartId: string;
-  frameId: string;
-};
-
-export function stackPathToString(stackPath: StackPath) {
-  return JSON.stringify(stackPath);
-}
-export function callPathToString(callPath: StackPathSegment[]) {
-  return JSON.stringify(callPath);
-}
-export function stackPathForStep(step: Step, traceTree: TraceTree): StackPath {
-  let callPath: StackPathSegment[];
+export function getCallPath(step: Step, traceTree: TraceTree): Call[] {
   if (step.caller) {
     const fakeCallerStep = {
       ...traceTree.steps[step.caller.prevStepId],
       frameId: step.caller.frameId,
     };
-    const callerStackPath = stackPathForStep(fakeCallerStep, traceTree);
-    callPath = [...callerStackPath.callPath, callerStackPath.final];
+    return [...getCallPath(fakeCallerStep, traceTree), step.caller];
   } else {
-    callPath = [];
+    return [];
   }
-
-  return {
-    callPath,
-    final: {
-      flowchartId: step.flowchartId,
-      frameId: step.frameId,
-    },
-  };
 }
 
 export function getCallerInfo(
@@ -785,178 +757,111 @@ export function getNextSteps(step: Step, traceTree: TraceTree) {
   );
 }
 
-/**
- * A "stack" is the set of steps shown at a single location in
- * the diagram (which can be ID'd by a frame path).
- */
-export type Stack = {
-  stackPath: StackPath;
-  stepIds: string[];
-};
-export type StepsInStacks = {
-  stacks: {
-    [stackPathStr: string]: Stack;
-  };
-  stackByStepId: {
-    [stepId: string]: Stack;
-  };
-};
-
-export function putStepsInStacks(tree: TraceTree): StepsInStacks {
-  const stacks: { [stackPathId: string]: Stack } = {};
-  const stackByStepId: { [stepId: string]: Stack } = {};
-
-  for (const step of Object.values(tree.steps)) {
-    const stackPath = stackPathForStep(step, tree);
-    const stackPathStr = stackPathToString(stackPath);
-    let stack = stacks[stackPathStr];
-    if (!stack) {
-      stack = stacks[stackPathStr] = { stackPath, stepIds: [] };
-    }
-    stack.stepIds.push(step.id);
-    stackByStepId[step.id] = stack;
-  }
-
-  return { stacks, stackByStepId };
-}
-
-export function getStackByPath(
-  stackPath: StackPath,
-  stepsInStacks: StepsInStacks,
-): Stack {
-  return stepsInStacks.stacks[stackPathToString(stackPath)];
-}
-
-export function getPrevStacks(
-  stack: Stack,
-  stepsInStacks: StepsInStacks,
-  traceTree: TraceTree,
-): Stack[] {
-  const { stackByStepId } = stepsInStacks;
-
-  return Array.from(
-    new Set(
-      stack.stepIds.flatMap((stepId) => {
-        const prevStepId = traceTree.steps[stepId].prevStepId;
-        return prevStepId ? [stackByStepId[prevStepId]] : [];
-      }),
-    ),
-  );
-}
-
-export function getNextStacks(
-  stack: Stack,
-  stepsInStacks: StepsInStacks,
-  traceTree: TraceTree,
-): Stack[] {
-  const { stackByStepId } = stepsInStacks;
-
-  return Array.from(
-    new Set(
-      stack.stepIds.flatMap((stepId) =>
-        getNextSteps(traceTree.steps[stepId], traceTree).map(
-          (nextStep) => stackByStepId[nextStep.id],
-        ),
-      ),
-    ),
-  );
-}
-
-export function getNextStacksInLevel(
-  stack: Stack,
-  stepsInStacks: StepsInStacks,
-  defs: Definitions,
-): Stack[] {
-  const { frameId, flowchartId } = stack.stackPath.final;
-  const nextFrameIds = getNextFrameIds(frameId, defs.flowcharts[flowchartId]);
-  return nextFrameIds.map((nextFrameId) => {
-    const nextStackPath = {
-      callPath: stack.stackPath.callPath,
-      final: { flowchartId, frameId: nextFrameId },
-    };
-    return (
-      getStackByPath(nextStackPath, stepsInStacks) ?? {
-        stackPath: nextStackPath,
-        stepIds: [],
-      }
-    );
-  });
-}
-
-export function getPrevStacksInLevel(
-  stack: Stack,
-  stepsInStacks: StepsInStacks,
-  defs: Definitions,
-): Stack[] {
-  const { frameId, flowchartId } = stack.stackPath.final;
-  const prevFrameIds = getPrevFrameIds(frameId, defs.flowcharts[flowchartId]);
-  return prevFrameIds.map((prevFrameId) => {
-    const prevStackPath = {
-      callPath: stack.stackPath.callPath,
-      final: { flowchartId, frameId: prevFrameId },
-    };
-    return (
-      getStackByPath(prevStackPath, stepsInStacks) ?? {
-        stackPath: prevStackPath,
-        stepIds: [],
-      }
-    );
-  });
-}
+// A "viewchart" shows the execution of a flowchart in a particular
+// arrangement: Steps are grouped into stacks (either one per frame
+// for 'stacked' mode or one per step for 'unstacked' mode). Calls
+// are shown in separate sub-viewcharts inside holes.
 
 export type Viewchart = {
   flowchartId: string;
-  stackByFrameId: Record<string, Stack>;
-  callViewchartsByFrameId: Record<string, Viewchart>;
-  /* just for debugging, I think */
-  callPath: StackPathSegment[];
+  initialStack: ViewchartStack;
 };
 
-export function stepsInStacksToViewchart(
-  stepsInStacks: StepsInStacks,
+export type ViewchartNode = ViewchartStack | ViewchartCall;
+
+export type ViewchartStack = {
+  type: "stack";
+  flowchartId: string;
+  frameId: string;
+  steps: Step[];
+  nextNodes: ViewchartNode[];
+};
+
+export type ViewchartCall = {
+  type: "call";
+  frameId: string;
+  childViewchart: Viewchart;
+  /* Either every output of the call feeds into a single stack at
+  this level, or each output feeds into a single stack. */
+  continuation:
+    | { type: "single"; single: ViewchartStack }
+    | { type: "many"; many: { [stackId: string]: ViewchartStack } };
+};
+
+export function traceTreeToViewchart(
+  traceTree: TraceTree,
+  defs: Definitions,
+  mode: "stacked" | "unstacked",
+  initialStepId: string,
 ): Viewchart {
-  return stepsInStacksToViewchartHelper(
-    [],
-    Object.values(stepsInStacks.stacks),
-  );
+  const step = traceTree.steps[initialStepId];
+  return {
+    flowchartId: step.flowchartId,
+    initialStack: traceTreeToViewchartStack(
+      traceTree,
+      defs,
+      mode,
+      step.flowchartId,
+      step.frameId,
+      [step],
+    ),
+  };
 }
 
-function stepsInStacksToViewchartHelper(
-  callPath: StackPathSegment[],
-  stacks: Stack[],
-): Viewchart {
-  let flowchartId: string | undefined = undefined;
-  const stackByFrameId: Record<string, Stack> = {};
-  const callViewchartsByFrameId: Record<string, Viewchart> = {};
-  const stacksByCallFrameId: Record<string, Stack[]> = {};
-  for (const stack of Object.values(stacks)) {
-    const isStackAtCallPath =
-      callPathToString(stack.stackPath.callPath) === callPathToString(callPath);
-
-    if (isStackAtCallPath) {
-      stackByFrameId[stack.stackPath.final.frameId] = stack;
-      // TODO hacky
-      flowchartId = stack.stackPath.final.flowchartId;
-    } else {
-      const callFrameId = stack.stackPath.callPath[callPath.length].frameId;
-      if (!stacksByCallFrameId[callFrameId]) {
-        stacksByCallFrameId[callFrameId] = [];
-      }
-      stacksByCallFrameId[callFrameId].push(stack);
-    }
-  }
-  if (!flowchartId) {
-    throw new Error("No flowchartId?");
-  }
-  for (const [callFrameId, stacks] of Object.entries(stacksByCallFrameId)) {
-    const nextCallPath = [...callPath, { flowchartId, frameId: callFrameId }];
-    callViewchartsByFrameId[callFrameId] = stepsInStacksToViewchartHelper(
-      nextCallPath,
-      stacks,
+export function traceTreeToViewchartStack(
+  traceTree: TraceTree,
+  defs: Definitions,
+  mode: "stacked" | "unstacked",
+  flowchartId: string,
+  frameId: string,
+  steps: Step[],
+): ViewchartStack {
+  const flowchart = defs.flowcharts[flowchartId];
+  const stepIds = steps.map((step) => step.id);
+  let nextNodes: ViewchartNode[] = [];
+  getNextFrameIds(frameId, flowchart).forEach((nextFrameId) => {
+    const nextSteps = Object.values(traceTree.steps).filter(
+      (step) =>
+        step.flowchartId === flowchartId &&
+        step.frameId === nextFrameId &&
+        step.prevStepId &&
+        stepIds.includes(step.prevStepId),
     );
-  }
-
-  return { flowchartId, stackByFrameId, callViewchartsByFrameId, callPath };
+    console.log("next frame", nextFrameId, nextSteps);
+    const makeStack = (steps: Step[]) =>
+      traceTreeToViewchartStack(
+        traceTree,
+        defs,
+        mode,
+        flowchartId,
+        nextFrameId,
+        steps,
+      );
+    if (mode === "stacked") {
+      // make a stack for all steps for this next frame (0 or more)
+      nextNodes.push(makeStack(nextSteps));
+    } else if (mode === "unstacked") {
+      if (nextSteps.length === 0) {
+        // make an empty stack for this frame
+        nextNodes.push(makeStack([]));
+      } else {
+        // make stacks for each step of this next frame
+        nextSteps.forEach((nextStep) => {
+          nextNodes.push(makeStack([nextStep]));
+        });
+      }
+    } else {
+      assertNever(mode);
+    }
+  });
+  const stack: ViewchartStack = {
+    type: "stack",
+    flowchartId,
+    frameId,
+    steps,
+    nextNodes,
+  };
+  return stack;
 }
 
 export function getActionText(action?: Action): string {

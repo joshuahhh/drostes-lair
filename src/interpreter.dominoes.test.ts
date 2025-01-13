@@ -1,9 +1,9 @@
 import { assert, expect, test } from "vitest";
 import { dominoFlowchart } from "./dominoes.ex";
 import {
+  callPath,
   getFinalValues,
   runHelper,
-  stackPathForStep,
   topLevelValueForStep,
 } from "./interpreter";
 
@@ -264,7 +264,7 @@ test("framePathForStep & topLevelValueForStep work", () => {
       "*→one-domino-1→one-domino-2↓♌︎→one-domino-1→one-domino-2↓♌︎→one-domino-1"
     ];
 
-  expect(stackPathForStep(someStep, traceTree)).toEqual({
+  expect(callPath(someStep, traceTree, "stacked")).toEqual({
     callPath: [
       {
         flowchartId: "♌︎",

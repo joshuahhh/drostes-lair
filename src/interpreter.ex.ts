@@ -43,3 +43,32 @@ export const twoCallsInARowFlowcharts: Flowchart[] = [
     arrows: [{ from: "1", to: "2" }],
   },
 ];
+
+export const branchingFlowchart: Flowchart[] = [
+  {
+    id: "fc1",
+    initialFrameId: "1",
+    frames: indexById([
+      { id: "1" },
+      {
+        id: "2",
+        action: {
+          type: "test-func",
+          func: ({ value: x }) => [
+            success(x),
+            success(x + 10),
+            success(x + 20),
+          ],
+        },
+      },
+      {
+        id: "3",
+        action: {
+          type: "call",
+          flowchartId: "fc2",
+        },
+      },
+    ]),
+    arrows: [{ from: "1", to: "2" }],
+  },
+];

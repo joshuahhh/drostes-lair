@@ -8,7 +8,7 @@ import {
   stepsInStacksToViewchart,
   success,
 } from "./interpreter";
-import { twoCallsInARowFlowcharts } from "./interpreter.ex";
+import { branchingFlowchart, twoCallsInARowFlowcharts } from "./interpreter.ex";
 import { indexById } from "./util";
 
 test("runAll works with a simple flowchart", () => {
@@ -696,9 +696,107 @@ test("runAll works with test-cond", () => {
   `);
 });
 
+test("putStepsInStacks works in 'stacked' mode", () => {
+  const { traceTree } = runHelper(branchingFlowchart, 3);
+  const stepsInStacks = putStepsInStacks(traceTree, "stacked");
+  expect(stepsInStacks.stacks).toMatchInlineSnapshot(`
+    {
+      "{"callPath":[],"final":{"flowchartId":"fc1","frameId":"1","stepId":null}}": {
+        "stackPath": {
+          "callPath": [],
+          "final": {
+            "flowchartId": "fc1",
+            "frameId": "1",
+            "stepId": null,
+          },
+        },
+        "stepIds": [
+          "*",
+        ],
+      },
+      "{"callPath":[],"final":{"flowchartId":"fc1","frameId":"2","stepId":null}}": {
+        "stackPath": {
+          "callPath": [],
+          "final": {
+            "flowchartId": "fc1",
+            "frameId": "2",
+            "stepId": null,
+          },
+        },
+        "stepIds": [
+          "*→2[0]",
+          "*→2[1]",
+          "*→2[2]",
+        ],
+      },
+    }
+  `);
+});
+
+test("putStepsInStacks works in 'unstacked' mode", () => {
+  const { traceTree } = runHelper(branchingFlowchart, 3);
+  const stepsInStacks = putStepsInStacks(traceTree, "unstacked");
+  expect(stepsInStacks.stacks).toMatchInlineSnapshot(`
+    {
+      "{"callPath":[],"final":{"flowchartId":"fc1","frameId":"1","stepId":"*"}}": {
+        "stackPath": {
+          "callPath": [],
+          "final": {
+            "flowchartId": "fc1",
+            "frameId": "1",
+            "stepId": "*",
+          },
+        },
+        "stepIds": [
+          "*",
+        ],
+      },
+      "{"callPath":[],"final":{"flowchartId":"fc1","frameId":"2","stepId":"*→2[0]"}}": {
+        "stackPath": {
+          "callPath": [],
+          "final": {
+            "flowchartId": "fc1",
+            "frameId": "2",
+            "stepId": "*→2[0]",
+          },
+        },
+        "stepIds": [
+          "*→2[0]",
+        ],
+      },
+      "{"callPath":[],"final":{"flowchartId":"fc1","frameId":"2","stepId":"*→2[1]"}}": {
+        "stackPath": {
+          "callPath": [],
+          "final": {
+            "flowchartId": "fc1",
+            "frameId": "2",
+            "stepId": "*→2[1]",
+          },
+        },
+        "stepIds": [
+          "*→2[1]",
+        ],
+      },
+      "{"callPath":[],"final":{"flowchartId":"fc1","frameId":"2","stepId":"*→2[2]"}}": {
+        "stackPath": {
+          "callPath": [],
+          "final": {
+            "flowchartId": "fc1",
+            "frameId": "2",
+            "stepId": "*→2[2]",
+          },
+        },
+        "stepIds": [
+          "*→2[2]",
+        ],
+      },
+    }
+  `);
+});
+
 test("stepsInStacksToViewchart works with two calls in a row", () => {
   const { traceTree } = runHelper(twoCallsInARowFlowcharts, 3);
-  const stepsInStacks = putStepsInStacks(traceTree);
+  const stepsInStacks = putStepsInStacks(traceTree, "stacked");
   const viewchart = stepsInStacksToViewchart(stepsInStacks);
   expect(viewchart).toMatchInlineSnapshot(`
     {
