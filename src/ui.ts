@@ -45,7 +45,7 @@ import {
   mm,
   saveFile,
 } from "./ui_util";
-import { assertNever, indexById, truthy } from "./util";
+import { assertNever, indexById } from "./util";
 import { Vec2, add, angleBetween, distance, mul, v } from "./vec2";
 
 const browser = detectBrowser();
@@ -1962,23 +1962,20 @@ async function main() {
 
       // draw downstream
       let maxX = curX + scenePadX;
-      // TODO: enable drawing calls!
-      const nextStacks = stack.nextNodes
-        .map((node) => (node.type === "stack" ? node : null))
-        .filter(truthy);
+      const nextNodes = stack.nextNodes;
       const finalPosForConnectors: { pos: Vec2; dead: boolean }[] = [];
       // hacky thing to position unused escape routes or escape-route ghosts
       let lastConnectionJoint: Vec2 = [curX + scenePadX / 2, myY + sceneH / 2];
-      if (nextStacks.length === 0) {
+      if (nextNodes.length === 0) {
         finalPosForConnectors.push({
           pos: [curX, myY + stackH / 2],
           dead: !hasSuccess,
         });
       }
-      for (const [i, nextStack] of nextStacks.entries()) {
+      for (const [i, nextNode] of nextNodes.entries()) {
         if (
-          isEscapeRoute(nextStack.frameId, flowchart) &&
-          nextStack.steps.length === 0
+          isEscapeRoute(nextNode.frameId, flowchart) &&
+          nextNode.steps.length === 0
         ) {
           // draw unused escape route mark
           const markPos = add(lastConnectionJoint, [
@@ -1993,7 +1990,7 @@ async function main() {
             empty: true,
           });
           if (tool.type === "purging-flame") {
-            const { flowchartId, frameId } = nextStack;
+            const { flowchartId, frameId } = nextNode;
             addClickHandler(xywh, () => {
               modifyFlowchart(flowchartId, (old) => deleteFrame(old, frameId));
               tool = { type: "pointer" };
@@ -2008,7 +2005,7 @@ async function main() {
         const child = drawStackAndDownstream(
           lyr,
           lyrAboveViewchart,
-          nextStack,
+          nextNode,
           curX + scenePadX,
           curY,
           viewchart,
@@ -2016,7 +2013,7 @@ async function main() {
         for (const v of child.finalPosForConnectors) {
           finalPosForConnectors.push(v);
         }
-        if (isEscapeRoute(nextStack.frameId, flowchart)) {
+        if (isEscapeRoute(nextNode.frameId, flowchart)) {
           const x = curX + scenePadX + sceneW / 2;
           const y = myY - scenePadY + 10;
           drawEscapeDagger(lyrBelow, [x, y], curY - y);
@@ -2027,7 +2024,7 @@ async function main() {
           const start = [curX, myY + stackH / 2] as Vec2;
           const end = child.initialPosForConnector;
 
-          if (!isEscapeRoute(nextStack.frameId, flowchart)) {
+          if (!isEscapeRoute(nextNode.frameId, flowchart)) {
             drawConnectorLine(lyrBelow, start, end, { dead: !hasSuccess });
             lastConnectionJoint = add(child.initialPosForConnector, [
               -scenePadX / 2,
@@ -2097,7 +2094,7 @@ async function main() {
       };
     };
     console.log("trace tree", traceTree);
-    const viewchart = traceTreeToViewchart(traceTree, defs, mode, initStep.id);
+    const viewchart = traceTreeToViewchart(traceTree, defs, mode, [initStep]);
     console.log("viewchart", viewchart);
     const lyrAboveViewchart = lyrMain.spawnLater();
     const topLevel = drawViewchart(

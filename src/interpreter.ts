@@ -792,18 +792,21 @@ export function traceTreeToViewchart(
   traceTree: TraceTree,
   defs: Definitions,
   mode: "stacked" | "unstacked",
-  initialStepId: string,
+  steps: Step[],
 ): Viewchart {
-  const step = traceTree.steps[initialStepId];
+  if (steps.length === 0) {
+    throw new Error("can't make a viewchart without at least one step");
+  }
+  const { flowchartId, frameId } = steps[0];
   return {
-    flowchartId: step.flowchartId,
+    flowchartId,
     initialStack: traceTreeToViewchartStack(
       traceTree,
       defs,
       mode,
-      step.flowchartId,
-      step.frameId,
-      [step],
+      flowchartId,
+      frameId,
+      steps,
     ),
   };
 }
@@ -820,15 +823,34 @@ export function traceTreeToViewchartStack(
   const stepIds = steps.map((step) => step.id);
   let nextNodes: ViewchartNode[] = [];
   getNextFrameIds(frameId, flowchart).forEach((nextFrameId) => {
-    const nextSteps = Object.values(traceTree.steps).filter(
+    const nextFrame = flowchart.frames[nextFrameId];
+    if (nextFrame.action?.type === "call") {
+      const nextStepsIntoCall = Object.values(traceTree.steps).filter(
+        (step) => step.prevStepId && stepIds.includes(step.prevStepId),
+      );
+      nextNodes.push({
+        type: "call",
+        frameId: nextFrameId,
+        childViewchart: traceTreeToViewchart(
+          traceTree,
+          defs,
+          mode,
+          nextStepsIntoCall,
+        ),
+        // TODO: phony continuation
+        continuation: { type: "many", many: {} },
+      });
+      return;
+    }
+    const nextStepsInFlowchart = Object.values(traceTree.steps).filter(
       (step) =>
         step.flowchartId === flowchartId &&
         step.frameId === nextFrameId &&
         step.prevStepId &&
         stepIds.includes(step.prevStepId),
     );
-    console.log("next frame", nextFrameId, nextSteps);
-    const makeStack = (steps: Step[]) =>
+    console.log("next frame", nextFrameId, nextStepsInFlowchart);
+    const makeNode = (steps: Step[]) =>
       traceTreeToViewchartStack(
         traceTree,
         defs,
@@ -839,15 +861,15 @@ export function traceTreeToViewchartStack(
       );
     if (mode === "stacked") {
       // make a stack for all steps for this next frame (0 or more)
-      nextNodes.push(makeStack(nextSteps));
+      nextNodes.push(makeNode(nextStepsInFlowchart));
     } else if (mode === "unstacked") {
-      if (nextSteps.length === 0) {
+      if (nextStepsInFlowchart.length === 0) {
         // make an empty stack for this frame
-        nextNodes.push(makeStack([]));
+        nextNodes.push(makeNode([]));
       } else {
         // make stacks for each step of this next frame
-        nextSteps.forEach((nextStep) => {
-          nextNodes.push(makeStack([nextStep]));
+        nextStepsInFlowchart.forEach((nextStep) => {
+          nextNodes.push(makeNode([nextStep]));
         });
       }
     } else {
