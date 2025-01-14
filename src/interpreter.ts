@@ -771,6 +771,7 @@ export type ViewchartNode = ViewchartStack | ViewchartCall;
 
 export type ViewchartStack = {
   type: "stack";
+  nodeId: string;
   flowchartId: string;
   frameId: string;
   steps: Step[];
@@ -779,6 +780,8 @@ export type ViewchartStack = {
 
 export type ViewchartCall = {
   type: "call";
+  nodeId: string;
+  callDepth: number;
   frameId: string;
   childViewchart: Viewchart;
   /* Either every output of the call feeds into a single stack at
@@ -793,6 +796,8 @@ export function traceTreeToViewchart(
   defs: Definitions,
   mode: "stacked" | "unstacked",
   steps: Step[],
+  initialNodeId: string,
+  callDepth: number,
 ): Viewchart {
   if (steps.length === 0) {
     throw new Error("can't make a viewchart without at least one step");
@@ -807,6 +812,8 @@ export function traceTreeToViewchart(
       flowchartId,
       frameId,
       steps,
+      initialNodeId,
+      callDepth,
     ),
   };
 }
@@ -818,6 +825,8 @@ export function traceTreeToViewchartStack(
   flowchartId: string,
   frameId: string,
   steps: Step[],
+  nodeId: string,
+  callDepth: number,
 ): ViewchartStack {
   const flowchart = defs.flowcharts[flowchartId];
   const stepIds = steps.map((step) => step.id);
@@ -830,12 +839,16 @@ export function traceTreeToViewchartStack(
       );
       nextNodes.push({
         type: "call",
+        nodeId,
+        callDepth: callDepth + 1,
         frameId: nextFrameId,
         childViewchart: traceTreeToViewchart(
           traceTree,
           defs,
           mode,
           nextStepsIntoCall,
+          nodeId,
+          callDepth + 1,
         ),
         // TODO: phony continuation
         continuation: { type: "many", many: {} },
@@ -850,7 +863,7 @@ export function traceTreeToViewchartStack(
         stepIds.includes(step.prevStepId),
     );
     console.log("next frame", nextFrameId, nextStepsInFlowchart);
-    const makeNode = (steps: Step[]) =>
+    const makeNode = (steps: Step[], nodeIdPart: string | undefined) =>
       traceTreeToViewchartStack(
         traceTree,
         defs,
@@ -858,32 +871,34 @@ export function traceTreeToViewchartStack(
         flowchartId,
         nextFrameId,
         steps,
+        nodeId + "/" + nextFrameId + (nodeIdPart ? "/" + nodeIdPart : ""),
+        callDepth,
       );
     if (mode === "stacked") {
       // make a stack for all steps for this next frame (0 or more)
-      nextNodes.push(makeNode(nextStepsInFlowchart));
+      nextNodes.push(makeNode(nextStepsInFlowchart, ""));
     } else if (mode === "unstacked") {
       if (nextStepsInFlowchart.length === 0) {
         // make an empty stack for this frame
-        nextNodes.push(makeNode([]));
+        nextNodes.push(makeNode([], ""));
       } else {
         // make stacks for each step of this next frame
         nextStepsInFlowchart.forEach((nextStep) => {
-          nextNodes.push(makeNode([nextStep]));
+          nextNodes.push(makeNode([nextStep], nextStep.id));
         });
       }
     } else {
       assertNever(mode);
     }
   });
-  const stack: ViewchartStack = {
+  return {
     type: "stack",
+    nodeId,
     flowchartId,
     frameId,
     steps,
     nextNodes,
   };
-  return stack;
 }
 
 export function getActionText(action?: Action): string {

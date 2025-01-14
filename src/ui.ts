@@ -19,6 +19,8 @@ import {
   SuccessfulStep,
   TraceTree,
   Viewchart,
+  ViewchartCall,
+  ViewchartNode,
   ViewchartStack,
   assertSuccessful,
   getActionText,
@@ -40,6 +42,8 @@ import {
   XYWH,
   drawArrow,
   expand,
+  fillRect,
+  fillRectGradient,
   inXYWH,
   loadImg,
   mm,
@@ -1525,7 +1529,6 @@ async function main() {
         lyrAboveViewchart,
         initialStack,
         ...topLeft,
-        viewchart,
       );
 
       // final connector lines, out of viewchart
@@ -1552,76 +1555,75 @@ async function main() {
       return r;
     };
 
-    // const drawInset = (
-    //   lyr: Layer,
-    //   callPath: StackPathSegment[],
-    //   curX: number,
-    //   curY: number,
-    //   maxX: number,
-    //   maxY: number,
-    // ) => {
-    //   const callPathStr = JSON.stringify(callPath);
-    //   const w = interpTo(`inset-${callPathStr}-w`, maxX + callPad - curX);
-    //   const h = interpTo(`inset-${callPathStr}-h`, maxY + callPad - curY);
-    //   lyr.fillStyle = `rgba(0, 0, 0, ${0.15 * callPath.length})`;
-    //   lyr.fillRect(curX, curY + callTopPad, w, h - callTopPad);
-    //   // shadows (via gradients inset from the edges)
-    //   // left
-    //   fillRectGradient(
-    //     lyr,
-    //     curX,
-    //     curY + 10,
-    //     15,
-    //     h - 10,
-    //     "rgba(0,0,0,0.7)",
-    //     "rgba(0,0,0,0)",
-    //     "H",
-    //   );
-    //   // right
-    //   fillRectGradient(
-    //     lyr,
-    //     curX + w,
-    //     curY + 10,
-    //     -15,
-    //     h - 10,
-    //     "rgba(0,0,0,0.7)",
-    //     "rgba(0,0,0,0)",
-    //     "H",
-    //   );
-    //   // bottom
-    //   fillRectGradient(
-    //     lyr,
-    //     curX,
-    //     curY + h,
-    //     w,
-    //     -5,
-    //     "rgba(0,0,0,0.2)",
-    //     "rgba(0,0,0,0)",
-    //     "V",
-    //   );
-    //   // top
-    //   fillRect(lyr, curX, curY, w, 20, "rgba(0,0,0,0.4)");
-    //   fillRectGradient(
-    //     lyr,
-    //     curX,
-    //     curY + 20,
-    //     w,
-    //     -10,
-    //     "rgba(0,0,0,0.7)",
-    //     "rgba(0,0,0,0)",
-    //     "V",
-    //   );
-    //   fillRectGradient(
-    //     lyr,
-    //     curX,
-    //     curY + 20,
-    //     w,
-    //     10,
-    //     "rgba(0,0,0,0.8)",
-    //     "rgba(0,0,0,0)",
-    //     "V",
-    //   );
-    // };
+    const drawInset = (
+      lyr: Layer,
+      call: ViewchartCall,
+      curX: number,
+      curY: number,
+      maxX: number,
+      maxY: number,
+    ) => {
+      const w = interpTo(`inset-${call.nodeId}-w`, maxX + callPad - curX);
+      const h = interpTo(`inset-${call.nodeId}-h`, maxY + callPad - curY);
+      lyr.fillStyle = `rgba(0, 0, 0, ${0.15 * call.callDepth})`;
+      lyr.fillRect(curX, curY + callTopPad, w, h - callTopPad);
+      // shadows (via gradients inset from the edges)
+      // left
+      fillRectGradient(
+        lyr,
+        curX,
+        curY + 10,
+        15,
+        h - 10,
+        "rgba(0,0,0,0.7)",
+        "rgba(0,0,0,0)",
+        "H",
+      );
+      // right
+      fillRectGradient(
+        lyr,
+        curX + w,
+        curY + 10,
+        -15,
+        h - 10,
+        "rgba(0,0,0,0.7)",
+        "rgba(0,0,0,0)",
+        "H",
+      );
+      // bottom
+      fillRectGradient(
+        lyr,
+        curX,
+        curY + h,
+        w,
+        -5,
+        "rgba(0,0,0,0.2)",
+        "rgba(0,0,0,0)",
+        "V",
+      );
+      // top
+      fillRect(lyr, curX, curY, w, 20, "rgba(0,0,0,0.4)");
+      fillRectGradient(
+        lyr,
+        curX,
+        curY + 20,
+        w,
+        -10,
+        "rgba(0,0,0,0.7)",
+        "rgba(0,0,0,0)",
+        "V",
+      );
+      fillRectGradient(
+        lyr,
+        curX,
+        curY + 20,
+        w,
+        10,
+        "rgba(0,0,0,0.8)",
+        "rgba(0,0,0,0)",
+        "V",
+      );
+    };
 
     const drawEscapeRouteMark = (
       lyr: Layer,
@@ -1801,16 +1803,28 @@ async function main() {
       return { maxX, maxY, layerUsed: layerToUse };
     };
 
-    /**
-     * returns maximum X & Y values reached
-     */
+    const drawNodeAndDownstream = (
+      lyr: Layer,
+      lyrAboveViewchart: Layer,
+      node: ViewchartNode,
+      myX: number,
+      myY: number,
+    ) => {
+      if (node.type === "stack") {
+        return drawStackAndDownstream(lyr, lyrAboveViewchart, node, myX, myY);
+      } else if (node.type === "call") {
+        return drawCallAndDownstream(lyr, lyrAboveViewchart, node, myX, myY);
+      } else {
+        assertNever(node);
+      }
+    };
+
     const drawStackAndDownstream = (
       lyr: Layer,
       lyrAboveViewchart: Layer,
       stack: ViewchartStack,
       myX: number,
       myY: number,
-      viewchart: Viewchart,
     ): {
       maxX: number;
       maxY: number;
@@ -1830,39 +1844,6 @@ async function main() {
       const frame = flowchart.frames[frameId];
       const steps = stack.steps;
 
-      // draw call, if any
-      // curX is lhs of call hole
-      let drewCallHole = false;
-      // if (frame.action?.type === "call") {
-      //   const childViewchart = viewchart.callViewchartsByFrameId[frameId] as
-      //     | Viewchart
-      //     | undefined;
-      //   if (childViewchart) {
-      //     const child = drawViewchart(
-      //       lyrAbove,
-      //       lyrAboveViewchart,
-      //       childViewchart,
-      //       [curX + callPad, curY + callPad + callTopPad],
-      //     );
-      //     maxY = Math.max(maxY, child.maxY + callPad);
-
-      //     drawInset(
-      //       lyrBelow,
-      //       childViewchart.callPath,
-      //       curX,
-      //       curY,
-      //       child.maxX - callPad,
-      //       child.maxY + callPad,
-      //     );
-
-      //     // TODO: think about this spacing; seems like call stack
-      //     // should be more attached to call hole?
-      //     curX = child.maxX + callPad;
-
-      //     drewCallHole = true;
-      //   }
-      // }
-
       // draw stack
       // curX is now lhs of stack
       // TODO: returning layerUsed feels bad to me
@@ -1874,13 +1855,13 @@ async function main() {
         myY,
       );
       const stackH = drawStackResult.maxY - myY;
-      if (drewCallHole) {
-        drawConnectorLine(
-          lyr,
-          [curX - scenePadX, curY + stackH / 2],
-          [curX, curY + stackH / 2],
-        );
-      }
+      // if (drewCallHole) {
+      //   drawConnectorLine(
+      //     lyr,
+      //     [curX - scenePadX, curY + stackH / 2],
+      //     [curX, curY + stackH / 2],
+      //   );
+      // }
       maxY = Math.max(maxY, drawStackResult.maxY);
       let label = getActionText(flowchart.frames[frameId].action);
       if (label.startsWith("call")) {
@@ -2002,13 +1983,12 @@ async function main() {
 
         if (i > 0) curY += scenePadY;
 
-        const child = drawStackAndDownstream(
+        const child = drawNodeAndDownstream(
           lyr,
           lyrAboveViewchart,
           nextNode,
           curX + scenePadX,
           curY,
-          viewchart,
         );
         for (const v of child.finalPosForConnectors) {
           finalPosForConnectors.push(v);
@@ -2086,15 +2066,63 @@ async function main() {
       return {
         maxX,
         maxY,
-        initialPosForConnector: [
-          myX,
-          myY + (drewCallHole ? sceneH / 2 : stackH / 2),
-        ],
+        initialPosForConnector: [myX, myY + sceneH / 2],
         finalPosForConnectors,
       };
     };
+
+    const drawCallAndDownstream = (
+      lyr: Layer,
+      lyrAboveViewchart: Layer,
+      call: ViewchartCall,
+      x: number,
+      y: number,
+    ): {
+      maxX: number;
+      maxY: number;
+      initialPosForConnector: Vec2 | undefined;
+      finalPosForConnectors: { pos: Vec2; dead: boolean }[];
+    } => {
+      const lyrAbove = lyr.spawnLater();
+      const lyrBelow = lyr.spawnHere();
+
+      const child = drawViewchart(
+        lyrAbove,
+        lyrAboveViewchart,
+        call.childViewchart,
+        [x + callPad, y + callPad + callTopPad],
+        mode,
+      );
+
+      drawInset(
+        lyrBelow,
+        call,
+        x,
+        y,
+        child.maxX - callPad,
+        child.maxY + callPad,
+      );
+
+      lyrAbove.place();
+
+      return {
+        maxX: child.maxX + callPad,
+        maxY: child.maxY + callPad,
+        // TODO: figure these out
+        initialPosForConnector: [x, y + sceneH / 2],
+        finalPosForConnectors: [],
+      };
+    };
+
     console.log("trace tree", traceTree);
-    const viewchart = traceTreeToViewchart(traceTree, defs, mode, [initStep]);
+    const viewchart = traceTreeToViewchart(
+      traceTree,
+      defs,
+      mode,
+      [initStep],
+      "init",
+      0,
+    );
     console.log("viewchart", viewchart);
     const lyrAboveViewchart = lyrMain.spawnLater();
     const topLevel = drawViewchart(
