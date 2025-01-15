@@ -130,7 +130,7 @@ const act = (f: (stateYouCanChange: UIState) => void) => {
   }
 };
 
-let mode: "stacked" | "unstacked" = "unstacked";
+let mode: "stacked" | "unstacked" = "stacked";
 
 // DEFAULT FLOWCHART RIGHT HERE BUDDY
 let undoStack: UIState[] = [examples.dominoesBlank];
@@ -400,6 +400,7 @@ async function main() {
     }
     if (e.key === "m") {
       mode = mode === "stacked" ? "unstacked" : "stacked";
+      console.log("mode is", mode);
     }
   });
   window.addEventListener("keyup", (e) => {
@@ -2103,18 +2104,36 @@ async function main() {
         child.maxY + callPad,
       );
 
+      let maxX = child.maxX + callPad;
+      let maxY = child.maxY + callPad;
+
+      x = maxX;
+      x += scenePadX;
+
       lyrAbove.place();
 
+      if (call.continuation.type === "single") {
+        const continuationStack = call.continuation.single;
+        const continuation = drawStackAndDownstream(
+          lyr,
+          lyrAboveViewchart,
+          continuationStack,
+          x,
+          y,
+        );
+        maxX = Math.max(maxX, continuation.maxX);
+        maxY = Math.max(maxY, continuation.maxY);
+      }
+
       return {
-        maxX: child.maxX + callPad,
-        maxY: child.maxY + callPad,
+        maxX,
+        maxY,
         // TODO: figure these out
         initialPosForConnector: [x, y + sceneH / 2],
         finalPosForConnectors: [],
       };
     };
 
-    console.log("trace tree", traceTree);
     const viewchart = traceTreeToViewchart(
       traceTree,
       defs,

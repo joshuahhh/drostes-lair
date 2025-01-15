@@ -648,6 +648,15 @@ export function getCallPath(step: Step, traceTree: TraceTree): Call[] {
   }
 }
 
+// TODO: names & ontology suck
+export function getCallPathStaticStr(callPath: Call[]): string {
+  const copy: any[] = structuredClone(callPath);
+  for (const call of copy) {
+    delete call.prevStepId;
+  }
+  return JSON.stringify(copy);
+}
+
 export function getCallerInfo(
   call: Call,
   traceTree: TraceTree,
@@ -795,6 +804,8 @@ export function traceTreeToViewchart(
   traceTree: TraceTree,
   defs: Definitions,
   mode: "stacked" | "unstacked",
+  /* We assume 1. there's at least one step, 2. all steps are on the
+  same frame */
   steps: Step[],
   initialNodeId: string,
   callDepth: number,
@@ -834,27 +845,21 @@ export function traceTreeToViewchartStack(
   getNextFrameIds(frameId, flowchart).forEach((nextFrameId) => {
     const nextFrame = flowchart.frames[nextFrameId];
     if (nextFrame.action?.type === "call") {
-      const nextStepsIntoCall = Object.values(traceTree.steps).filter(
-        (step) => step.prevStepId && stepIds.includes(step.prevStepId),
-      );
-      nextNodes.push({
-        type: "call",
-        nodeId,
-        callDepth: callDepth + 1,
-        frameId: nextFrameId,
-        childViewchart: traceTreeToViewchart(
+      nextNodes.push(
+        traceTreeToViewchartCall(
           traceTree,
           defs,
           mode,
-          nextStepsIntoCall,
-          nodeId,
-          callDepth + 1,
+          flowchartId,
+          nextFrameId,
+          steps,
+          nodeId + "/" + nextFrameId,
+          callDepth,
         ),
-        // TODO: phony continuation
-        continuation: { type: "many", many: {} },
-      });
+      );
       return;
     }
+
     const nextStepsInFlowchart = Object.values(traceTree.steps).filter(
       (step) =>
         step.flowchartId === flowchartId &&
@@ -862,7 +867,6 @@ export function traceTreeToViewchartStack(
         step.prevStepId &&
         stepIds.includes(step.prevStepId),
     );
-    console.log("next frame", nextFrameId, nextStepsInFlowchart);
     const makeNode = (steps: Step[], nodeIdPart: string | undefined) =>
       traceTreeToViewchartStack(
         traceTree,
@@ -898,6 +902,88 @@ export function traceTreeToViewchartStack(
     frameId,
     steps,
     nextNodes,
+  };
+}
+
+export function traceTreeToViewchartCall(
+  traceTree: TraceTree,
+  defs: Definitions,
+  mode: "stacked" | "unstacked",
+  flowchartId: string,
+  callFrameId: string,
+  steps: Step[],
+  nodeId: string,
+  callDepth: number,
+): ViewchartNode {
+  const stepIds = steps.map((step) => step.id);
+
+  // These are the initial steps inside the call
+  const stepsInCall = Object.values(traceTree.steps).filter(
+    (step) => step.prevStepId && stepIds.includes(step.prevStepId),
+  );
+
+  if (stepsInCall.length === 0) {
+    // make an empty stack for this call
+    return traceTreeToViewchartStack(
+      traceTree,
+      defs,
+      mode,
+      flowchartId,
+      callFrameId,
+      [],
+      nodeId + "/" + callFrameId,
+      callDepth + 1,
+    );
+  }
+
+  // there's at least one step in this call; make a call node
+  const childViewchart = traceTreeToViewchart(
+    traceTree,
+    defs,
+    mode,
+    stepsInCall,
+    nodeId,
+    callDepth + 1,
+  );
+  let continuation: ViewchartCall["continuation"];
+  if (mode === "stacked") {
+    const myCallPathStaticStr = getCallPathStaticStr(
+      getCallPath(stepsInCall[0], traceTree).slice(0, -1),
+    );
+    // make a single stack for all steps leading into this call
+    const nextStepsInFlowchart = Object.values(traceTree.steps).filter(
+      (step) =>
+        step.flowchartId === flowchartId &&
+        step.frameId === callFrameId &&
+        getCallPathStaticStr(getCallPath(step, traceTree)) ===
+          myCallPathStaticStr,
+    );
+    continuation = {
+      type: "single",
+      single: traceTreeToViewchartStack(
+        traceTree,
+        defs,
+        mode,
+        flowchartId,
+        callFrameId,
+        nextStepsInFlowchart,
+        nodeId + "/" + callFrameId,
+        callDepth,
+      ),
+    };
+  } else if (mode === "unstacked") {
+    // TODO: phony
+    continuation = { type: "many", many: {} };
+  } else {
+    assertNever(mode);
+  }
+  return {
+    type: "call",
+    nodeId,
+    callDepth: callDepth + 1,
+    frameId: callFrameId,
+    childViewchart,
+    continuation,
   };
 }
 
