@@ -108,44 +108,37 @@ export type LensImpl = {
 
 // DYNAMIC WORLD
 
-/**
- * When you run a flowchart, you get a TraceTree. It tells you
- * everywhere the execution goes. Because of ambs, this won't always
- * be a linear chain of steps! Sometimes a step might lead to
- * multiple next steps. But I guess it's always a tree? Hence the
- * name.
- *
- * Note that a trace tree extends into function calls! Wow.
- */
-export type TraceTree = {
-  steps: { [id: string]: Step };
-  finalStepIds: string[];
-};
+export type Node = Step | Call;
 
-/**
- * A (completed) step in the execution of a flowchart. It's
- * /concrete/ – no ambing or suchlike. A specific scene! But it
- * happens somewhere (a frame, maybe in some nested calls) and it
- * (probably) came from somewhere (a previous step).
- */
+/* A "Step" is the trace of an action and everything downstream of
+it. */
 export type Step = {
-  id: string;
-  prevStepId: string | undefined;
+  type: "step";
+  nodeId: string;
   frameId: string;
   flowchartId: string;
   scene: Scene;
-  caller: Call | undefined;
-  isStuck?: boolean;
+  nextNodes: Node[];
+  isStuck: boolean;
 };
 
+/* A "Call" is the trace of a call into a flowchart and everything
+ * downstream of it.
+ */
 export type Call = {
-  // We need to know:
-  // 1. The input to the call
-  prevStepId: string;
-  // 2. The call that was made
+  type: "call";
+  nodeId: string;
   flowchartId: string;
-  frameId: string;
+  initialStep: Step;
+  /* Each final step inside the call exits to a step outside the call
+  (or 'final-exit' if there's nothing outside) */
+  exits: Exits;
+
+  /* Redundant; included for visualization convenience */
+  // callDepth: number;
 };
+
+export type Exits = { [stepId: string]: Step | "final-exit" };
 
 /**
  * A scene is the state of the world inside a frame. For now we just
@@ -166,7 +159,8 @@ export type Scene =
       errorAnnotation?: ErrorAnnotation;
     };
 
-export type SuccessfulStep = Step & { scene: { type: "success" } };
+export type SuccessfulScene = Scene & { type: "success" };
+export type SuccessfulStep = Step & { scene: SuccessfulScene };
 
 // FUNCTIONS
 
@@ -181,75 +175,271 @@ export function assertSuccessfulValue(step: Step): SuccessfulStep {
   return step;
 }
 
-export function makeTraceTree(): TraceTree {
-  return {
-    steps: {},
-    finalStepIds: [],
-  };
-}
-
 let RUN_ALL_DEPTH = 0;
 
-/**
- * Given step running in a flowchart, runs the flowchart to
- * completion (in all possible ways) and puts the results into the
- * mutable traceTreeOut.
- */
-export function runAll(
-  step: Step & { scene: { type: "success" } },
-  defs: Definitions,
-  traceTreeOut: TraceTree,
-  callDepth: number,
-): void {
-  if (RUN_ALL_DEPTH > 100) {
-    throw new RangeError("runAll depth overflow");
+type RunContext = {
+  /* A stack of "call" action frames, so we know how to continue
+  after returning from a call. */
+  // callStack: {
+  //   flowchartId: string;
+  //   frameId: string;
+  //   inputScene: SuccessfulScene;
+  // }[];
+  callDepth: number;
+  /* Definitions in effect for the run. */
+  defs: Definitions;
+};
+
+/* This function doesn't know anything about the flowchart's
+caller. */
+export function runFlowchart(
+  ctx: RunContext,
+  parentNodeId: string,
+  flowchartId: string,
+  scene: SuccessfulScene,
+): { initialStep: Step; exitingSteps: Step[] } {
+  const flowchart = ctx.defs.flowcharts[flowchartId];
+  const { nodes, exitingSteps } = runStep(
+    ctx,
+    parentNodeId,
+    scene,
+    flowchartId,
+    flowchart.initialFrameId,
+  );
+  if (nodes.length !== 1) {
+    throw new Error(
+      `INTERNAL ERROR: initial frame in runFlowchart produced ${nodes.length} nodes; should produce 1`,
+    );
+  }
+  if (nodes[0].type !== "step") {
+    throw new Error(
+      `INTERNAL ERROR: initial node in runFlowchart was not a step`,
+    );
+  }
+  const initialStep = nodes[0];
+  return { initialStep, exitingSteps };
+}
+
+export function runCall(
+  ctx: RunContext,
+  inputNodeId: string,
+  flowchartId: string,
+  frameId: string,
+  scene: SuccessfulScene,
+) {
+  const action = ctx.defs.flowcharts[flowchartId].frames[frameId]
+    .action as Action & { type: "call" };
+  let callScene = {
+    ...scene,
+    actionAnnotation: undefined,
+  };
+  if (action.lens) {
+    const lensImpl = lenses[action.lens.type];
+    if (!lensImpl) {
+      throw new Error(`Lens type ${action.lens.type} not found`);
+    }
+    callScene = {
+      ...scene,
+      value: lensImpl.getPart(action.lens, scene.value),
+      actionAnnotation: undefined,
+    };
+  }
+  const { initialStep, exitingSteps } = runFlowchart(
+    ctx,
+    `${inputNodeId}→${frameId}`,
+    flowchartId,
+    callScene,
+  );
+
+  const exits: Exits = {};
+  for (const exitingStep of exitingSteps) {
+    let returnScene: Scene = { ...scene, actionAnnotation: undefined };
+    if (action.lens) {
+      const lensImpl = lenses[callerLens.type];
+      if (!lensImpl) {
+        throw new Error(`Lens type ${callerLens.type} not found`);
+      }
+      returnScene = {
+        ...scene,
+        value: lensImpl.setPart(
+          callerLens,
+          assertSuccessfulValue(callerInfo.prevStep).scene.value,
+          scene.value,
+        ),
+      };
+    }
+    exits[exitingStep.nodeId];
+
+    // TODO: unapply lens?
+    // TODO: continue execution to end of flowchart?
+    return {
+      type: "call",
+      nodeId: step.id,
+      flowchartId,
+      initialStep: step,
+      exits,
+    };
+  }
+}
+
+export function runStep(
+  ctx: RunContext,
+  inputNodeId: string,
+  inputScene: SuccessfulScene,
+  flowchartId: string,
+  frameId: string,
+): {
+  /* Nodes immediately produced */
+  nodes: Node[];
+  /* All downstream steps exiting this flow-chart */
+  exitingSteps: Step[];
+} {
+  const flowchart = ctx.defs.flowcharts[flowchartId];
+  const frame = flowchart.frames[frameId];
+
+  // Special case: a call
+  if (frame.action?.type === "call") {
+    if (ctx.callStack.length > 10) {
+      throw new Error("too deep");
+    }
+    const newCtx = {
+      ...ctx,
+      callStack: [...ctx.callStack, { flowchartId, frameId, inputScene }],
+    };
+    const call = runCall(
+      newCtx,
+      `${inputNodeId}→${frameId}`,
+      frame.action.flowchartId,
+      inputScene,
+    );
+    return { steps: [call.initialStep], exits: call.exits };
   }
 
-  RUN_ALL_DEPTH++;
+  // Apply the action to produce output scenes
   try {
-    // console.log(step.id);
-    // log(step.scene.value);
-    // console.log();
+    const scenes = applyAction(ctx, inputScene, frame.action);
+    if (scenes.length === 0) {
+      // TODO: we currently regard an empty set of output scenes as a
+      // failure, so that, e.g., you can provide an escape route if
+      // "move any item" is called on an empty list. this is all
+      // weird and hacky and deserves more thought.
+      throw new ErrorWithAnnotation("no way to go", {
+        type: "scene",
+        scene: inputScene,
+      });
+    }
+    // remember: each scene is a version of ME
+    const continuations: { step: Step; exits: Exits }[] = scenes.map(
+      (scene, i) => {
+        const nodeId = `${inputNodeId}→${frameId}[${i}]`;
 
-    // this is our responsibility I guess
-    traceTreeOut.steps[step.id] = step;
+        if (scene.type === "error") {
+          // TODO: this is kinda weird ain't it? when would applyAction
+          // produce scenes with errors rather than throwing an error?
+          return {
+            step: {
+              type: "step",
+              nodeId,
+              frameId,
+              flowchartId,
+              scene,
+              nextNodes: [],
+              isStuck: false,
+            },
+            exits: {},
+          };
+        }
 
-    const { flowchartId, frameId, scene, caller } = step;
-    const flowchart = defs.flowcharts[flowchartId];
-    const frame = flowchart.frames[frameId];
-    const nextArrows = flowchart.arrows.filter(({ from }) => from === frameId);
+        return continueWith(ctx, nodeId, scene, flowchartId, frameId);
+      },
+    );
+    return {
+      steps: continuations.map(({ step }) => step),
+      exits: Object.assign({}, ...continuations.map(({ exits }) => exits)),
+    };
+  } catch (e) {
+    let scene: Scene = { type: "error", message: "unknown" };
+    if (e instanceof ErrorWithAnnotation) {
+      scene = {
+        type: "error",
+        message: e.message,
+        errorAnnotation: e.annotation,
+      };
+    } else if (e instanceof Error) {
+      scene = { type: "error", message: e.message };
+    }
+    const nextStep: Step = {
+      type: "step",
+      nodeId: `${inputNodeId}→${frameId}`,
+      frameId,
+      flowchartId,
+      nextNodes: [],
+      scene,
+      isStuck: false, // stuck is for successful steps
+    };
+    return { steps: [nextStep], exits: {} };
+  }
+}
 
-    // If there are no further arrows, we assume the current flowchart
-    // is done (and return to the caller if necessary).
-    //
-    // TODO: Any need to be more explicit about returning? Design
-    // decision!
-    const isFinalFrame = nextArrows.length === 0;
-    if (isFinalFrame) {
-      if (caller === undefined) {
-        traceTreeOut.finalStepIds.push(step.id);
-        // console.log("  *********");
-        // console.log("  * FINAL *");
-        // console.log("  *********");
-        // console.log("");
-        return;
-      }
+export function continueWith(
+  ctx: RunContext,
+  outputNodeId: string,
+  outputScene: SuccessfulScene,
+  flowchartId: string,
+  frameId: string,
+): { step: Step; exits: Exits } {
+  // TODO: figure out stuckness
+  // if (continuations.every(({ step }) => step.scene.type === "error")) {
 
-      const callerInfo = getCallerInfo(caller, traceTreeOut, defs);
+  const flowchart = ctx.defs.flowcharts[flowchartId];
+  const frame = flowchart.frames[frameId];
 
-      let returnScene: Scene = { ...scene, actionAnnotation: undefined };
-      const callerLens = callerInfo.frame.action.lens;
+  const nextArrows = flowchart.arrows.filter(({ from }) => from === frameId);
+
+  // If there are no further arrows, we assume the current flowchart
+  // is done (and return to the caller if necessary).
+  const isFinalFrame = nextArrows.length === 0;
+  if (isFinalFrame) {
+    if (ctx.callStack.length === 0) {
+      // No caller – top level
+      return {
+        step: {
+          type: "step",
+          nodeId: outputNodeId,
+          frameId,
+          flowchartId,
+          nextNodes: [],
+          scene: outputScene,
+          isStuck: false,
+        },
+        exits: {
+          [outputNodeId]: "final-exit",
+        },
+      };
+    } else {
+      // We have a caller!
+      const caller = ctx.callStack[ctx.callStack.length - 1];
+      const newCtx = {
+        ...ctx,
+        callStack: ctx.callStack.slice(0, -1),
+      };
+      const callerFrame = ctx.defs.flowcharts[caller.flowchartId].frames[
+        caller.frameId
+      ] as Frame & { action: { type: "call" } };
+
+      let returnScene: Scene = { ...outputScene, actionAnnotation: undefined };
+      const callerLens = callerFrame.action.lens;
       if (callerLens) {
         const lensImpl = lenses[callerLens.type];
         if (!lensImpl) {
           throw new Error(`Lens type ${callerLens.type} not found`);
         }
         returnScene = {
-          ...scene,
+          ...outputScene,
           value: lensImpl.setPart(
             callerLens,
-            assertSuccessfulValue(callerInfo.prevStep).scene.value,
-            scene.value,
+            caller.inputScene.value,
+            returnScene.value,
           ),
         };
       }
@@ -265,105 +455,77 @@ export function runAll(
       runAll(nextStep, defs, traceTreeOut, callDepth - 1);
       return;
     }
+  }
 
-    // Otherwise, we follow all arrows.
-    let continuedSuccessfully = false;
-    for (const nextArrow of nextArrows) {
-      const nextFrameId = nextArrow.to;
-      const nextFrame = flowchart.frames[nextFrameId];
-      if (!nextFrame) {
-        throw new Error(`Frame ${nextFrameId} not found`);
-      }
-      try {
-        performAction(
-          step,
-          nextFrameId,
-          nextFrame.action,
-          defs,
-          traceTreeOut,
-          callDepth,
-        );
-        continuedSuccessfully = true;
-      } catch (e) {
-        // TODO: not sure this is the right place to output this...
-        let scene: Scene = { type: "error", message: "unknown" };
-        if (e instanceof ErrorWithAnnotation) {
-          scene = {
-            type: "error",
-            message: e.message,
-            errorAnnotation: e.annotation,
-          };
-        } else if (e instanceof Error) {
-          scene = { type: "error", message: e.message };
-        }
-        const nextStep: Step = {
-          id: `${step.id}→${nextFrameId}`,
-          prevStepId: step.id,
-          flowchartId,
-          frameId: nextFrameId,
-          scene,
-          caller,
+  // Otherwise, we follow all arrows.
+  let continuedSuccessfully = false;
+  for (const nextArrow of nextArrows) {
+    const nextFrameId = nextArrow.to;
+    const nextFrame = flowchart.frames[nextFrameId];
+    if (!nextFrame) {
+      throw new Error(`Frame ${nextFrameId} not found`);
+    }
+    try {
+      performAction(
+        step,
+        nextFrameId,
+        nextFrame.action,
+        defs,
+        traceTreeOut,
+        callDepth,
+      );
+      continuedSuccessfully = true;
+    } catch (e) {
+      // TODO: not sure this is the right place to output this...
+      let scene: Scene = { type: "error", message: "unknown" };
+      if (e instanceof ErrorWithAnnotation) {
+        scene = {
+          type: "error",
+          message: e.message,
+          errorAnnotation: e.annotation,
         };
-        traceTreeOut.steps[nextStep.id] = nextStep;
+      } else if (e instanceof Error) {
+        scene = { type: "error", message: e.message };
       }
+      const nextStep: Step = {
+        id: `${step.id}→${nextFrameId}`,
+        prevStepId: step.id,
+        flowchartId,
+        frameId: nextFrameId,
+        scene,
+        caller,
+      };
+      traceTreeOut.steps[nextStep.id] = nextStep;
     }
-    if (!continuedSuccessfully) {
-      // TODO: first time we've mutated a step after adding it? idk
-      step.isStuck = true;
-      if (frame.escapeRouteFrameId) {
-        performAction(
-          step,
-          frame.escapeRouteFrameId,
-          flowchart.frames[frame.escapeRouteFrameId].action,
-          defs,
-          traceTreeOut,
-          callDepth,
-        );
-      }
+  }
+  if (!continuedSuccessfully) {
+    // TODO: first time we've mutated a step after adding it? idk
+    step.isStuck = true;
+    if (frame.escapeRouteFrameId) {
+      performAction(
+        step,
+        frame.escapeRouteFrameId,
+        flowchart.frames[frame.escapeRouteFrameId].action,
+        defs,
+        traceTreeOut,
+        callDepth,
+      );
     }
-  } finally {
-    RUN_ALL_DEPTH--;
   }
 }
 
-function performAction(
-  step: SuccessfulStep,
-  frameId: string,
+function applyAction(
+  scene: SuccessfulScene,
   action: Action | undefined,
-  defs: Definitions,
-  traceTreeOut: TraceTree,
-  callDepth: number,
-): void {
-  const { flowchartId, scene, caller } = step;
-
-  function proceedWith(nextScenes: Scene[]) {
-    if (nextScenes.length === 0) {
-      // TODO: we currently regard an empty proceedWith as a failure,
-      // so that, e.g., you can provide an escape route if "move any
-      // item" is called on an empty list. this is all weird and
-      // hacky and deserves more thought.
-      throw new ErrorWithAnnotation("no way to go", { type: "scene", scene });
-    }
-    let i = 0;
-    for (const nextScene of nextScenes) {
-      const nextStep: Step = {
-        id: `${step.id}→${frameId}${nextScenes.length > 1 ? `[${i++}]` : ""}`,
-        prevStepId: step.id,
-        flowchartId,
-        frameId,
-        scene: nextScene,
-        caller,
-      };
-      if (nextScene.type === "success") {
-        runAll(assertSuccessfulValue(nextStep), defs, traceTreeOut, callDepth);
-      }
-    }
-  }
-
+): Scene[] {
   if (!action || action.type === "start" || action.type === "escape") {
-    proceedWith([{ ...scene, actionAnnotation: undefined }]);
+    return [{ ...scene, actionAnnotation: undefined }];
+  } else if (action.type === "call") {
+    throw new Error(
+      "INTERNAL ERROR: calls are supposed to be handled before applyAction",
+    );
   } else if (action.type === "test-func") {
-    proceedWith(action.func(scene));
+    return action.func(scene);
   } else if (action.type === "place-domino") {
     const { domino } = action;
     const { value } = scene;
@@ -389,141 +551,108 @@ function performAction(
         scene: newScene,
       });
     }
-    proceedWith([newScene]);
-  } else if (action.type === "call") {
-    // console.log("callDepth", callDepth);
-    if (callDepth > 10) {
-      throw new Error("too deep");
-    }
-
-    // time to step into the call
-    const nextFlowchart = defs.flowcharts[action.flowchartId];
-    if (!nextFlowchart) {
-      throw new Error(`Flowchart ${action.flowchartId} not found`);
-    }
-    let callScene = {
-      ...scene,
-      actionAnnotation: undefined,
-    };
-    if (action.lens) {
-      const lensImpl = lenses[action.lens.type];
-      if (!lensImpl) {
-        throw new Error(`Lens type ${action.lens.type} not found`);
-      }
-      callScene = {
-        ...scene,
-        value: lensImpl.getPart(action.lens, scene.value),
-        actionAnnotation: undefined,
-      };
-    }
-    const nextStep: SuccessfulStep = {
-      id: `${step.id}→${frameId}↓${nextFlowchart.id}`,
-      prevStepId: step.id,
-      flowchartId: action.flowchartId,
-      frameId: nextFlowchart.initialFrameId,
-      scene: callScene,
-      caller: {
-        prevStepId: step.id,
-        flowchartId,
-        frameId,
-      },
-    };
-    runAll(nextStep, defs, traceTreeOut, callDepth + 1);
+    return [newScene];
   } else if (action.type === "test-cond") {
     const nextAction = action.func(scene) ? action.then : action.else;
-    performAction(step, frameId, nextAction, defs, traceTreeOut, callDepth);
+    return applyAction(scene, nextAction);
   } else if (action.type === "workspace-pick") {
-    const { source, index, target } = action;
-    const { value } = scene;
-    const sourceValue: unknown[] = value.contents[source];
-    if (!sourceValue) {
-      throw new Error(`Item ${source} not found in workspace`);
-    }
-    let pickedIndices: number[];
-    if (index === "first") {
-      pickedIndices = [0];
-    } else if (index === "last") {
-      pickedIndices = [sourceValue.length - 1];
-    } else if (index === "any") {
-      pickedIndices = Array.from({ length: sourceValue.length }, (_, i) => i);
-    } else {
-      pickedIndices = [index];
-    }
-    const nextScenes = pickedIndices.map((pickedIndex) => {
-      if (pickedIndex < 0 || pickedIndex >= sourceValue.length) {
-        if (sourceValue.length === 0) {
-          throw new ErrorWithAnnotation(`list is empty`, {
-            type: "workspace-pick-bad-source",
-            scene: { type: "success", value },
-            source,
-          });
-        } else {
-          throw new Error(`off the list`);
-        }
-      }
-      let annotation: ActionAnnotation | undefined = undefined;
-      let newWorkspace = value.contents.slice();
-      const pickedItem = sourceValue[pickedIndex];
-      newWorkspace[source] = sourceValue.slice();
-      newWorkspace[source].splice(pickedIndex, 1);
-      if (target.type === "at") {
-        if (target.side === "replace") {
-          newWorkspace[target.index] = [pickedItem];
-          annotation = {
-            type: "workspace-pick",
-            src: [source, pickedIndex],
-            dst: [target.index, 0],
-          };
-        } else if (target.side === "before") {
-          newWorkspace[target.index] = [
-            pickedItem,
-            ...newWorkspace[target.index],
-          ];
-          annotation = {
-            type: "workspace-pick",
-            src: [source, pickedIndex],
-            dst: [target.index, 0],
-          };
-        } else if (target.side === "after") {
-          newWorkspace[target.index] = [
-            ...newWorkspace[target.index],
-            pickedItem,
-          ];
-          annotation = {
-            type: "workspace-pick",
-            src: [source, pickedIndex],
-            dst: [target.index, newWorkspace[target.index].length - 1],
-          };
-        } else {
-          assertNever(target.side);
-        }
-      } else if (target.type === "after") {
-        newWorkspace.splice(target.index + 1, 0, [pickedItem]);
-        annotation = {
-          type: "workspace-pick",
-          src: [source >= target.index + 1 ? source + 1 : source, pickedIndex],
-          dst: [target.index + 1, 0],
-        };
-      } else {
-        assertNever(target);
-      }
-      return {
-        type: "success" as const,
-        value: {
-          ...value,
-          contents: newWorkspace,
-        },
-        actionAnnotation: annotation,
-      };
-    });
-    proceedWith(nextScenes);
+    return applyActionWorkspacePick(scene, action);
   } else if (action.type === "dev-eval") {
     const func = new Function("x", `return (${action.code})`);
     const result = func(scene.value);
-    proceedWith([{ type: "success", value: result }]);
+    return [{ type: "success", value: result }];
   } else {
     assertNever(action);
   }
+}
+
+function applyActionWorkspacePick(
+  scene: SuccessfulScene,
+  action: Action & { type: "workspace-pick" },
+) {
+  const { source, index, target } = action;
+  const { value } = scene;
+  const sourceValue: unknown[] = value.contents[source];
+  if (!sourceValue) {
+    throw new Error(`Item ${source} not found in workspace`);
+  }
+  let pickedIndices: number[];
+  if (index === "first") {
+    pickedIndices = [0];
+  } else if (index === "last") {
+    pickedIndices = [sourceValue.length - 1];
+  } else if (index === "any") {
+    pickedIndices = Array.from({ length: sourceValue.length }, (_, i) => i);
+  } else {
+    pickedIndices = [index];
+  }
+  return pickedIndices.map((pickedIndex) => {
+    if (pickedIndex < 0 || pickedIndex >= sourceValue.length) {
+      if (sourceValue.length === 0) {
+        throw new ErrorWithAnnotation(`list is empty`, {
+          type: "workspace-pick-bad-source",
+          scene: { type: "success", value },
+          source,
+        });
+      } else {
+        throw new Error(`off the list`);
+      }
+    }
+    let annotation: ActionAnnotation | undefined = undefined;
+    let newWorkspace = value.contents.slice();
+    const pickedItem = sourceValue[pickedIndex];
+    newWorkspace[source] = sourceValue.slice();
+    newWorkspace[source].splice(pickedIndex, 1);
+    if (target.type === "at") {
+      if (target.side === "replace") {
+        newWorkspace[target.index] = [pickedItem];
+        annotation = {
+          type: "workspace-pick",
+          src: [source, pickedIndex],
+          dst: [target.index, 0],
+        };
+      } else if (target.side === "before") {
+        newWorkspace[target.index] = [
+          pickedItem,
+          ...newWorkspace[target.index],
+        ];
+        annotation = {
+          type: "workspace-pick",
+          src: [source, pickedIndex],
+          dst: [target.index, 0],
+        };
+      } else if (target.side === "after") {
+        newWorkspace[target.index] = [
+          ...newWorkspace[target.index],
+          pickedItem,
+        ];
+        annotation = {
+          type: "workspace-pick",
+          src: [source, pickedIndex],
+          dst: [target.index, newWorkspace[target.index].length - 1],
+        };
+      } else {
+        assertNever(target.side);
+      }
+    } else if (target.type === "after") {
+      newWorkspace.splice(target.index + 1, 0, [pickedItem]);
+      annotation = {
+        type: "workspace-pick",
+        src: [source >= target.index + 1 ? source + 1 : source, pickedIndex],
+        dst: [target.index + 1, 0],
+      };
+    } else {
+      assertNever(target);
+    }
+    return {
+      type: "success" as const,
+      value: {
+        ...value,
+        contents: newWorkspace,
+      },
+      actionAnnotation: annotation,
+    };
+  });
 }
 
 const lenses: Record<string, LensImpl> = {
@@ -773,10 +902,10 @@ export function getNextSteps(step: Step, traceTree: TraceTree) {
 
 export type Viewchart = {
   flowchartId: string;
-  initialStack: ViewchartStack;
+  initialStack: Step;
 };
 
-export type ViewchartNode = ViewchartStack | ViewchartCall;
+export type ViewchartNode = Step | ViewchartCall;
 
 export type ViewchartStack = {
   type: "stack";
@@ -784,7 +913,7 @@ export type ViewchartStack = {
   flowchartId: string;
   frameId: string;
   steps: Step[];
-  nextNodes: ViewchartNode[];
+  nextNodes: Node[];
 };
 
 export type ViewchartCall = {
@@ -796,8 +925,8 @@ export type ViewchartCall = {
   /* Either every output of the call feeds into a single stack at
   this level, or each output feeds into a single stack. */
   continuation:
-    | { type: "single"; single: ViewchartStack }
-    | { type: "many"; many: { [stackId: string]: ViewchartStack } };
+    | { type: "single"; single: Step }
+    | { type: "many"; many: { [stackId: string]: Step } };
 };
 
 export function traceTreeToViewchart(
@@ -838,10 +967,10 @@ export function traceTreeToViewchartStack(
   steps: Step[],
   nodeId: string,
   callDepth: number,
-): ViewchartStack {
+): Step {
   const flowchart = defs.flowcharts[flowchartId];
   const stepIds = steps.map((step) => step.id);
-  let nextNodes: ViewchartNode[] = [];
+  let nextNodes: Node[] = [];
   getNextFrameIds(frameId, flowchart).forEach((nextFrameId) => {
     const nextFrame = flowchart.frames[nextFrameId];
     if (nextFrame.action?.type === "call") {
@@ -901,7 +1030,7 @@ export function traceTreeToViewchartStack(
     flowchartId,
     frameId,
     steps,
-    nextNodes,
+    nextNodes: nextNodes,
   };
 }
 
@@ -914,7 +1043,7 @@ export function traceTreeToViewchartCall(
   steps: Step[],
   nodeId: string,
   callDepth: number,
-): ViewchartNode {
+): Node {
   const stepIds = steps.map((step) => step.id);
 
   // These are the initial steps inside the call

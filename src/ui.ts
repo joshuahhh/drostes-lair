@@ -14,14 +14,14 @@ import {
   Definitions,
   Flowchart,
   Frame,
+  Node,
   Scene,
   Step,
   SuccessfulStep,
+  TrStep,
   TraceTree,
   Viewchart,
   ViewchartCall,
-  ViewchartNode,
-  ViewchartStack,
   assertSuccessful,
   getActionText,
   getCallPath,
@@ -1728,7 +1728,7 @@ async function main() {
     const drawStack = (
       lyr: Layer,
       lyrAboveViewchart: Layer,
-      stack: ViewchartStack,
+      stack: TrStep,
       curX: number,
       myY: number,
     ): { maxX: number; maxY: number; layerUsed: Layer } => {
@@ -1807,7 +1807,7 @@ async function main() {
     const drawNodeAndDownstream = (
       lyr: Layer,
       lyrAboveViewchart: Layer,
-      node: ViewchartNode,
+      node: Node,
       myX: number,
       myY: number,
     ) => {
@@ -1823,7 +1823,7 @@ async function main() {
     const drawStackAndDownstream = (
       lyr: Layer,
       lyrAboveViewchart: Layer,
-      stack: ViewchartStack,
+      stack: TrStep,
       myX: number,
       myY: number,
     ): {
@@ -1944,7 +1944,7 @@ async function main() {
 
       // draw downstream
       let maxX = curX + scenePadX;
-      const nextNodes = stack.nextNodes;
+      const nextNodes = stack.nextTrNodes;
       const finalPosForConnectors: { pos: Vec2; dead: boolean }[] = [];
       // hacky thing to position unused escape routes or escape-route ghosts
       let lastConnectionJoint: Vec2 = [curX + scenePadX / 2, myY + sceneH / 2];
