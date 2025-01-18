@@ -29,28 +29,26 @@ test("runFlowchart works with a very simple flowchart", () => {
     {
       "flowchartId": "fc1",
       "frameId": "1",
+      "id": "→1[0]",
       "isStuck": false,
-      "nextNodes": [
+      "nextSteps": [
         {
           "flowchartId": "fc1",
           "frameId": "2",
+          "id": "→1[0]→2[0]",
           "isStuck": false,
-          "nextNodes": [],
-          "nodeId": "→1[0]→2[0]",
+          "nextSteps": [],
           "scene": {
             "type": "success",
             "value": 4,
           },
-          "type": "step",
         },
       ],
-      "nodeId": "→1[0]",
       "scene": {
         "actionAnnotation": undefined,
         "type": "success",
         "value": 3,
       },
-      "type": "step",
     }
   `);
 
@@ -101,60 +99,56 @@ test("runFlowchart works with NFA split & merge", () => {
     {
       "flowchartId": "fc1",
       "frameId": "1",
+      "id": "→1[0]",
       "isStuck": false,
-      "nextNodes": [
+      "nextSteps": [
         {
           "flowchartId": "fc1",
           "frameId": "2",
+          "id": "→1[0]→2[0]",
           "isStuck": false,
-          "nextNodes": [
+          "nextSteps": [
             {
               "flowchartId": "fc1",
               "frameId": "4",
+              "id": "→1[0]→2[0]→4[0]",
               "isStuck": false,
-              "nextNodes": [],
-              "nodeId": "→1[0]→2[0]→4[0]",
+              "nextSteps": [],
               "scene": {
                 "type": "success",
                 "value": 8,
               },
-              "type": "step",
             },
           ],
-          "nodeId": "→1[0]→2[0]",
           "scene": {
             "type": "success",
             "value": 7,
           },
-          "type": "step",
         },
         {
           "flowchartId": "fc1",
           "frameId": "3",
+          "id": "→1[0]→3[0]",
           "isStuck": false,
-          "nextNodes": [
+          "nextSteps": [
             {
               "flowchartId": "fc1",
               "frameId": "4",
+              "id": "→1[0]→3[0]→4[0]",
               "isStuck": false,
-              "nextNodes": [],
-              "nodeId": "→1[0]→3[0]→4[0]",
+              "nextSteps": [],
               "scene": {
                 "type": "success",
                 "value": 13,
               },
-              "type": "step",
             },
           ],
-          "nodeId": "→1[0]→3[0]",
           "scene": {
             "type": "success",
             "value": 12,
           },
-          "type": "step",
         },
       ],
-      "nodeId": "→1[0]",
       "scene": {
         "actionAnnotation": undefined,
         "type": "success",
@@ -163,7 +157,6 @@ test("runFlowchart works with NFA split & merge", () => {
           4,
         ],
       },
-      "type": "step",
     }
   `);
 
@@ -206,60 +199,56 @@ test("runFlowchart works with SIMD split & merge", () => {
     {
       "flowchartId": "fc1",
       "frameId": "1",
+      "id": "→1[0]",
       "isStuck": false,
-      "nextNodes": [
+      "nextSteps": [
         {
           "flowchartId": "fc1",
           "frameId": "2",
+          "id": "→1[0]→2[0]",
           "isStuck": false,
-          "nextNodes": [
+          "nextSteps": [
             {
               "flowchartId": "fc1",
               "frameId": "3",
+              "id": "→1[0]→2[0]→3[0]",
               "isStuck": false,
-              "nextNodes": [],
-              "nodeId": "→1[0]→2[0]→3[0]",
+              "nextSteps": [],
               "scene": {
                 "type": "success",
                 "value": 8,
               },
-              "type": "step",
             },
           ],
-          "nodeId": "→1[0]→2[0]",
           "scene": {
             "type": "success",
             "value": 7,
           },
-          "type": "step",
         },
         {
           "flowchartId": "fc1",
           "frameId": "2",
+          "id": "→1[0]→2[1]",
           "isStuck": false,
-          "nextNodes": [
+          "nextSteps": [
             {
               "flowchartId": "fc1",
               "frameId": "3",
+              "id": "→1[0]→2[1]→3[0]",
               "isStuck": false,
-              "nextNodes": [],
-              "nodeId": "→1[0]→2[1]→3[0]",
+              "nextSteps": [],
               "scene": {
                 "type": "success",
                 "value": 13,
               },
-              "type": "step",
             },
           ],
-          "nodeId": "→1[0]→2[1]",
           "scene": {
             "type": "success",
             "value": 12,
           },
-          "type": "step",
         },
       ],
-      "nodeId": "→1[0]",
       "scene": {
         "actionAnnotation": undefined,
         "type": "success",
@@ -268,7 +257,6 @@ test("runFlowchart works with SIMD split & merge", () => {
           4,
         ],
       },
-      "type": "step",
     }
   `);
 
@@ -316,62 +304,54 @@ test("runFlowchart works with a single call", () => {
     {
       "flowchartId": "fc1",
       "frameId": "1",
+      "id": "→1[0]",
       "isStuck": false,
-      "nextNodes": [
+      "nextSteps": [
         {
-          "exits": {
-            "→1[0]→2→2→1[0]→2[0]": {
-              "flowchartId": "fc1",
-              "frameId": "2",
-              "isStuck": false,
-              "nextNodes": [],
-              "nodeId": "→1[0]→2→2→1[0]→2[0]→↑",
-              "scene": {
-                "actionAnnotation": undefined,
-                "type": "success",
-                "value": 13,
-              },
-              "type": "step",
-            },
-          },
           "flowchartId": "fc1",
-          "initialStep": {
-            "flowchartId": "fc2",
-            "frameId": "1",
-            "isStuck": false,
-            "nextNodes": [
-              {
+          "frameId": "2",
+          "id": "→1[0]→2[0]",
+          "isStuck": false,
+          "nextSteps": [],
+          "scene": {
+            "actionAnnotation": {
+              "initialStep": {
                 "flowchartId": "fc2",
-                "frameId": "2",
+                "frameId": "1",
+                "id": "→1[0]/→1[0]",
                 "isStuck": false,
-                "nextNodes": [],
-                "nodeId": "→1[0]→2→2→1[0]→2[0]",
+                "nextSteps": [
+                  {
+                    "flowchartId": "fc2",
+                    "frameId": "2",
+                    "id": "→1[0]/→1[0]→2[0]",
+                    "isStuck": false,
+                    "nextSteps": [],
+                    "scene": {
+                      "type": "success",
+                      "value": 13,
+                    },
+                  },
+                ],
                 "scene": {
+                  "actionAnnotation": undefined,
                   "type": "success",
-                  "value": 13,
+                  "value": 3,
                 },
-                "type": "step",
               },
-            ],
-            "nodeId": "→1[0]→2→2→1[0]",
-            "scene": {
-              "actionAnnotation": undefined,
-              "type": "success",
-              "value": 3,
+              "returningStepId": "→1[0]/→1[0]→2[0]",
+              "type": "call",
             },
-            "type": "step",
+            "type": "success",
+            "value": 13,
           },
-          "nodeId": "→1[0]→2",
-          "type": "call",
         },
       ],
-      "nodeId": "→1[0]",
       "scene": {
         "actionAnnotation": undefined,
         "type": "success",
         "value": 3,
       },
-      "type": "step",
     }
   `);
 
@@ -385,109 +365,94 @@ test("runFlowchart works with two calls in a row", () => {
     {
       "flowchartId": "fc1",
       "frameId": "1",
+      "id": "→1[0]",
       "isStuck": false,
-      "nextNodes": [
+      "nextSteps": [
         {
-          "exits": {
-            "→1[0]→2→2→1[0]→2[0]": {
+          "flowchartId": "fc1",
+          "frameId": "2",
+          "id": "→1[0]→2[0]",
+          "isStuck": false,
+          "nextSteps": [
+            {
               "flowchartId": "fc1",
-              "frameId": "2",
+              "frameId": "3",
+              "id": "→1[0]→2[0]→3[0]",
               "isStuck": false,
-              "nextNodes": [
-                {
-                  "exits": {
-                    "→1[0]→2→2→1[0]→2[0]→↑→3→3→1[0]→2[0]": {
-                      "flowchartId": "fc1",
-                      "frameId": "3",
-                      "isStuck": false,
-                      "nextNodes": [],
-                      "nodeId": "→1[0]→2→2→1[0]→2[0]→↑→3→3→1[0]→2[0]→↑",
-                      "scene": {
-                        "actionAnnotation": undefined,
-                        "type": "success",
-                        "value": 23,
-                      },
-                      "type": "step",
-                    },
-                  },
-                  "flowchartId": "fc1",
+              "nextSteps": [],
+              "scene": {
+                "actionAnnotation": {
                   "initialStep": {
                     "flowchartId": "fc2",
                     "frameId": "1",
+                    "id": "→1[0]→2[0]/→1[0]",
                     "isStuck": false,
-                    "nextNodes": [
+                    "nextSteps": [
                       {
                         "flowchartId": "fc2",
                         "frameId": "2",
+                        "id": "→1[0]→2[0]/→1[0]→2[0]",
                         "isStuck": false,
-                        "nextNodes": [],
-                        "nodeId": "→1[0]→2→2→1[0]→2[0]→↑→3→3→1[0]→2[0]",
+                        "nextSteps": [],
                         "scene": {
                           "type": "success",
                           "value": 23,
                         },
-                        "type": "step",
                       },
                     ],
-                    "nodeId": "→1[0]→2→2→1[0]→2[0]→↑→3→3→1[0]",
                     "scene": {
                       "actionAnnotation": undefined,
                       "type": "success",
                       "value": 13,
                     },
-                    "type": "step",
                   },
-                  "nodeId": "→1[0]→2→2→1[0]→2[0]→↑→3",
+                  "returningStepId": "→1[0]→2[0]/→1[0]→2[0]",
                   "type": "call",
                 },
-              ],
-              "nodeId": "→1[0]→2→2→1[0]→2[0]→↑",
-              "scene": {
-                "actionAnnotation": undefined,
                 "type": "success",
-                "value": 13,
+                "value": 23,
               },
-              "type": "step",
             },
-          },
-          "flowchartId": "fc1",
-          "initialStep": {
-            "flowchartId": "fc2",
-            "frameId": "1",
-            "isStuck": false,
-            "nextNodes": [
-              {
+          ],
+          "scene": {
+            "actionAnnotation": {
+              "initialStep": {
                 "flowchartId": "fc2",
-                "frameId": "2",
+                "frameId": "1",
+                "id": "→1[0]/→1[0]",
                 "isStuck": false,
-                "nextNodes": [],
-                "nodeId": "→1[0]→2→2→1[0]→2[0]",
+                "nextSteps": [
+                  {
+                    "flowchartId": "fc2",
+                    "frameId": "2",
+                    "id": "→1[0]/→1[0]→2[0]",
+                    "isStuck": false,
+                    "nextSteps": [],
+                    "scene": {
+                      "type": "success",
+                      "value": 13,
+                    },
+                  },
+                ],
                 "scene": {
+                  "actionAnnotation": undefined,
                   "type": "success",
-                  "value": 13,
+                  "value": 3,
                 },
-                "type": "step",
               },
-            ],
-            "nodeId": "→1[0]→2→2→1[0]",
-            "scene": {
-              "actionAnnotation": undefined,
-              "type": "success",
-              "value": 3,
+              "returningStepId": "→1[0]/→1[0]→2[0]",
+              "type": "call",
             },
-            "type": "step",
+            "type": "success",
+            "value": 13,
           },
-          "nodeId": "→1[0]→2",
-          "type": "call",
         },
       ],
-      "nodeId": "→1[0]",
       "scene": {
         "actionAnnotation": undefined,
         "type": "success",
         "value": 3,
       },
-      "type": "step",
     }
   `);
 

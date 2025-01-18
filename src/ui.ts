@@ -10,27 +10,17 @@ import {
 import {
   Action,
   ActionAnnotation,
-  Call,
   Definitions,
   Flowchart,
   Frame,
-  Node,
   Scene,
   Step,
-  SuccessfulStep,
-  TrStep,
-  TraceTree,
-  Viewchart,
-  ViewchartCall,
   assertSuccessful,
   getActionText,
-  getCallPath,
   isEscapeRoute,
-  makeTraceTree,
-  runAll,
+  runFlowchart,
   stringifyEqual,
   topLevelValueForStep,
-  traceTreeToViewchart,
 } from "./interpreter";
 import { Layer, getLayerCommandCount, layer } from "./layer";
 import { howManyTimesDidModWrap, mod } from "./number";
@@ -1388,20 +1378,17 @@ async function main() {
     (window as any).state = state;
     const { defs } = state;
 
-    // run program on every frame lol
-    traceTree = makeTraceTree();
-    (window as any).traceTree = traceTree;
     // TODO: hardcoding the first flowchart
     const flowchart = state.defs.flowcharts[state.initialFlowchartId];
-    const initStep: SuccessfulStep = {
-      id: "*",
-      prevStepId: undefined,
-      flowchartId: flowchart.id,
-      frameId: flowchart.initialFrameId,
-      scene: { type: "success", value: state.initialValue },
-      caller: undefined,
-    };
-    runAll(initStep, defs, traceTree, 0);
+
+    const { initialStep, exitingSteps } = runFlowchart(
+      { callStack: [], defs },
+      flowchart.id,
+      {
+        type: "success",
+        value: state.initialValue,
+      },
+    );
 
     _clickables = [];
 
@@ -1483,7 +1470,8 @@ async function main() {
     const drawViewchart = (
       lyr: Layer,
       lyrAboveViewchart: Layer,
-      viewchart: Viewchart,
+      initialStep: Step,
+      exitingSteps: Step[],
       topLeft: Vec2,
       mode: "stacked" | "unstacked",
     ): {
@@ -1495,7 +1483,7 @@ async function main() {
 
       drawFlowchartSigil(
         lyrAbove,
-        viewchart.flowchartId,
+        initialStep.flowchartId,
         add(topLeft, [0, -60]),
       );
 
@@ -2134,20 +2122,12 @@ async function main() {
       };
     };
 
-    const viewchart = traceTreeToViewchart(
-      traceTree,
-      defs,
-      mode,
-      [initStep],
-      "init",
-      0,
-    );
-    console.log("viewchart", viewchart);
     const lyrAboveViewchart = lyrMain.spawnLater();
     const topLevel = drawViewchart(
       lyrMain,
       lyrAboveViewchart,
-      viewchart,
+      initialStep,
+      exitingSteps,
       add(pan, v(100)),
       mode,
     );

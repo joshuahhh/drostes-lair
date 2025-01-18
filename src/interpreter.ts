@@ -57,11 +57,17 @@ export type Action =
       code: string;
     };
 
-export type ActionAnnotation = {
-  type: "workspace-pick";
-  src: [number, number];
-  dst: [number, number];
-};
+export type ActionAnnotation =
+  | {
+      type: "call";
+      initialStep: Step;
+      returningStepId: string;
+    }
+  | {
+      type: "workspace-pick";
+      src: [number, number];
+      dst: [number, number];
+    };
 
 export type ErrorAnnotation =
   | { type: "scene"; scene: Scene & { type: "success" } }
@@ -106,41 +112,16 @@ export type LensImpl = {
 
 // DYNAMIC WORLD
 
-export type Node = Step | Call;
-
 /* A "Step" is the trace of an action and everything downstream of
 it. */
 export type Step = {
-  type: "step";
-  nodeId: string;
+  id: string;
   frameId: string;
   flowchartId: string;
   scene: Scene;
-  nextNodes: Node[];
+  nextSteps: Step[];
   isStuck: boolean;
 };
-
-/* A "Call" is the trace of a call into a flowchart and everything
- * downstream of it.
- */
-export type Call = {
-  type: "call";
-  nodeId: string;
-  flowchartId: string;
-  frameId: string;
-  initialStep: Step;
-  /* Each final step inside the call exits to a step outside the call
-  (or 'final-exit' if there's nothing outside) */
-  exits: CallExits;
-
-  /* Redundant; included for visualization convenience */
-  // callDepth: number;
-};
-
-/* "Exits" gives a step (with its whole downstream trace) for each
- * final step in a call.
- */
-export type CallExits = { [stepId: string]: Step | "final-exit" };
 
 /**
  * A scene is the state of the world inside a frame. For now we just
@@ -177,17 +158,9 @@ export function assertSuccessfulValue(step: Step): SuccessfulStep {
   return step;
 }
 
-let RUN_ALL_DEPTH = 0;
-
 export type RunContext = {
-  /* A stack of "call" action frames, so we know how to continue
-  after returning from a call. */
-  // callStack: {
-  //   flowchartId: string;
-  //   frameId: string;
-  //   inputScene: SuccessfulScene;
-  // }[];
-  callDepth: number;
+  /* A stack of call step ids */
+  callStack: string[];
   /* Definitions in effect for the run. */
   defs: Definitions;
 };
@@ -196,157 +169,49 @@ export type RunContext = {
 caller. */
 export function runFlowchart(
   ctx: RunContext,
-  parentNodeId: string,
   flowchartId: string,
   scene: SuccessfulScene,
 ): { initialStep: Step; exitingSteps: SuccessfulStep[] } {
   const flowchart = ctx.defs.flowcharts[flowchartId];
-  const { nodes, exitingSteps } = runPreFrame(
+  const { steps, exitingSteps } = runPreFrame(
     ctx,
-    parentNodeId,
+    ctx.callStack.map((n) => n + "/").join(""),
     scene,
     flowchartId,
     flowchart.initialFrameId,
   );
-  if (nodes.length !== 1) {
+  if (steps.length !== 1) {
     throw new Error(
-      `INTERNAL ERROR: initial frame in runFlowchart produced ${nodes.length} nodes; should produce 1`,
+      `INTERNAL ERROR: initial frame in runFlowchart produced ${steps.length} steps; should produce 1`,
     );
   }
-  if (nodes[0].type !== "step") {
-    throw new Error(
-      `INTERNAL ERROR: initial node in runFlowchart was not a step`,
-    );
-  }
-  const initialStep = nodes[0];
+  const initialStep = steps[0];
   return { initialStep, exitingSteps };
 }
 
-export function runCall(
-  ctx: RunContext,
-  inputNodeId: string,
-  /* the flowchart we are calling FROM */
-  flowchartId: string,
-  /* the frame we are calling FROM */
-  frameId: string,
-  /* the scene coming into the call */
-  scene: SuccessfulScene,
-): {
-  /* Call immediately produced */
-  call: Call;
-  /* All downstream steps exiting this flow-chart */
-  exitingSteps: SuccessfulStep[];
-} {
-  const action = ctx.defs.flowcharts[flowchartId].frames[frameId]
-    .action as Action & { type: "call" };
-  const lens = action.lens;
-
-  let callScene = {
-    ...scene,
-    actionAnnotation: undefined,
-  };
-  if (lens) {
-    const lensImpl = lenses[lens.type];
-    if (!lensImpl) {
-      throw new Error(`Lens type ${lens.type} not found`);
-    }
-    callScene = {
-      ...scene,
-      value: lensImpl.getPart(lens, scene.value),
-      actionAnnotation: undefined,
-    };
-  }
-  const { initialStep, exitingSteps } = runFlowchart(
-    ctx,
-    `${inputNodeId}→${frameId}`,
-    action.flowchartId,
-    callScene,
-  );
-
-  const exits: CallExits = {};
-  const myExitingSteps: SuccessfulStep[] = [];
-
-  for (const exitingStep of exitingSteps) {
-    let returnScene: Scene = {
-      ...exitingStep.scene,
-      actionAnnotation: undefined,
-    };
-    if (lens) {
-      const lensImpl = lenses[lens.type];
-      if (!lensImpl) {
-        throw new Error(`Lens type ${lens.type} not found`);
-      }
-      returnScene = {
-        ...returnScene,
-        value: lensImpl.setPart(lens, scene.value, returnScene.value),
-      };
-    }
-    const ret = runPostFrame(
-      ctx,
-      `${exitingStep.nodeId}→↑`,
-      returnScene,
-      flowchartId,
-      frameId,
-    );
-    exits[exitingStep.nodeId] = ret.step;
-    myExitingSteps.push(...ret.exitingSteps);
-  }
-
-  return {
-    call: {
-      type: "call",
-      nodeId: inputNodeId,
-      flowchartId,
-      frameId,
-      initialStep,
-      exits,
-    },
-    exitingSteps: myExitingSteps,
-  };
-}
-
 /* Run a frame, starting with an input scene, producing a set of
-immediate nodes. (So, if frame A goes into frame B, you take the
+immediate steps. (So, if frame A goes into frame B, you take the
 output scene of a frame-A step and feed it into runFrame with frame B
-info and it will give you a set of nodes (steps & calls) the frame-A
-step should lead to.) */
+info and it will give you a set of steps the frame-A step should lead
+to.) */
 export function runPreFrame(
   ctx: RunContext,
-  inputNodeId: string,
+  inputStepId: string,
   inputScene: SuccessfulScene,
   flowchartId: string,
   frameId: string,
 ): {
-  /* Nodes immediately produced */
-  nodes: Node[];
+  /* Steps immediately produced */
+  steps: Step[];
   /* All downstream steps exiting this flow-chart */
   exitingSteps: SuccessfulStep[];
 } {
   const flowchart = ctx.defs.flowcharts[flowchartId];
   const frame = flowchart.frames[frameId];
 
-  // Special case: a call
-  if (frame.action?.type === "call") {
-    if (ctx.callDepth > 10) {
-      throw new Error("too deep");
-    }
-    const newCtx: RunContext = {
-      ...ctx,
-      callDepth: ctx.callDepth + 1,
-    };
-    const { call, exitingSteps } = runCall(
-      newCtx,
-      `${inputNodeId}→${frameId}`,
-      flowchartId,
-      frameId,
-      inputScene,
-    );
-    return { nodes: [call], exitingSteps };
-  }
-
   // Apply the action to produce output scenes
   try {
-    const scenes = applyAction(inputScene, frame.action);
+    const scenes = applyAction(ctx, inputStepId, inputScene, frame.action);
     if (scenes.length === 0) {
       // TODO: we currently regard an empty set of output scenes as a
       // failure, so that, e.g., you can provide an escape route if
@@ -357,23 +222,23 @@ export function runPreFrame(
         scene: inputScene,
       });
     }
-    // We have scenes for the immediate nodes. Now we run each one to
+    // We have scenes for the immediate steps. Now we run each one to
     // completion. Remember: Each scene lives on ME (this frameId).
-    const nodes: Node[] = [];
+    const steps: Step[] = [];
     const exitingSteps: SuccessfulStep[] = [];
     for (const [i, scene] of scenes.entries()) {
       const result = runPostFrame(
         ctx,
-        `${inputNodeId}→${frameId}[${i}]`,
+        `${inputStepId}→${frameId}[${i}]`,
         scene,
         flowchartId,
         frameId,
       );
-      nodes.push(result.step);
+      steps.push(result.step);
       exitingSteps.push(...result.exitingSteps);
     }
 
-    return { nodes, exitingSteps };
+    return { steps: steps, exitingSteps };
   } catch (e) {
     let scene: Scene = { type: "error", message: "unknown" };
     if (e instanceof ErrorWithAnnotation) {
@@ -386,15 +251,14 @@ export function runPreFrame(
       scene = { type: "error", message: e.message };
     }
     const nextStep: Step = {
-      type: "step",
-      nodeId: `${inputNodeId}→${frameId}`,
+      id: `${inputStepId}→${frameId}`,
       frameId,
       flowchartId,
-      nextNodes: [],
+      nextSteps: [],
       scene,
       isStuck: false, // stuck is for successful steps
     };
-    return { nodes: [nextStep], exitingSteps: [] };
+    return { steps: [nextStep], exitingSteps: [] };
   }
 }
 
@@ -402,7 +266,7 @@ export function runPreFrame(
 step. */
 export function runPostFrame(
   ctx: RunContext,
-  outputNodeId: string,
+  outputStepId: string,
   outputScene: Scene,
   flowchartId: string,
   frameId: string,
@@ -417,11 +281,10 @@ export function runPostFrame(
 
   // We will evolve these as we follow arrows
   const step: Step = {
-    type: "step",
-    nodeId: outputNodeId,
+    id: outputStepId,
     frameId,
     flowchartId,
-    nextNodes: [],
+    nextSteps: [],
     scene: outputScene,
     isStuck: false,
   };
@@ -434,7 +297,7 @@ export function runPostFrame(
   assertSuccessful(step);
 
   // If there are no further arrows, we assume the current flowchart
-  // is done and return it as an exiting node.
+  // is done and return it as an exiting step.
   if (nextArrows.length === 0) {
     return { step, exitingSteps: [step] };
   }
@@ -450,21 +313,17 @@ export function runPostFrame(
 
     const followResult = runPreFrame(
       ctx,
-      outputNodeId,
+      outputStepId,
       step.scene,
       flowchartId,
       nextFrameId,
     );
-    step.nextNodes.push(...followResult.nodes);
+    step.nextSteps.push(...followResult.steps);
     exitingSteps.push(...followResult.exitingSteps);
 
     if (
       // Criteria for successful continuation...
-      followResult.nodes.some(
-        (node) =>
-          node.type === "call" ||
-          (node.type === "step" && node.scene.type === "success"),
-      )
+      followResult.steps.some((step) => step.scene.type === "success")
     ) {
       continuedSuccessfully = true;
     }
@@ -475,12 +334,12 @@ export function runPostFrame(
     if (frame.escapeRouteFrameId) {
       const followResult = runPreFrame(
         ctx,
-        outputNodeId,
+        outputStepId,
         step.scene,
         flowchartId,
         frame.escapeRouteFrameId,
       );
-      step.nextNodes.push(...followResult.nodes);
+      step.nextSteps.push(...followResult.steps);
       exitingSteps.push(...followResult.exitingSteps);
     }
   }
@@ -489,17 +348,16 @@ export function runPostFrame(
 }
 
 function applyAction(
+  ctx: RunContext,
+  stepId: string,
   scene: SuccessfulScene,
   action: Action | undefined,
 ): Scene[] {
   if (!action || action.type === "start" || action.type === "escape") {
     return [{ ...scene, actionAnnotation: undefined }];
   } else if (action.type === "call") {
-    throw new Error(
-      "INTERNAL ERROR: calls are supposed to be handled before applyAction",
-    );
+    return applyCall(ctx, stepId, scene, action);
   } else if (action.type === "test-func") {
-    console.log("running test-func", action, scene);
     return action.func(scene.value);
   } else if (action.type === "place-domino") {
     const { domino } = action;
@@ -541,6 +399,68 @@ function applyAction(
   } else {
     assertNever(action);
   }
+}
+
+function applyCall(
+  ctx: RunContext,
+  stepId: string,
+  scene: SuccessfulScene,
+  action: Action & { type: "call" },
+): Scene[] {
+  const lens = action.lens;
+
+  // Prepare initial scene, using lens if necessary
+  let initialScene = {
+    ...scene,
+    actionAnnotation: undefined,
+  };
+  if (lens) {
+    const lensImpl = lenses[lens.type];
+    if (!lensImpl) {
+      throw new Error(`Lens type ${lens.type} not found`);
+    }
+    initialScene = {
+      ...scene,
+      value: lensImpl.getPart(lens, scene.value),
+      actionAnnotation: undefined,
+    };
+  }
+
+  // Run the call
+  const { initialStep, exitingSteps } = runFlowchart(
+    {
+      ...ctx,
+      callStack: [...ctx.callStack, stepId],
+    },
+    action.flowchartId,
+    initialScene,
+  );
+
+  // Prepare returned scenes, using lens if necessary
+  const returnScenes: Scene[] = [];
+  for (const exitingStep of exitingSteps) {
+    let returnScene: Scene = {
+      ...exitingStep.scene,
+      actionAnnotation: {
+        type: "call",
+        initialStep,
+        returningStepId: exitingStep.id,
+      },
+    };
+    if (lens) {
+      const lensImpl = lenses[lens.type];
+      if (!lensImpl) {
+        throw new Error(`Lens type ${lens.type} not found`);
+      }
+      returnScene = {
+        ...returnScene,
+        value: lensImpl.setPart(lens, scene.value, returnScene.value),
+      };
+    }
+    returnScenes.push(returnScene);
+  }
+
+  return returnScenes;
 }
 
 function applyActionWorkspacePick(
@@ -684,8 +604,8 @@ const lenses: Record<string, LensImpl> = {
  */
 export function runHelper(flowcharts: Flowchart[], value: any) {
   const defs: Definitions = { flowcharts: indexById(flowcharts) };
-  const ctx: RunContext = { defs, callDepth: 0 };
-  return runFlowchart(ctx, "", flowcharts[0].id, { type: "success", value });
+  const ctx: RunContext = { defs, callStack: [] };
+  return runFlowchart(ctx, flowcharts[0].id, { type: "success", value });
 }
 
 export function exitingValues(steps: SuccessfulStep[]) {
@@ -783,233 +703,6 @@ export function getPrevFrameIds(frameId: string, flowchart: Flowchart) {
 
 export function stringifyEqual<T>(a: T, b: T) {
   return JSON.stringify(a) === JSON.stringify(b);
-}
-
-export function getNextSteps(step: Step, traceTree: TraceTree) {
-  return Object.values(traceTree.steps).filter(
-    ({ prevStepId }) => prevStepId === step.id,
-  );
-}
-
-// A "viewchart" shows the execution of a flowchart in a particular
-// arrangement: Steps are grouped into stacks (either one per frame
-// for 'stacked' mode or one per step for 'unstacked' mode). Calls
-// are shown in separate sub-viewcharts inside holes.
-
-export type Viewchart = {
-  flowchartId: string;
-  initialStack: Step;
-};
-
-export type ViewchartNode = Step | ViewchartCall;
-
-export type ViewchartStack = {
-  type: "stack";
-  nodeId: string;
-  flowchartId: string;
-  frameId: string;
-  steps: Step[];
-  nextNodes: Node[];
-};
-
-export type ViewchartCall = {
-  type: "call";
-  nodeId: string;
-  callDepth: number;
-  frameId: string;
-  childViewchart: Viewchart;
-  /* Either every output of the call feeds into a single stack at
-  this level, or each output feeds into a single stack. */
-  continuation:
-    | { type: "single"; single: Step }
-    | { type: "many"; many: { [stackId: string]: Step } };
-};
-
-export function traceTreeToViewchart(
-  traceTree: TraceTree,
-  defs: Definitions,
-  mode: "stacked" | "unstacked",
-  /* We assume 1. there's at least one step, 2. all steps are on the
-  same frame */
-  steps: Step[],
-  initialNodeId: string,
-  callDepth: number,
-): Viewchart {
-  if (steps.length === 0) {
-    throw new Error("can't make a viewchart without at least one step");
-  }
-  const { flowchartId, frameId } = steps[0];
-  return {
-    flowchartId,
-    initialStack: traceTreeToViewchartStack(
-      traceTree,
-      defs,
-      mode,
-      flowchartId,
-      frameId,
-      steps,
-      initialNodeId,
-      callDepth,
-    ),
-  };
-}
-
-export function traceTreeToViewchartStack(
-  traceTree: TraceTree,
-  defs: Definitions,
-  mode: "stacked" | "unstacked",
-  flowchartId: string,
-  frameId: string,
-  steps: Step[],
-  nodeId: string,
-  callDepth: number,
-): Step {
-  const flowchart = defs.flowcharts[flowchartId];
-  const stepIds = steps.map((step) => step.id);
-  let nextNodes: Node[] = [];
-  getNextFrameIds(frameId, flowchart).forEach((nextFrameId) => {
-    const nextFrame = flowchart.frames[nextFrameId];
-    if (nextFrame.action?.type === "call") {
-      nextNodes.push(
-        traceTreeToViewchartCall(
-          traceTree,
-          defs,
-          mode,
-          flowchartId,
-          nextFrameId,
-          steps,
-          nodeId + "/" + nextFrameId,
-          callDepth,
-        ),
-      );
-      return;
-    }
-
-    const nextStepsInFlowchart = Object.values(traceTree.steps).filter(
-      (step) =>
-        step.flowchartId === flowchartId &&
-        step.frameId === nextFrameId &&
-        step.prevStepId &&
-        stepIds.includes(step.prevStepId),
-    );
-    const makeNode = (steps: Step[], nodeIdPart: string | undefined) =>
-      traceTreeToViewchartStack(
-        traceTree,
-        defs,
-        mode,
-        flowchartId,
-        nextFrameId,
-        steps,
-        nodeId + "/" + nextFrameId + (nodeIdPart ? "/" + nodeIdPart : ""),
-        callDepth,
-      );
-    if (mode === "stacked") {
-      // make a stack for all steps for this next frame (0 or more)
-      nextNodes.push(makeNode(nextStepsInFlowchart, ""));
-    } else if (mode === "unstacked") {
-      if (nextStepsInFlowchart.length === 0) {
-        // make an empty stack for this frame
-        nextNodes.push(makeNode([], ""));
-      } else {
-        // make stacks for each step of this next frame
-        nextStepsInFlowchart.forEach((nextStep) => {
-          nextNodes.push(makeNode([nextStep], nextStep.id));
-        });
-      }
-    } else {
-      assertNever(mode);
-    }
-  });
-  return {
-    type: "stack",
-    nodeId,
-    flowchartId,
-    frameId,
-    steps,
-    nextNodes: nextNodes,
-  };
-}
-
-export function traceTreeToViewchartCall(
-  traceTree: TraceTree,
-  defs: Definitions,
-  mode: "stacked" | "unstacked",
-  flowchartId: string,
-  callFrameId: string,
-  steps: Step[],
-  nodeId: string,
-  callDepth: number,
-): Node {
-  const stepIds = steps.map((step) => step.id);
-
-  // These are the initial steps inside the call
-  const stepsInCall = Object.values(traceTree.steps).filter(
-    (step) => step.prevStepId && stepIds.includes(step.prevStepId),
-  );
-
-  if (stepsInCall.length === 0) {
-    // make an empty stack for this call
-    return traceTreeToViewchartStack(
-      traceTree,
-      defs,
-      mode,
-      flowchartId,
-      callFrameId,
-      [],
-      nodeId + "/" + callFrameId,
-      callDepth + 1,
-    );
-  }
-
-  // there's at least one step in this call; make a call node
-  const childViewchart = traceTreeToViewchart(
-    traceTree,
-    defs,
-    mode,
-    stepsInCall,
-    nodeId,
-    callDepth + 1,
-  );
-  let continuation: ViewchartCall["continuation"];
-  if (mode === "stacked") {
-    const myCallPathStaticStr = getCallPathStaticStr(
-      getCallPath(stepsInCall[0], traceTree).slice(0, -1),
-    );
-    // make a single stack for all steps leading into this call
-    const nextStepsInFlowchart = Object.values(traceTree.steps).filter(
-      (step) =>
-        step.flowchartId === flowchartId &&
-        step.frameId === callFrameId &&
-        getCallPathStaticStr(getCallPath(step, traceTree)) ===
-          myCallPathStaticStr,
-    );
-    continuation = {
-      type: "single",
-      single: traceTreeToViewchartStack(
-        traceTree,
-        defs,
-        mode,
-        flowchartId,
-        callFrameId,
-        nextStepsInFlowchart,
-        nodeId + "/" + callFrameId,
-        callDepth,
-      ),
-    };
-  } else if (mode === "unstacked") {
-    // TODO: phony
-    continuation = { type: "many", many: {} };
-  } else {
-    assertNever(mode);
-  }
-  return {
-    type: "call",
-    nodeId,
-    callDepth: callDepth + 1,
-    frameId: callFrameId,
-    childViewchart,
-    continuation,
-  };
 }
 
 export function getActionText(action?: Action): string {
