@@ -36,7 +36,7 @@ export const twoCallsInARowFlowcharts: Flowchart[] = [
         id: "2",
         action: {
           type: "test-func",
-          func: ({ value: x }) => [success(x + 10)],
+          func: (x) => [success(x + 10)],
         },
       },
     ]),
@@ -54,11 +54,7 @@ export const branchingFlowchart: Flowchart[] = [
         id: "2",
         action: {
           type: "test-func",
-          func: ({ value: x }) => [
-            success(x),
-            success(x + 10),
-            success(x + 20),
-          ],
+          func: (x) => [success(x), success(x + 10), success(x + 20)],
         },
       },
       {

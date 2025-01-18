@@ -1,11 +1,6 @@
 import { assert, expect, test } from "vitest";
 import { dominoFlowchart } from "./dominoes.ex";
-import {
-  callPath,
-  getFinalValues,
-  runHelper,
-  topLevelValueForStep,
-} from "./interpreter";
+import { exitingValues, runHelper, topLevelValueForStep } from "./interpreter";
 
 test("runAll works with recursion (dominoes!)", () => {
   const initialValue = {
@@ -13,8 +8,8 @@ test("runAll works with recursion (dominoes!)", () => {
     height: 2,
     dominoes: [],
   };
-  const { traceTree } = runHelper([dominoFlowchart], initialValue);
-  const finalValues = getFinalValues(traceTree);
+  const { exitingSteps } = runHelper([dominoFlowchart], initialValue);
+  const finalValues = exitingValues(exitingSteps);
   expect(finalValues.length).toBe(5);
   expect(finalValues).toMatchInlineSnapshot(`
     [
