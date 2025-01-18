@@ -127,6 +127,7 @@ export type Call = {
   type: "call";
   nodeId: string;
   flowchartId: string;
+  frameId: string;
   initialStep: Step;
   /* Each final step inside the call exits to a step outside the call
   (or 'final-exit' if there's nothing outside) */
@@ -296,6 +297,7 @@ export function runCall(
       type: "call",
       nodeId: inputNodeId,
       flowchartId,
+      frameId,
       initialStep,
       exits,
     },
