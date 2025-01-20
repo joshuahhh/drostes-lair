@@ -31,7 +31,7 @@ export type StackedCallExits = {
 
 export function stackSteps(
   defs: Definitions,
-  framechartId: string,
+  flowchartId: string,
   frameId: string,
   steps: Step[],
 ): StackedSteps {

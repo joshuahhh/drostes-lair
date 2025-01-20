@@ -1,6 +1,6 @@
 // mini Vec2 library by Elliot
 
-export type Vec2 = readonly [number, number];
+export type Vec2 = [number, number];
 
 export const X: Vec2 = [1, 0];
 export const Y: Vec2 = [0, 1];
@@ -12,8 +12,11 @@ export const RIGHT: Vec2 = [1, 0];
 export const x = (v: Vec2): number => v[0];
 export const y = (v: Vec2): number => v[1];
 
-export const v = (xOrBoth: number, y?: number): Vec2 =>
-  y === undefined ? [xOrBoth, xOrBoth] : [xOrBoth, y];
+export function v(xy: number): Vec2;
+export function v(x: number, y: number): Vec2;
+export function v(xOrBoth: number, y?: number): Vec2 {
+  return y === undefined ? [xOrBoth, xOrBoth] : [xOrBoth, y];
+}
 
 export const add = (v1: Vec2, v2: Vec2): Vec2 => [v1[0] + v2[0], v1[1] + v2[1]];
 

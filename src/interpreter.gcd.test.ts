@@ -2,7 +2,7 @@ import { expect, test } from "vitest";
 import { Flowchart, exitingValues, runHelper, success } from "./interpreter";
 import { indexById } from "./util";
 
-test("runFramechart works with recursion (gcd!)", () => {
+test("runFlowchart works with recursion (gcd!)", () => {
   const flowchart: Flowchart = {
     id: "fc1",
     initialFrameId: "1",

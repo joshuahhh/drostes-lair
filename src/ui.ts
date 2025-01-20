@@ -11,16 +11,17 @@ import {
   Action,
   ActionAnnotation,
   Definitions,
+  DominoesValue,
   Flowchart,
-  Frame,
-  Scene,
-  Step,
-  assertSuccessful,
+  SuccessfulScene,
+  WorkspaceValue,
   getActionText,
+  getFrame,
+  isDominoesValue,
   isEscapeRoute,
+  isWorkspaceValue,
   runFlowchart,
   stringifyEqual,
-  topLevelValueForStep,
 } from "./interpreter";
 import { Layer, getLayerCommandCount, layer } from "./layer";
 import { howManyTimesDidModWrap, mod } from "./number";
@@ -37,10 +38,19 @@ import {
   inXYWH,
   loadImg,
   mm,
+  mr,
   saveFile,
 } from "./ui_util";
 import { assertNever, indexById } from "./util";
-import { Vec2, add, angleBetween, distance, mul, v } from "./vec2";
+import { Vec2, add, angleBetween, distance, mul, sub, v } from "./vec2";
+import {
+  SceneWithId,
+  ViewchartCall,
+  ViewchartNode,
+  ViewchartStack,
+  ViewchartStackGroup,
+  stepToViewchartStack,
+} from "./viewchart";
 
 const browser = detectBrowser();
 
@@ -119,8 +129,6 @@ const act = (f: (stateYouCanChange: UIState) => void) => {
     f(curStateYouCanChange);
   }
 };
-
-let mode: "stacked" | "unstacked" = "stacked";
 
 // DEFAULT FLOWCHART RIGHT HERE BUDDY
 let undoStack: UIState[] = [examples.dominoesBlank];
@@ -205,6 +213,7 @@ if (hashParams["example"]) {
 let viewDepth = Infinity;
 
 const persistentValuesById = new Map<string, number>();
+const persistentValuesAccessedLately = new Set<string>();
 const interpTo = (
   id: string,
   targetValue: number,
@@ -218,6 +227,7 @@ const interpTo = (
   }
   const newValue = v + (targetValue - v) / slowness;
   persistentValuesById.set(id, newValue);
+  persistentValuesAccessedLately.add(id);
   return newValue;
 };
 
@@ -225,7 +235,6 @@ let hoveredStackId = undefined as string | undefined;
 
 // globals for communication are the best
 let state: UIState;
-let traceTree: TraceTree;
 
 const c = document.getElementById("c") as HTMLCanvasElement;
 const cContainer = document.getElementById("c-container") as HTMLDivElement;
@@ -387,10 +396,6 @@ async function main() {
     }
     if (e.key === "0" && !(e.ctrlKey || e.metaKey)) {
       viewDepth = Infinity;
-    }
-    if (e.key === "m") {
-      mode = mode === "stacked" ? "unstacked" : "stacked";
-      console.log("mode is", mode);
     }
   });
   window.addEventListener("keyup", (e) => {
@@ -581,20 +586,17 @@ async function main() {
     lyr.restore();
   };
 
-  const drawDominoes = (
+  const drawDominoesValue = (
     lyr: Layer,
-    value: {
-      width: number;
-      height: number;
-      dominoes: [[number, number], [number, number]][];
-    },
-    flowchartId: string,
-    frameId: string,
-    callPath: Call[],
-    action: Action | undefined,
+    value: DominoesValue,
+    scene: SuccessfulScene,
+    stepId: string | undefined,
+    stack: ViewchartStack,
     pos: Vec2,
   ) => {
     const { defs } = state;
+    const { flowchartId, frameId } = stack;
+    const action = getFrame(defs, stack).action;
 
     function gridToXY([x, y]: [number, number]): [number, number] {
       return [pos[0] + 10 + cellSize * x, pos[1] + 20 + cellSize * y];
@@ -603,14 +605,15 @@ async function main() {
     // precompute overall offset of the bottom call
     let dx = 0;
     let dy = 0;
-    for (const segment of callPath) {
-      const frame =
-        defs.flowcharts[segment.flowchartId].frames[segment.frameId];
-      const action = frame.action as Action & { type: "call" };
-      const lens = action.lens!; // TODO: what if not here
-      dx += lens.dx;
-      dy += lens.dy;
-    }
+    // TODO: restore lenses
+    // for (const segment of callPath) {
+    //   const frame =
+    //     defs.flowcharts[segment.flowchartId].frames[segment.frameId];
+    //   const action = frame.action as Action & { type: "call" };
+    //   const lens = action.lens!; // TODO: what if not here
+    //   dx += lens.dx;
+    //   dy += lens.dy;
+    // }
 
     // grid squares
     lyr.beginPath();
@@ -714,64 +717,61 @@ async function main() {
     let y = 0;
     let width = value.width;
     let height = value.height;
-    for (const [i, segment] of callPath.entries()) {
-      const frame =
-        defs.flowcharts[segment.flowchartId].frames[segment.frameId];
-      const action = frame.action as Action & { type: "call" };
-      const lens = action.lens!; // TODO: what if not here
-      x += lens.dx;
-      y += lens.dy;
-      width -= lens.dx;
-      height -= lens.dy;
-      // shaded background
-      lyr.beginPath();
-      lyr.rect(...pos, sceneW, sceneH);
-      lyr.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
-      // use parchment fade or darkness fade?
-      if (true) {
-        lyr.fillStyle = patternParchment;
-        patternParchment.setTransform(new DOMMatrix().translate(...pan, 0));
-        lyr.globalAlpha = i === callPath.length - 1 ? 0.8 : 0.4;
-      } else {
-        lyr.fillStyle = "rgba(0,0,0,0.4)";
-      }
-      lyr.fill("evenodd");
-      lyr.globalAlpha = 1;
-      // outline
-      lyr.lineWidth = 2;
-      lyr.beginPath();
-      lyr.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
-      // lyr.setLineDash([2, 2]);
-      lyr.strokeStyle = `hsl(${callHueSaturation} 50%)`;
-      lyr.stroke();
-    }
+    // TODO: restore lenses
+    // for (const [i, segment] of callPath.entries()) {
+    //   const frame =
+    //     defs.flowcharts[segment.flowchartId].frames[segment.frameId];
+    //   const action = frame.action as Action & { type: "call" };
+    //   const lens = action.lens!; // TODO: what if not here
+    //   x += lens.dx;
+    //   y += lens.dy;
+    //   width -= lens.dx;
+    //   height -= lens.dy;
+    //   // shaded background
+    //   lyr.beginPath();
+    //   lyr.rect(...pos, sceneW, sceneH);
+    //   lyr.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
+    //   // use parchment fade or darkness fade?
+    //   if (true) {
+    //     lyr.fillStyle = patternParchment;
+    //     patternParchment.setTransform(new DOMMatrix().translate(...pan, 0));
+    //     lyr.globalAlpha = i === callPath.length - 1 ? 0.8 : 0.4;
+    //   } else {
+    //     lyr.fillStyle = "rgba(0,0,0,0.4)";
+    //   }
+    //   lyr.fill("evenodd");
+    //   lyr.globalAlpha = 1;
+    //   // outline
+    //   lyr.lineWidth = 2;
+    //   lyr.beginPath();
+    //   lyr.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
+    //   // lyr.setLineDash([2, 2]);
+    //   lyr.strokeStyle = `hsl(${callHueSaturation} 50%)`;
+    //   lyr.stroke();
+    // }
 
     lyrTop.place();
   };
 
-  const drawWorkspace = (
+  const drawWorkspaceValue = (
     lyr: Layer,
-    scene: Scene & { type: "success"; value: { contents: unknown[][] } },
-    flowchartId: string,
-    frameId: string,
-    stepId: string,
+    value: WorkspaceValue,
+    actionAnnotation: ActionAnnotation | undefined,
+    stepId: string | undefined,
+    stack: ViewchartStack | undefined,
     pos: Vec2,
     opts: { badSource?: number } = {},
   ) => {
     const { badSource } = opts;
 
-    if (scene.type !== "success") {
-      throw new Error("bad scene type");
-    }
-
     const lyrTop = lyr.spawnLater(); // so drop target lines go above the contents
 
-    const contents = scene.value.contents;
+    const contents = value.contents;
     let annotation:
       | (ActionAnnotation & { type: "workspace-pick" })
       | undefined = undefined;
-    if (scene.actionAnnotation?.type === "workspace-pick") {
-      annotation = scene.actionAnnotation;
+    if (actionAnnotation?.type === "workspace-pick") {
+      annotation = actionAnnotation;
     }
 
     const isDropTarget =
@@ -800,12 +800,12 @@ async function main() {
       if (idxInWorkspace > 0) {
         curY += 5;
       }
-      const result = drawWorkspaceValue(
+      const result = drawWorkspaceItem(
         lyr,
         lyrTop,
         item,
         idxInWorkspace,
-        traceTree.steps[stepId],
+        stack,
         [pos[0] + 10, curY],
         {
           removalIdx:
@@ -845,7 +845,8 @@ async function main() {
       }
     }
 
-    if (tool.type === "call") {
+    if (stack && tool.type === "call") {
+      const { flowchartId, frameId } = stack;
       const xywh = [pos[0], pos[1], sceneW, sceneH] as const;
       const callFlowchartId = tool.flowchartId;
       if (inXYWH(mouseX, mouseY, xywh)) {
@@ -921,12 +922,12 @@ async function main() {
     lyrTop.place();
   };
 
-  const drawWorkspaceValue = (
+  const drawWorkspaceItem = (
     lyr: Layer,
     lyrTop: Layer | undefined,
-    value: unknown[],
+    item: unknown[],
     idxInWorkspace: number,
-    step: Step | undefined,
+    stack: ViewchartStack | undefined,
     pos: Vec2,
     opt: {
       removalIdx?: number;
@@ -946,9 +947,9 @@ async function main() {
 
     const isDropTarget =
       interactable &&
-      step &&
+      stack &&
       tool.type === "workspace-pick" &&
-      tool.stepId === step.id;
+      tool.stepId === stack.id;
 
     let left = pos[0];
 
@@ -970,7 +971,7 @@ async function main() {
     let cellContents: (
       | { type: "item"; value: unknown; isAdded: boolean; idx: number }
       | { type: "removal" }
-    )[] = value.map((item: unknown, idx: number) => ({
+    )[] = item.map((item: unknown, idx: number) => ({
       type: "item",
       value: item,
       isAdded: insertionIdx === idx,
@@ -993,7 +994,7 @@ async function main() {
       const isInsertion = cell.type === "item" && cell.isAdded;
       const isRemoval = cell.type === "removal";
 
-      const cellPos = [left, pos[1] + cellSize * 0] as const;
+      const cellPos = v(left, pos[1] + cellSize * 0);
       const xywh = [...cellPos, cellSize, cellSize] as const;
 
       if (isInsertion) {
@@ -1024,7 +1025,7 @@ async function main() {
         lyr.rect(...xywh);
         lyr.stroke();
         lyr.setLineDash([]);
-        if (interactable && !isRemoval && tool.type === "pointer" && step) {
+        if (interactable && !isRemoval && tool.type === "pointer" && stack) {
           if (inXYWH(mouseX, mouseY, xywh)) {
             lyr.fillStyle = "rgba(255,200,0,0.4)";
             lyr.fill();
@@ -1035,9 +1036,9 @@ async function main() {
                 type: "workspace-pick",
                 source: idxInWorkspace,
                 index: cell.idx,
-                flowchartId: step.flowchartId,
-                frameId: step.frameId,
-                stepId: step.id,
+                flowchartId: stack.flowchartId,
+                frameId: stack.frameId,
+                stepId: stack.id,
                 value: cell.value,
               };
             });
@@ -1156,51 +1157,38 @@ async function main() {
     });
   };
 
-  const drawSceneValue = (
+  /* This draws the main contents of a scene onto a parchment. It is
+  called in two contexts: 1. a scene was successful, 2. a scene
+  errored out but it has an error annotation with a scene on it. In
+  either case, it receives a successful scene to show. */
+  const drawSceneContents = (
     lyr: Layer,
-    step: Step,
-    value: any,
-    frame: Frame,
+    scene: SuccessfulScene,
+    stepId: string | undefined,
+    stack: ViewchartStack,
     defs: Definitions,
     topLeft: Vec2,
   ) => {
-    const { flowchartId, frameId } = step;
-    const callPath = getCallPath(step, traceTree);
+    // const callPath = getCallPath(step, traceTree);
 
-    value = topLevelValueForStep(step, value, traceTree, defs) as any;
+    // TODO: restore this
+    // value = topLevelValueForStep(step, value, traceTree, defs) as any;
 
     lyr.save();
     lyr.beginPath();
     lyr.rect(...topLeft, sceneW, sceneH);
     lyr.clip();
 
-    if (typeof value === "object" && value !== null && "dominoes" in value) {
-      drawDominoes(
+    const value = scene.value;
+    if (isDominoesValue(value)) {
+      drawDominoesValue(lyr, value, scene, stepId, stack, topLeft);
+    } else if (isWorkspaceValue(value)) {
+      drawWorkspaceValue(
         lyr,
-        value as any,
-        flowchartId,
-        frameId,
-        callPath,
-        frame.action,
-        topLeft,
-      );
-    } else if (
-      typeof value === "object" &&
-      value !== null &&
-      "type" in value &&
-      value.type === "workspace"
-    ) {
-      // TODO: drawSceneValue is a big mess
-      drawWorkspace(
-        lyr,
-        {
-          type: "success",
-          value,
-          actionAnnotation: (step.scene as any).actionAnnotation,
-        },
-        flowchartId,
-        frameId,
-        step.id,
+        value,
+        scene.actionAnnotation,
+        stepId,
+        stack,
         topLeft,
       );
     } else {
@@ -1215,22 +1203,27 @@ async function main() {
     lyr.restore();
   };
 
+  /* This draws a scene onto parchment. It might be one scene of many
+  in a stack. It might be an errored-out scene. */
   const drawScene = (
     lyr: Layer,
-    step: Step,
+    scene: SceneWithId,
+    stack: ViewchartStack,
     topleft: Vec2,
     onHover: () => void,
   ) => {
     const { defs } = state;
 
-    const frame = defs.flowcharts[step.flowchartId].frames[step.frameId];
+    const frame = getFrame(defs, stack);
 
     const xywh = [...topleft, sceneW, sceneH] as const;
     if (inXYWH(mouseX, mouseY, expand(xywh, 10))) {
       onHover();
     }
 
-    const isOutlined = traceTree.finalStepIds.includes(step.id);
+    // TODO: restore this
+    // const isOutlined = traceTree.finalStepIds.includes(step.id);
+    const isOutlined = false;
 
     if (isOutlined) {
       lyr.save();
@@ -1265,16 +1258,16 @@ async function main() {
       lyr.stroke();
     });
 
-    if (step.scene.type === "error") {
-      const errorAnnotation = step.scene.errorAnnotation;
+    if (scene.type === "error") {
+      const errorAnnotation = scene.errorAnnotation;
       if (errorAnnotation) {
         if (errorAnnotation.type === "workspace-pick-bad-source") {
-          drawWorkspace(
+          drawWorkspaceValue(
             lyr,
-            errorAnnotation.scene,
-            step.flowchartId,
-            step.frameId,
-            step.id,
+            errorAnnotation.scene.value as WorkspaceValue,
+            errorAnnotation.scene.actionAnnotation,
+            undefined,
+            stack,
             topleft,
             {
               badSource: errorAnnotation.source,
@@ -1282,11 +1275,11 @@ async function main() {
           );
         }
         if (errorAnnotation.type === "scene") {
-          drawSceneValue(
+          drawSceneContents(
             lyr,
-            step,
-            errorAnnotation.scene.value,
-            frame,
+            errorAnnotation.scene,
+            undefined,
+            stack,
             defs,
             topleft,
           );
@@ -1307,19 +1300,18 @@ async function main() {
 
       drawOutlinedText(
         lyr,
-        step.scene.message,
+        scene.message,
         [topleft[0] + sceneW, topleft[1] + sceneH],
         { textAlign: "right", color: "#e8816b" },
       );
       return;
     }
-    assertSuccessful(step);
 
-    drawSceneValue(lyr, step, step.scene.value, frame, defs, topleft);
+    drawSceneContents(lyr, scene, scene.stepId, stack, defs, topleft);
 
     if (tool.type === "purging-flame" && frame.action?.type !== "start") {
       addClickHandler(xywh, () => {
-        const { flowchartId, frameId } = step;
+        const { flowchartId, frameId } = stack;
         modifyFlowchart(flowchartId, (old) => deleteFrame(old, frameId));
         tool = { type: "pointer" };
       });
@@ -1335,7 +1327,7 @@ async function main() {
         if (newActionStr === null) return;
         try {
           const newAction = JSON.parse(newActionStr);
-          const { flowchartId, frameId } = step;
+          const { flowchartId, frameId } = stack;
           modifyFlowchart(flowchartId, (old) =>
             setAction(old, frameId, newAction, true),
           );
@@ -1368,6 +1360,8 @@ async function main() {
     const hueRotation = 250 + Math.sin(t / 100) * 15;
     callHueSaturation = `${hueRotation.toFixed(2)}deg 37%`;
 
+    persistentValuesAccessedLately.clear();
+
     // console.log("draw");
 
     // This one will be drawn on the real canvas
@@ -1389,8 +1383,12 @@ async function main() {
         value: state.initialValue,
       },
     );
+    const initialStack = stepToViewchartStack(initialStep, 0);
+    (window as any).initialStack = initialStack;
 
     _clickables = [];
+
+    const stackXYWHs: { [stackId: string]: XYWH } = {};
 
     const [cursorName, cursorStyle] =
       shiftHeld || (ix.type === "confirmed" && ix.isPan)
@@ -1463,17 +1461,18 @@ async function main() {
 
     // draw trace
     const scenePadX = 20;
-    const scenePadY = mode === "stacked" ? 40 : 15;
-    const callPad = 20;
-    const callTopPad = 20;
+    const scenePadY = 15; // 40 for stacks
+    const callPad = 20; // space between elements and edges of the bottom of the hole
+    const callTopPad = 20; // height of the "top of the hole" (transition from top to bottom)
 
+    /* The bounds of the viewchart are determined by elements within it. */
     const drawViewchart = (
       lyr: Layer,
       lyrAboveViewchart: Layer,
-      initialStep: Step,
-      exitingSteps: Step[],
+      initialStack: ViewchartStack,
+      /* 0 is a top-level viewchart */
+      callDepth: number,
       topLeft: Vec2,
-      mode: "stacked" | "unstacked",
     ): {
       maxX: number;
       maxY: number;
@@ -1483,36 +1482,34 @@ async function main() {
 
       drawFlowchartSigil(
         lyrAbove,
-        initialStep.flowchartId,
-        add(topLeft, [0, -60]),
+        initialStack.flowchartId,
+        sub(topLeft, [0, callPad + callTopPad + 10]),
       );
 
-      // TODO: figure out depth filtering
-      // if (viewchart.callPath.length > viewDepth) {
-      //   // TODO: we're backwards-engineering the padding put around
-      //   // the viewchart; this is dumb
-      //   lyr.save();
-      //   for (let i = -1; i < 2; i++) {
-      //     lyr.beginPath();
-      //     lyr.arc(
-      //       topLeft[0] + sceneW / 2 - callPad + i * 20,
-      //       topLeft[1] + sceneH / 2 - callPad,
-      //       5,
-      //       0,
-      //       Math.PI * 2,
-      //     );
-      //     lyr.globalAlpha = 0.5;
-      //     lyr.fillStyle = patternParchment;
-      //     lyr.fill();
-      //   }
-      //   lyr.restore();
-      //   return {
-      //     maxX: topLeft[0] + sceneW - callPad,
-      //     maxY: topLeft[1] + sceneH - 2 * callPad - 2 * callTopPad,
-      //   };
-      // }
+      if (callDepth > viewDepth) {
+        // TODO: we're backwards-engineering the padding put around
+        // the viewchart; this is dumb
+        lyr.save();
+        for (let i = -1; i < 2; i++) {
+          lyr.beginPath();
+          lyr.arc(
+            topLeft[0] + sceneW / 2 - callPad + i * 20,
+            topLeft[1] + sceneH / 2 - callPad,
+            5,
+            0,
+            Math.PI * 2,
+          );
+          lyr.globalAlpha = 0.5;
+          lyr.fillStyle = patternParchment;
+          lyr.fill();
+        }
+        lyr.restore();
+        return {
+          maxX: topLeft[0] + sceneW - 2 * callPad,
+          maxY: topLeft[1] + sceneH - 2 * callPad - callTopPad,
+        };
+      }
 
-      const initialStack = viewchart.initialStack;
       const r = drawStackAndDownstream(
         lyr,
         lyrAboveViewchart,
@@ -1520,31 +1517,36 @@ async function main() {
         ...topLeft,
       );
 
-      // final connector lines, out of viewchart
-      for (const v of r.finalPosForConnectors) {
-        drawConnectorLine(
-          lyrBelow,
-          v.pos,
-          mode === "stacked"
-            ? [r.maxX, topLeft[1] + sceneH / 2]
-            : [r.maxX, v.pos[1]],
-          {
-            dead: v.dead,
-          },
-        );
-      }
+      // TODO: should be drawn by whoever is drawing the viewchart?
+      // // final connector lines, out of viewchart
+      // for (const v of r.finalPosForConnectors) {
+      //   drawConnectorLine(
+      //     lyrBelow,
+      //     v.pos,
+      //     mode === "stacked"
+      //       ? [r.maxX, topLeft[1] + sceneH / 2]
+      //       : [r.maxX, v.pos[1]],
+      //     {
+      //       dead: v.dead,
+      //     },
+      //   );
+      // }
 
       // initial little connector line on the left
       const start = add(topLeft, v(-scenePadX, sceneH / 2));
       const end = add(start, v(scenePadX, 0));
       drawConnectorLine(lyrBelow, start, end);
 
+      // lyrAbove.lineWidth = 1;
+      // lyrAbove.strokeStyle = "rgba(255,255,255)";
+      // lyrAbove.strokeRect(...topLeft, r.maxX - topLeft[0], r.maxY - topLeft[1]);
+
       lyrAbove.place();
 
       return r;
     };
 
-    const drawInset = (
+    const drawHole = (
       lyr: Layer,
       call: ViewchartCall,
       curX: number,
@@ -1552,8 +1554,14 @@ async function main() {
       maxX: number,
       maxY: number,
     ) => {
-      const w = interpTo(`inset-${call.nodeId}-w`, maxX + callPad - curX);
-      const h = interpTo(`inset-${call.nodeId}-h`, maxY + callPad - curY);
+      const w = interpTo(
+        `inset-${call.initialStack.id}-w`,
+        maxX + callPad - curX,
+      );
+      const h = interpTo(
+        `inset-${call.initialStack.id}-h`,
+        maxY + callPad - curY,
+      );
       lyr.fillStyle = `rgba(0, 0, 0, ${0.15 * call.callDepth})`;
       lyr.fillRect(curX, curY + callTopPad, w, h - callTopPad);
       // shadows (via gradients inset from the edges)
@@ -1716,15 +1724,17 @@ async function main() {
     const drawStack = (
       lyr: Layer,
       lyrAboveViewchart: Layer,
-      stack: TrStep,
+      stack: ViewchartStack,
       curX: number,
       myY: number,
     ): { maxX: number; maxY: number; layerUsed: Layer } => {
-      const stackId = stack.steps[0]?.id as string | undefined;
-      const steps = stack.steps;
+      const stackId = stack.id;
+      const scenes = stack.scenes;
 
       let maxX = curX;
       let maxY = myY;
+
+      stackXYWHs[stackId] = [curX, myY, sceneW, sceneH];
 
       const hovered =
         stackId &&
@@ -1739,14 +1749,14 @@ async function main() {
       const stackH = scenePadY - 5;
       const layerToUse = hovered ? lyrAboveViewchart : lyr;
       layerToUse.do((lyr) => {
-        for (const [stepIdx, step] of steps.entries()) {
+        for (const [sceneIdx, scene] of scenes.entries()) {
           let targetX = curX;
-          let targetY = myY + (stepIdx / stack.steps.length) * stackH;
+          let targetY = myY + (sceneIdx / scenes.length) * stackH;
           if (hovered) {
             const stackFanX = sceneW + 10;
             const stackFanY = sceneH + 10;
             const modArgs = [
-              myY + stepIdx * stackFanY,
+              myY + sceneIdx * stackFanY,
               c.height - sceneH,
               myY,
             ] as const;
@@ -1756,29 +1766,34 @@ async function main() {
           }
 
           const xy: Vec2 = [
-            interpTo(step.id + "x", targetX - pan[0]) + pan[0],
-            interpTo(step.id + "y", targetY - pan[1]) + pan[1],
+            interpTo(`${stackId} ${sceneIdx} x`, targetX - pan[0]) + pan[0],
+            interpTo(`${stackId} ${sceneIdx} y`, targetY - pan[1]) + pan[1],
           ];
-          drawScene(lyr, step, xy, () => {
+          drawScene(lyr, scene, stack, xy, () => {
             hoveredStackId = stackId;
           });
 
-          if (stepIdx === 0) {
+          if (sceneIdx === 0) {
             // TODO: Only one step is used to determine size. This is
             // needed, at least, for consistent connector placement.
             maxX = Math.max(maxX, curX + sceneW);
             maxY = Math.max(maxY, myY + sceneH);
           }
         }
-        if (stack.steps.length > 1) {
+        if (stack.scenes.length > 1) {
           // draw number of steps in stack
-          drawOutlinedText(lyr, `${stack.steps.length}`, [curX + sceneW, myY], {
-            textAlign: "right",
-            size: 20,
-            color: "#BDAA94",
-          });
+          drawOutlinedText(
+            lyr,
+            `${stack.scenes.length}`,
+            [curX + sceneW, myY],
+            {
+              textAlign: "right",
+              size: 20,
+              color: "#BDAA94",
+            },
+          );
         }
-        if (stack.steps.length === 0) {
+        if (stack.scenes.length === 0) {
           const w = 60;
           const h = 50;
           drawParchmentBox(lyr, curX, myY, w, h, {
@@ -1795,31 +1810,34 @@ async function main() {
     const drawNodeAndDownstream = (
       lyr: Layer,
       lyrAboveViewchart: Layer,
-      node: Node,
-      myX: number,
-      myY: number,
+      node: ViewchartNode,
+      x: number,
+      y: number,
     ) => {
       if (node.type === "stack") {
-        return drawStackAndDownstream(lyr, lyrAboveViewchart, node, myX, myY);
+        return drawStackAndDownstream(lyr, lyrAboveViewchart, node, x, y);
       } else if (node.type === "call") {
-        return drawCallAndDownstream(lyr, lyrAboveViewchart, node, myX, myY);
+        return drawCallAndDownstream(lyr, lyrAboveViewchart, node, x, y);
+      } else if (node.type === "stack-group") {
+        return drawStackGroupAndDownstream(lyr, lyrAboveViewchart, node, x, y);
       } else {
         assertNever(node);
       }
     };
 
+    type DrawNodeReturn = {
+      maxX: number;
+      maxY: number;
+      initialPosForConnector: Vec2;
+    };
+
     const drawStackAndDownstream = (
       lyr: Layer,
       lyrAboveViewchart: Layer,
-      stack: TrStep,
+      stack: ViewchartStack,
       myX: number,
       myY: number,
-    ): {
-      maxX: number;
-      maxY: number;
-      initialPosForConnector: Vec2 | undefined;
-      finalPosForConnectors: { pos: Vec2; dead: boolean }[];
-    } => {
+    ): DrawNodeReturn => {
       const lyrAbove = lyr.spawnLater();
       const lyrBelow = lyr.spawnHere();
 
@@ -1831,7 +1849,7 @@ async function main() {
       const { flowchartId, frameId } = stack;
       const flowchart = defs.flowcharts[flowchartId];
       const frame = flowchart.frames[frameId];
-      const steps = stack.steps;
+      const scenes = stack.scenes;
 
       // draw stack
       // curX is now lhs of stack
@@ -1928,24 +1946,18 @@ async function main() {
         );
       }
 
-      const hasSuccess = steps.some((step) => step.scene.type === "success");
+      const hasSuccess = scenes.some((scene) => scene.type === "success");
 
       // draw downstream
-      let maxX = curX + scenePadX;
-      const nextNodes = stack.nextTrNodes;
-      const finalPosForConnectors: { pos: Vec2; dead: boolean }[] = [];
+      let maxX = curX;
+      const nextNodes = stack.nextNodes;
       // hacky thing to position unused escape routes or escape-route ghosts
       let lastConnectionJoint: Vec2 = [curX + scenePadX / 2, myY + sceneH / 2];
-      if (nextNodes.length === 0) {
-        finalPosForConnectors.push({
-          pos: [curX, myY + stackH / 2],
-          dead: !hasSuccess,
-        });
-      }
       for (const [i, nextNode] of nextNodes.entries()) {
         if (
+          nextNode.type === "stack" &&
           isEscapeRoute(nextNode.frameId, flowchart) &&
-          nextNode.steps.length === 0
+          nextNode.scenes.length === 0
         ) {
           // draw unused escape route mark
           const markPos = add(lastConnectionJoint, [
@@ -1979,10 +1991,10 @@ async function main() {
           curX + scenePadX,
           curY,
         );
-        for (const v of child.finalPosForConnectors) {
-          finalPosForConnectors.push(v);
-        }
-        if (isEscapeRoute(nextNode.frameId, flowchart)) {
+        if (
+          nextNode.type === "stack" &&
+          isEscapeRoute(nextNode.frameId, flowchart)
+        ) {
           const x = curX + scenePadX + sceneW / 2;
           const y = myY - scenePadY + 10;
           drawEscapeDagger(lyrBelow, [x, y], curY - y);
@@ -1993,7 +2005,12 @@ async function main() {
           const start = [curX, myY + stackH / 2] as Vec2;
           const end = child.initialPosForConnector;
 
-          if (!isEscapeRoute(nextNode.frameId, flowchart)) {
+          if (
+            !(
+              nextNode.type === "stack" &&
+              isEscapeRoute(nextNode.frameId, flowchart)
+            )
+          ) {
             drawConnectorLine(lyrBelow, start, end, { dead: !hasSuccess });
             lastConnectionJoint = add(child.initialPosForConnector, [
               -scenePadX / 2,
@@ -2008,7 +2025,7 @@ async function main() {
       maxY = Math.max(maxY, curY);
 
       // do we need an escape route?
-      if (steps.some((step) => step.isStuck) && !frame.escapeRouteFrameId) {
+      if (stack.someStepIsStuck && !frame.escapeRouteFrameId) {
         const markPos = add(lastConnectionJoint, [
           sceneW / 2 + scenePadX / 2,
           escapeRouteDropY,
@@ -2019,7 +2036,6 @@ async function main() {
             modifyFlowchart(flowchartId, (old) => addEscapeRoute(old, frameId));
           }
         });
-        finalPosForConnectors.push({ pos: markPos, dead: !hasSuccess });
 
         lyr.save();
         const pos = add(markPos, v(15, 0));
@@ -2050,13 +2066,16 @@ async function main() {
         lyr.fill();
       }
 
+      // lyrAbove.lineWidth = 1;
+      // lyrAbove.strokeStyle = "rgba(255,255,255)";
+      // lyrAbove.strokeRect(myX, myY, maxX - myX, maxY - myY);
+
       lyrAbove.place();
 
       return {
         maxX,
         maxY,
         initialPosForConnector: [myX, myY + sceneH / 2],
-        finalPosForConnectors,
       };
     };
 
@@ -2066,31 +2085,22 @@ async function main() {
       call: ViewchartCall,
       x: number,
       y: number,
-    ): {
-      maxX: number;
-      maxY: number;
-      initialPosForConnector: Vec2 | undefined;
-      finalPosForConnectors: { pos: Vec2; dead: boolean }[];
-    } => {
+    ): DrawNodeReturn => {
+      const myX = x;
+      const myY = y;
+
       const lyrAbove = lyr.spawnLater();
       const lyrBelow = lyr.spawnHere();
 
       const child = drawViewchart(
         lyrAbove,
         lyrAboveViewchart,
-        call.childViewchart,
+        call.initialStack,
+        call.callDepth,
         [x + callPad, y + callPad + callTopPad],
-        mode,
       );
 
-      drawInset(
-        lyrBelow,
-        call,
-        x,
-        y,
-        child.maxX - callPad,
-        child.maxY + callPad,
-      );
+      drawHole(lyrBelow, call, x, y, child.maxX, child.maxY);
 
       let maxX = child.maxX + callPad;
       let maxY = child.maxY + callPad;
@@ -2100,25 +2110,90 @@ async function main() {
 
       lyrAbove.place();
 
-      if (call.continuation.type === "single") {
-        const continuationStack = call.continuation.single;
+      for (const [innerStackId, outerStack] of Object.entries(
+        call.exitStacks,
+      )) {
+        const innerStackXYWH = stackXYWHs[innerStackId] as XYWH | undefined;
+        if (innerStackXYWH) {
+          y = Math.max(y, innerStackXYWH[1] - callPad - callTopPad);
+        }
         const continuation = drawStackAndDownstream(
           lyr,
           lyrAboveViewchart,
-          continuationStack,
+          outerStack,
           x,
           y,
         );
+        y = continuation.maxY;
+        y += scenePadY;
         maxX = Math.max(maxX, continuation.maxX);
-        maxY = Math.max(maxY, continuation.maxY);
+        maxY = Math.max(maxY, y);
+
+        // draw connector line
+        let holeEdgeOutside: Vec2;
+        if (innerStackXYWH) {
+          const lineStart: Vec2 = mr(innerStackXYWH);
+          const lineEnd = continuation.initialPosForConnector;
+          const holeEdgeInside = v(child.maxX + callPad, lineStart[1]);
+          holeEdgeOutside = v(child.maxX + callPad, lineEnd[1]);
+          drawConnectorLine(lyr, lineStart, holeEdgeInside);
+        } else {
+          holeEdgeOutside = v(child.maxX + callPad, myY + sceneH / 2);
+        }
+        const lineEnd = continuation.initialPosForConnector;
+        drawConnectorLine(lyr, lineEnd, holeEdgeOutside);
       }
 
       return {
         maxX,
         maxY,
-        // TODO: figure these out
-        initialPosForConnector: [x, y + sceneH / 2],
-        finalPosForConnectors: [],
+        initialPosForConnector: [myX, myY + sceneH / 2],
+      };
+    };
+
+    const drawStackGroupAndDownstream = (
+      lyr: Layer,
+      lyrAboveViewchart: Layer,
+      stackGroup: ViewchartStackGroup,
+      x: number,
+      y: number,
+    ): DrawNodeReturn => {
+      let maxX = x;
+      let maxY = y;
+      x += 20;
+      let initialPosForConnector: Vec2 | undefined = undefined;
+      for (const stack of stackGroup.nextStacks) {
+        const continuation = drawStackAndDownstream(
+          lyr,
+          lyrAboveViewchart,
+          stack,
+          x,
+          y,
+        );
+        y = continuation.maxY;
+        y += scenePadY;
+        maxX = Math.max(maxX, continuation.maxX);
+        maxY = Math.max(maxY, y);
+
+        if (!initialPosForConnector) {
+          initialPosForConnector = sub(
+            continuation.initialPosForConnector,
+            [20, 0],
+          );
+        }
+
+        // draw connector line
+        drawConnectorLine(
+          lyr,
+          initialPosForConnector,
+          continuation.initialPosForConnector,
+        );
+      }
+
+      return {
+        maxX,
+        maxY,
+        initialPosForConnector: initialPosForConnector!,
       };
     };
 
@@ -2126,10 +2201,10 @@ async function main() {
     const topLevel = drawViewchart(
       lyrMain,
       lyrAboveViewchart,
-      initialStep,
-      exitingSteps,
+      initialStack,
+      0,
+      // exitingSteps,
       add(pan, v(100)),
-      mode,
     );
     lyrAboveViewchart.place();
     // is there more than one final stack?
@@ -2272,81 +2347,9 @@ async function main() {
     } else if (tool.type === "workspace-pick") {
       drawWorkspaceValue(
         lyrAbove,
+        { type: "workspace", contents: [[tool.value]] },
         undefined,
-        [tool.value],
-        0,
         undefined,
-        add([mouseX, mouseY], v(-cellSize / 2)),
-      );
-    } else if (tool.type === "purging-flame") {
-      drawSpriteSheet(
-        lyrAbove,
-        imgCandleSheet,
-        1,
-        127,
-        10,
-        [100, 100],
-        [mouseX - 156, mouseY - 72],
-        [300, 300],
-      );
-    } else if (tool.type === "dev-action") {
-      // handled by css cursor
-    } else {
-      assertNever(tool);
-    }
-
-    if (tool.type === "pointer") {
-      // handled by css cursor
-    } else if (tool.type === "domino") {
-      drawDomino(lyrAbove, mouseX, mouseY, tool.orientation, false);
-    } else if (tool.type === "call") {
-      drawOutlinedText(lyrAbove, tool.flowchartId, [mouseX, mouseY], {
-        size: 40,
-        color: `hsl(${callHueSaturation} 70%)`,
-        family: "monospace",
-      });
-    } else if (tool.type === "workspace-pick") {
-      drawWorkspaceValue(
-        lyrAbove,
-        undefined,
-        [tool.value],
-        0,
-        undefined,
-        add([mouseX, mouseY], v(-cellSize / 2)),
-      );
-    } else if (tool.type === "purging-flame") {
-      drawSpriteSheet(
-        lyrAbove,
-        imgCandleSheet,
-        1,
-        127,
-        10,
-        [100, 100],
-        [mouseX - 156, mouseY - 72],
-        [300, 300],
-      );
-    } else if (tool.type === "dev-action") {
-      // handled by css cursor
-    } else {
-      assertNever(tool);
-    }
-
-    if (tool.type === "pointer") {
-      // handled by css cursor
-    } else if (tool.type === "domino") {
-      drawDomino(lyrAbove, mouseX, mouseY, tool.orientation, false);
-    } else if (tool.type === "call") {
-      drawOutlinedText(lyrAbove, tool.flowchartId, [mouseX, mouseY], {
-        size: 40,
-        color: `hsl(${callHueSaturation} 70%)`,
-        family: "monospace",
-      });
-    } else if (tool.type === "workspace-pick") {
-      drawWorkspaceValue(
-        lyrAbove,
-        undefined,
-        [tool.value],
-        0,
         undefined,
         add([mouseX, mouseY], v(-cellSize / 2)),
       );
@@ -2419,6 +2422,13 @@ async function main() {
 
     lyrAbove.place();
     lyrMain.draw();
+
+    // remove persistent values that haven't been accessed lately
+    for (const key of persistentValuesById.keys()) {
+      if (!persistentValuesAccessedLately.has(key)) {
+        persistentValuesById.delete(key);
+      }
+    }
   }
 }
 

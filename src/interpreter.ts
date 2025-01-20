@@ -1,7 +1,6 @@
-// STATIC WORLD
-
 import { assertNever, indexById, truthy } from "./util";
-import { Vec2 } from "./vec2";
+
+// STATIC WORLD
 
 export type Flowchart = {
   id: string;
@@ -28,11 +27,11 @@ export type Action =
       // better ways than opaque functions to specify & show actions
       type: "test-func";
       label?: string;
-      func: (value: any) => Scene[];
+      func: (value: any) => ActionResult;
     }
   | {
       type: "place-domino";
-      domino: [Vec2, Vec2];
+      domino: [[number, number], [number, number]];
     }
   | {
       type: "call";
@@ -70,7 +69,12 @@ export type ActionAnnotation =
     };
 
 export type ErrorAnnotation =
-  | { type: "scene"; scene: Scene & { type: "success" } }
+  | {
+      type: "scene";
+      /* This is a scene that shows what was attempted, as though it
+      succeeded. */
+      scene: Scene & { type: "success" };
+    }
   | {
       type: "workspace-pick-bad-source";
       scene: Scene & { type: "success" };
@@ -100,15 +104,55 @@ export type Definitions = {
   flowcharts: Record<string, Flowchart>;
 };
 
+export function getFrame(
+  defs: Definitions,
+  { flowchartId, frameId }: { flowchartId: string; frameId: string },
+) {
+  return defs.flowcharts[flowchartId].frames[frameId];
+}
+
 // IMPLEMENTATION WORLD
 
-export type LensImpl = {
+export type LensImpl<L extends Lens = Lens, V = any> = {
   // TODO: using "value" here rather than "scene" for convenience; if
   // a scene is ever more than just a value we'll have to figure this
   // out
-  getPart(lens: Lens, value: any): any;
-  setPart(lens: Lens, value: any, part: any): any;
+  getPart(lens: L, value: V): any;
+  setPart(lens: L, value: V, part: V): any;
 };
+
+export function lensImpl<LType, V>(impl: LensImpl<Lens & { type: LType }, V>) {
+  return impl;
+}
+
+export type DominoesValue = {
+  width: number;
+  height: number;
+  dominoes: [[number, number], [number, number]][];
+};
+export function isDominoesValue(value: any): value is DominoesValue {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "width" in value &&
+    "height" in value &&
+    "dominoes" in value
+  );
+}
+
+export type WorkspaceValue = {
+  type: "workspace";
+  contents: unknown[][];
+};
+export function isWorkspaceValue(value: any): value is WorkspaceValue {
+  return (
+    typeof value === "object" &&
+    value !== null &&
+    "type" in value &&
+    value.type === "workspace" &&
+    "contents" in value
+  );
+}
 
 // DYNAMIC WORLD
 
@@ -119,7 +163,7 @@ export type Step = {
   frameId: string;
   flowchartId: string;
   scene: Scene;
-  nextSteps: Step[];
+  nextSteps: { [frameId: string]: Step[] };
   isStuck: boolean;
 };
 
@@ -206,8 +250,9 @@ export function runPreFrame(
   /* All downstream steps exiting this flow-chart */
   exitingSteps: SuccessfulStep[];
 } {
-  const flowchart = ctx.defs.flowcharts[flowchartId];
-  const frame = flowchart.frames[frameId];
+  const frame = getFrame(ctx.defs, { flowchartId, frameId });
+
+  let stepId = `${inputStepId}→${frameId}`;
 
   // Apply the action to produce output scenes
   try {
@@ -226,10 +271,10 @@ export function runPreFrame(
     // completion. Remember: Each scene lives on ME (this frameId).
     const steps: Step[] = [];
     const exitingSteps: SuccessfulStep[] = [];
-    for (const [i, scene] of scenes.entries()) {
+    for (const [i, { scene, key }] of scenes.entries()) {
       const result = runPostFrame(
         ctx,
-        `${inputStepId}→${frameId}[${i}]`,
+        `${stepId}[${key}]`,
         scene,
         flowchartId,
         frameId,
@@ -243,18 +288,18 @@ export function runPreFrame(
     let scene: Scene = { type: "error", message: "unknown" };
     if (e instanceof ErrorWithAnnotation) {
       scene = {
-        type: "error",
+        ...scene,
         message: e.message,
         errorAnnotation: e.annotation,
       };
     } else if (e instanceof Error) {
-      scene = { type: "error", message: e.message };
+      scene = { ...scene, message: e.message };
     }
     const nextStep: Step = {
-      id: `${inputStepId}→${frameId}`,
+      id: stepId,
       frameId,
       flowchartId,
-      nextSteps: [],
+      nextSteps: {},
       scene,
       isStuck: false, // stuck is for successful steps
     };
@@ -284,7 +329,7 @@ export function runPostFrame(
     id: outputStepId,
     frameId,
     flowchartId,
-    nextSteps: [],
+    nextSteps: {},
     scene: outputScene,
     isStuck: false,
   };
@@ -318,7 +363,7 @@ export function runPostFrame(
       flowchartId,
       nextFrameId,
     );
-    step.nextSteps.push(...followResult.steps);
+    step.nextSteps[nextFrameId] = followResult.steps;
     exitingSteps.push(...followResult.exitingSteps);
 
     if (
@@ -339,7 +384,7 @@ export function runPostFrame(
         flowchartId,
         frame.escapeRouteFrameId,
       );
-      step.nextSteps.push(...followResult.steps);
+      step.nextSteps[frame.escapeRouteFrameId] = followResult.steps;
       exitingSteps.push(...followResult.exitingSteps);
     }
   }
@@ -347,27 +392,29 @@ export function runPostFrame(
   return { step, exitingSteps };
 }
 
+export type ActionResult = { scene: Scene; key: string }[];
+
 function applyAction(
   ctx: RunContext,
   stepId: string,
   scene: SuccessfulScene,
   action: Action | undefined,
-): Scene[] {
+): ActionResult {
   if (!action || action.type === "start" || action.type === "escape") {
-    return [{ ...scene, actionAnnotation: undefined }];
+    return [{ scene: { ...scene, actionAnnotation: undefined }, key: "" }];
   } else if (action.type === "call") {
     return applyCall(ctx, stepId, scene, action);
   } else if (action.type === "test-func") {
     return action.func(scene.value);
   } else if (action.type === "place-domino") {
     const { domino } = action;
-    const value = scene.value as any;
+    const value = scene.value as DominoesValue;
     const newScene: Scene = {
       type: "success",
       value: {
         ...value,
         dominoes: [...value.dominoes, action.domino],
-      },
+      } satisfies DominoesValue,
     };
     if (
       domino[0][0] < 0 ||
@@ -384,18 +431,18 @@ function applyAction(
         scene: newScene,
       });
     }
-    return [newScene];
+    return [{ scene: newScene, key: "" }];
   } else if (action.type === "test-assert") {
     if (!action.func(scene.value)) {
       throw new Error("assertion failed");
     }
-    return [{ ...scene, actionAnnotation: undefined }];
+    return [{ scene: { ...scene, actionAnnotation: undefined }, key: "" }];
   } else if (action.type === "workspace-pick") {
     return applyActionWorkspacePick(scene, action);
   } else if (action.type === "dev-eval") {
     const func = new Function("x", `return (${action.code})`);
     const result = func(scene.value);
-    return [{ type: "success", value: result }];
+    return [{ scene: { type: "success", value: result }, key: "" }];
   } else {
     assertNever(action);
   }
@@ -406,7 +453,7 @@ function applyCall(
   stepId: string,
   scene: SuccessfulScene,
   action: Action & { type: "call" },
-): Scene[] {
+): ActionResult {
   const lens = action.lens;
 
   // Prepare initial scene, using lens if necessary
@@ -437,7 +484,7 @@ function applyCall(
   );
 
   // Prepare returned scenes, using lens if necessary
-  const returnScenes: Scene[] = [];
+  const result: ActionResult = [];
   for (const exitingStep of exitingSteps) {
     let returnScene: Scene = {
       ...exitingStep.scene,
@@ -457,16 +504,16 @@ function applyCall(
         value: lensImpl.setPart(lens, scene.value, returnScene.value),
       };
     }
-    returnScenes.push(returnScene);
+    result.push({ scene: returnScene, key: exitingStep.id });
   }
 
-  return returnScenes;
+  return result;
 }
 
 function applyActionWorkspacePick(
   scene: SuccessfulScene,
   action: Action & { type: "workspace-pick" },
-) {
+): ActionResult {
   const { source, index, target } = action;
   const value = scene.value as any;
   const sourceValue: unknown[] = value.contents[source];
@@ -542,19 +589,22 @@ function applyActionWorkspacePick(
       assertNever(target);
     }
     return {
-      type: "success" as const,
-      value: {
-        ...value,
-        contents: newWorkspace,
+      scene: {
+        type: "success" as const,
+        value: {
+          ...value,
+          contents: newWorkspace,
+        },
+        actionAnnotation: annotation,
       },
-      actionAnnotation: annotation,
+      key: `${pickedIndex}`,
     };
   });
 }
 
 const lenses: Record<string, LensImpl> = {
-  "domino-grid": {
-    getPart(lens: Lens & { type: "domino-grid" }, value) {
+  "domino-grid": lensImpl<"domino-grid", DominoesValue>({
+    getPart(lens, value) {
       const width = value.width - lens.dx;
       const height = value.height - lens.dy;
       if (width < 0 || height < 0) {
@@ -582,7 +632,7 @@ const lenses: Record<string, LensImpl> = {
         }),
       };
     },
-    setPart(lens: Lens & { type: "domino-grid" }, value, part) {
+    setPart(lens, value, part) {
       // console.log("calling setPart", lens, value, part);
       return {
         width: value.width,
@@ -596,7 +646,7 @@ const lenses: Record<string, LensImpl> = {
         ],
       };
     },
-  },
+  }),
 };
 
 /**
