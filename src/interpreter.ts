@@ -156,6 +156,14 @@ export function isWorkspaceValue(value: any): value is WorkspaceValue {
 
 // DYNAMIC WORLD
 
+// From top to bottom
+export type CallStack = CallRecord[];
+export type CallRecord = {
+  callId: string;
+  scene: SuccessfulScene;
+  action: Action & { type: "call" };
+};
+
 /* A "Step" is the trace of an action and everything downstream of
 it. */
 export type Step = {
@@ -165,6 +173,8 @@ export type Step = {
   scene: Scene;
   nextSteps: { [frameId: string]: Step[] };
   isStuck: boolean;
+  // UNCOOL: this is super-redundant info; very object-network
+  callStack: CallStack;
 };
 
 /**
@@ -203,8 +213,7 @@ export function assertSuccessfulValue(step: Step): SuccessfulStep {
 }
 
 export type RunContext = {
-  /* A stack of call step ids */
-  callStack: string[];
+  callStack: CallStack;
   /* Definitions in effect for the run. */
   defs: Definitions;
 };
@@ -219,7 +228,7 @@ export function runFlowchart(
   const flowchart = ctx.defs.flowcharts[flowchartId];
   const { steps, exitingSteps } = runPreFrame(
     ctx,
-    ctx.callStack.map((n) => n + "/").join(""),
+    ctx.callStack.map(({ callId }) => callId + "/").join(""),
     scene,
     flowchartId,
     flowchart.initialFrameId,
@@ -256,7 +265,7 @@ export function runPreFrame(
 
   // Apply the action to produce output scenes
   try {
-    const scenes = applyAction(ctx, inputStepId, inputScene, frame.action);
+    const scenes = applyAction(ctx, inputScene, frame.action, stepId);
     if (scenes.length === 0) {
       // TODO: we currently regard an empty set of output scenes as a
       // failure, so that, e.g., you can provide an escape route if
@@ -271,7 +280,7 @@ export function runPreFrame(
     // completion. Remember: Each scene lives on ME (this frameId).
     const steps: Step[] = [];
     const exitingSteps: SuccessfulStep[] = [];
-    for (const [i, { scene, key }] of scenes.entries()) {
+    for (const { scene, key } of scenes) {
       const result = runPostFrame(
         ctx,
         `${stepId}[${key}]`,
@@ -302,6 +311,7 @@ export function runPreFrame(
       nextSteps: {},
       scene,
       isStuck: false, // stuck is for successful steps
+      callStack: ctx.callStack,
     };
     return { steps: [nextStep], exitingSteps: [] };
   }
@@ -332,6 +342,7 @@ export function runPostFrame(
     nextSteps: {},
     scene: outputScene,
     isStuck: false,
+    callStack: ctx.callStack,
   };
   const exitingSteps: SuccessfulStep[] = [];
 
@@ -396,14 +407,15 @@ export type ActionResult = { scene: Scene; key: string }[];
 
 function applyAction(
   ctx: RunContext,
-  stepId: string,
   scene: SuccessfulScene,
   action: Action | undefined,
+  /* kinda weird: id for a call if this happens to be one */
+  callId: string,
 ): ActionResult {
   if (!action || action.type === "start" || action.type === "escape") {
     return [{ scene: { ...scene, actionAnnotation: undefined }, key: "" }];
   } else if (action.type === "call") {
-    return applyCall(ctx, stepId, scene, action);
+    return applyCall(ctx, callId, scene, action);
   } else if (action.type === "test-func") {
     return action.func(scene.value);
   } else if (action.type === "place-domino") {
@@ -450,7 +462,7 @@ function applyAction(
 
 function applyCall(
   ctx: RunContext,
-  stepId: string,
+  callId: string,
   scene: SuccessfulScene,
   action: Action & { type: "call" },
 ): ActionResult {
@@ -475,10 +487,7 @@ function applyCall(
 
   // Run the call
   const { initialStep, exitingSteps } = runFlowchart(
-    {
-      ...ctx,
-      callStack: [...ctx.callStack, stepId],
-    },
+    { ...ctx, callStack: [...ctx.callStack, { callId, scene, action }] },
     action.flowchartId,
     initialScene,
   );
@@ -684,49 +693,26 @@ export function success(value: any): Scene {
  */
 
 export function topLevelValueForStep(
-  step: Step,
-  value: any,
-  traceTree: TraceTree,
-  defs: Definitions,
+  value: unknown,
+  callStack: CallStack,
 ): unknown {
-  if (step.caller) {
-    return topLevelValueForCall(value, step.caller, traceTree, defs);
-  } else {
+  if (callStack.length === 0) {
     return value;
   }
-}
-
-function topLevelValueForCall(
-  nestedValue: unknown,
-  call: Call,
-  traceTree: TraceTree,
-  defs: Definitions,
-): unknown {
-  const callInfo = getCallerInfo(call, traceTree, defs);
-  // BIG TODO: deal with missing lens
-  let value: any;
-  const lens = callInfo.frame.action.lens;
-  if (lens) {
-    const lensImpl = lenses[lens.type];
-    if (!lensImpl) {
-      throw new Error(`Lens type ${lens.type} not found`);
-    }
-    // figure out the value at this level by simulating early return
-    value = lensImpl.setPart(lens, callInfo.prevStep.scene.value, nestedValue);
-  } else {
-    value = nestedValue;
+  const [call, ...restStack] = callStack;
+  const lens = call.action.lens;
+  if (!lens) {
+    return topLevelValueForStep(value, restStack);
   }
-  // keep recursing if there's more to do
-  if (callInfo.prevStep.caller) {
-    return topLevelValueForCall(
-      value,
-      callInfo.prevStep.caller,
-      traceTree,
-      defs,
-    );
-  } else {
-    return value;
+  const lensImpl = lenses[lens.type];
+  if (!lensImpl) {
+    throw new Error(`Lens type ${lens.type} not found`);
   }
+  return lensImpl.setPart(
+    lens,
+    call.scene.value,
+    topLevelValueForStep(value, restStack),
+  );
 }
 
 export function getNextFrameIds(frameId: string, flowchart: Flowchart) {

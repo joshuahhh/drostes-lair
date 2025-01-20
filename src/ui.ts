@@ -22,6 +22,7 @@ import {
   isWorkspaceValue,
   runFlowchart,
   stringifyEqual,
+  topLevelValueForStep,
 } from "./interpreter";
 import { Layer, getLayerCommandCount, layer } from "./layer";
 import { howManyTimesDidModWrap, mod } from "./number";
@@ -268,10 +269,15 @@ async function main() {
   let _clickables: {
     xywh: XYWH;
     callback: () => void;
+    unzoomed?: boolean;
   }[] = [];
 
-  const addClickHandler = (xywh: XYWH, callback: () => void) => {
-    _clickables.push({ xywh, callback });
+  const addClickHandler = (
+    xywh: XYWH,
+    callback: () => void,
+    opts: { unzoomed?: boolean } = {},
+  ) => {
+    _clickables.push({ xywh, callback, unzoomed: opts.unzoomed });
   };
 
   type InteractionState =
@@ -344,6 +350,17 @@ async function main() {
         "state.json",
       );
     }
+    if (
+      (e.key === "=" || e.key === "-" || e.key === "0") &&
+      (e.ctrlKey || e.metaKey)
+    ) {
+      e.preventDefault();
+      if (e.key === "0") {
+        zoom = 1;
+      } else {
+        zoom *= e.key === "=" ? 1.1 : 1 / 1.1;
+      }
+    }
     if (e.key === "p" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
       setPan([0, 0]);
@@ -407,6 +424,8 @@ async function main() {
     }
   });
 
+  let zoom = 1.1;
+
   let mouseX = 0;
   let mouseY = 0;
   let pointerType: string;
@@ -415,19 +434,29 @@ async function main() {
     // clientX/Y works better than offsetX/Y for Chrome/Safari compatibility.
     const dragOffset =
       ix.type === "confirmed" && pointerType === "touch" ? 50 : 0;
-    mouseX = e.clientX;
-    mouseY = e.clientY - dragOffset;
+    mouseX = e.clientX / zoom;
+    mouseY = (e.clientY - dragOffset) / zoom;
     pointerType = e.pointerType;
   };
   const hoveredClickable = () => {
-    return _clickables.find(({ xywh }) => inXYWH(mouseX, mouseY, xywh));
+    return _clickables.find(({ xywh, unzoomed }) =>
+      inXYWH(
+        unzoomed ? mouseX * zoom : mouseX,
+        unzoomed ? mouseY * zoom : mouseY,
+        xywh,
+      ),
+    );
   };
 
   c.addEventListener("pointermove", (e) => {
     updateMouse(e);
 
     if (ix.type === "unconfirmed") {
-      if (distance(ix.startPos, [e.clientX, e.clientY]) > 4) {
+      // TODO: having to care about zoom here sucks
+      if (
+        distance(ix.startPos, [e.clientX / zoom, e.clientY / zoom]) >
+        4 / zoom
+      ) {
         if (ix.callback) {
           ix.callback();
           ix = { type: "confirmed", isPan: false, pointerType };
@@ -439,7 +468,7 @@ async function main() {
     }
 
     if (shiftHeld || (ix.type === "confirmed" && ix.isPan)) {
-      setPan(add(pan, [e.movementX, e.movementY]));
+      setPan(add(pan, [e.movementX / zoom, e.movementY / zoom]));
     }
   });
   c.addEventListener("pointerdown", (e) => {
@@ -501,7 +530,7 @@ async function main() {
 
   c.addEventListener("wheel", (e) => {
     e.preventDefault();
-    setPan(add(pan, [-e.deltaX, -e.deltaY]));
+    setPan(add(pan, [-e.deltaX / zoom, -e.deltaY / zoom]));
   });
 
   const drawParchmentBox = (
@@ -517,8 +546,8 @@ async function main() {
 
     lyr.save();
     lyr.shadowColor = "rgba(0,0,0,1)";
-    lyr.shadowOffsetY = 4;
-    lyr.shadowBlur = 15;
+    lyr.shadowOffsetY = 4 * zoom;
+    lyr.shadowBlur = 15 * zoom;
     if (empty) {
       lyr.globalAlpha = 0.3;
     }
@@ -551,6 +580,7 @@ async function main() {
     opts: {
       onClick?: () => void;
       isBad?: boolean;
+      unzoomed?: boolean;
     } = {},
   ) => {
     const { onClick, isBad } = opts;
@@ -569,7 +599,7 @@ async function main() {
       lyr.beginPath();
       lyr.fillStyle = isBad ? `rgba(128,0,0,0.5)` : "#fce8a7";
       lyr.shadowColor = isBad ? `rgba(128,0,0,0.5)` : "#fce8a7";
-      lyr.shadowBlur = 8;
+      lyr.shadowBlur = 8 * zoom;
       lyr.rect(...expand(xywh, 2));
       lyr.fill();
     }
@@ -581,6 +611,7 @@ async function main() {
       addClickHandler(
         [xywh[0] - 10, xywh[1] - 10, xywh[2] + 20, xywh[3] + 20],
         onClick,
+        { unzoomed: opts.unzoomed },
       );
     }
     lyr.restore();
@@ -605,15 +636,13 @@ async function main() {
     // precompute overall offset of the bottom call
     let dx = 0;
     let dy = 0;
-    // TODO: restore lenses
-    // for (const segment of callPath) {
-    //   const frame =
-    //     defs.flowcharts[segment.flowchartId].frames[segment.frameId];
-    //   const action = frame.action as Action & { type: "call" };
-    //   const lens = action.lens!; // TODO: what if not here
-    //   dx += lens.dx;
-    //   dy += lens.dy;
-    // }
+
+    for (const record of stack.callStack) {
+      const action = record.action;
+      const lens = action.lens!; // TODO: what if not here
+      dx += lens.dx;
+      dy += lens.dy;
+    }
 
     // grid squares
     lyr.beginPath();
@@ -717,38 +746,35 @@ async function main() {
     let y = 0;
     let width = value.width;
     let height = value.height;
-    // TODO: restore lenses
-    // for (const [i, segment] of callPath.entries()) {
-    //   const frame =
-    //     defs.flowcharts[segment.flowchartId].frames[segment.frameId];
-    //   const action = frame.action as Action & { type: "call" };
-    //   const lens = action.lens!; // TODO: what if not here
-    //   x += lens.dx;
-    //   y += lens.dy;
-    //   width -= lens.dx;
-    //   height -= lens.dy;
-    //   // shaded background
-    //   lyr.beginPath();
-    //   lyr.rect(...pos, sceneW, sceneH);
-    //   lyr.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
-    //   // use parchment fade or darkness fade?
-    //   if (true) {
-    //     lyr.fillStyle = patternParchment;
-    //     patternParchment.setTransform(new DOMMatrix().translate(...pan, 0));
-    //     lyr.globalAlpha = i === callPath.length - 1 ? 0.8 : 0.4;
-    //   } else {
-    //     lyr.fillStyle = "rgba(0,0,0,0.4)";
-    //   }
-    //   lyr.fill("evenodd");
-    //   lyr.globalAlpha = 1;
-    //   // outline
-    //   lyr.lineWidth = 2;
-    //   lyr.beginPath();
-    //   lyr.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
-    //   // lyr.setLineDash([2, 2]);
-    //   lyr.strokeStyle = `hsl(${callHueSaturation} 50%)`;
-    //   lyr.stroke();
-    // }
+    for (const [i, record] of stack.callStack.entries()) {
+      const action = record.action;
+      const lens = action.lens!; // TODO: what if not here
+      x += lens.dx;
+      y += lens.dy;
+      width -= lens.dx;
+      height -= lens.dy;
+      // shaded background
+      lyr.beginPath();
+      lyr.rect(...pos, sceneW, sceneH);
+      lyr.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
+      // use parchment fade or darkness fade?
+      if (true) {
+        lyr.fillStyle = patternParchment;
+        patternParchment.setTransform(new DOMMatrix().translate(...pan, 0));
+        lyr.globalAlpha = i === stack.callStack.length - 1 ? 0.8 : 0.4;
+      } else {
+        lyr.fillStyle = "rgba(0,0,0,0.4)";
+      }
+      lyr.fill("evenodd");
+      lyr.globalAlpha = 1;
+      // outline
+      lyr.lineWidth = 2;
+      lyr.beginPath();
+      lyr.rect(...gridToXY([x, y]), width * cellSize, height * cellSize);
+      // lyr.setLineDash([2, 2]);
+      lyr.strokeStyle = `hsl(${callHueSaturation} 50%)`;
+      lyr.stroke();
+    }
 
     lyrTop.place();
   };
@@ -905,8 +931,8 @@ async function main() {
         lyr.strokeStyle = "#fce8a7cc";
         lyr.fillStyle = "#fce8a7cc";
         lyr.shadowColor = "rgba(0,0,0,0.6)";
-        lyr.shadowOffsetY = 2;
-        lyr.shadowBlur = 10;
+        lyr.shadowOffsetY = 2 * zoom;
+        lyr.shadowBlur = 10 * zoom;
 
         lyr.beginPath();
         lyr.arc(...removalPt, 3, 0, Math.PI * 2);
@@ -1011,7 +1037,7 @@ async function main() {
           lyr.beginPath();
           lyr.fillStyle = "#fce8a7";
           lyr.shadowColor = "#fce8a7";
-          lyr.shadowBlur = 8;
+          lyr.shadowBlur = 8 * zoom;
           lyr.rect(...expand(xywh, 2));
           lyr.fill();
           lyr.restore();
@@ -1171,15 +1197,12 @@ async function main() {
   ) => {
     // const callPath = getCallPath(step, traceTree);
 
-    // TODO: restore this
-    // value = topLevelValueForStep(step, value, traceTree, defs) as any;
-
     lyr.save();
     lyr.beginPath();
     lyr.rect(...topLeft, sceneW, sceneH);
     lyr.clip();
 
-    const value = scene.value;
+    const value = topLevelValueForStep(scene.value, stack.callStack);
     if (isDominoesValue(value)) {
       drawDominoesValue(lyr, value, scene, stepId, stack, topLeft);
     } else if (isWorkspaceValue(value)) {
@@ -1221,9 +1244,7 @@ async function main() {
       onHover();
     }
 
-    // TODO: restore this
-    // const isOutlined = traceTree.finalStepIds.includes(step.id);
-    const isOutlined = false;
+    const isOutlined = stack.isFinal;
 
     if (isOutlined) {
       lyr.save();
@@ -1366,13 +1387,15 @@ async function main() {
 
     // This one will be drawn on the real canvas
     const lyrMain = layer(ctxReal);
+    lyrMain.save(); // will reset at the bottom of the draw loop!
+    lyrMain.scale(zoom, zoom);
     const lyrAbove = lyrMain.spawnLater();
+    const lyrAboveUnzoomed = lyrMain.spawnLater();
 
     state = undoStack.at(-1)!;
     (window as any).state = state;
     const { defs } = state;
 
-    // TODO: hardcoding the first flowchart
     const flowchart = state.defs.flowcharts[state.initialFlowchartId];
 
     const { initialStep, exitingSteps } = runFlowchart(
@@ -1404,7 +1427,9 @@ async function main() {
 
     // draw background
     ctxReal.fillStyle = patternAsfault;
-    patternAsfault.setTransform(new DOMMatrix().translate(...pan, 0));
+    patternAsfault.setTransform(
+      new DOMMatrix().scale(zoom).translate(...pan, 0),
+    );
     ctxReal.fillRect(0, 0, c.width, c.height);
     ctxReal.fillStyle = "rgba(255, 255, 255, 0.2)";
     ctxReal.fillRect(0, 0, c.width, c.height);
@@ -1444,6 +1469,7 @@ async function main() {
       flowchartId: string,
       pos: Vec2,
       exists: boolean = true,
+      unzoomed: boolean = false,
     ) => {
       drawOutlinedText(lyr, flowchartId, pos, {
         textAlign: "left",
@@ -1453,9 +1479,13 @@ async function main() {
         color: `hsl(${callHueSaturation} 70% ${exists ? "" : "/ 50%"})`,
       });
       if (tool.type === "pointer") {
-        addClickHandler([...pos, 40, 40], () => {
-          tool = { type: "call", flowchartId };
-        });
+        addClickHandler(
+          [...pos, 40, 40],
+          () => {
+            tool = { type: "call", flowchartId };
+          },
+          { unzoomed },
+        );
       }
     };
 
@@ -1487,7 +1517,7 @@ async function main() {
       );
 
       if (callDepth > viewDepth) {
-        // TODO: we're backwards-engineering the padding put around
+        // UNCOOL: we're backwards-engineering the padding put around
         // the viewchart; this is dumb
         lyr.save();
         for (let i = -1; i < 2; i++) {
@@ -1635,8 +1665,8 @@ async function main() {
       // to draw the actual circle with a shadow.
       lyr.save();
       lyr.shadowColor = disabled ? "rgba(0,0,0,0.6)" : `rgba(100,10,10,0.7)`;
-      lyr.shadowOffsetY = 2;
-      lyr.shadowBlur = 10;
+      lyr.shadowOffsetY = 2 * zoom;
+      lyr.shadowBlur = 10 * zoom;
       lyr.beginPath();
       lyr.arc(...centerPos, markRadius, 0, 2 * Math.PI);
       lyr.fill();
@@ -2243,7 +2273,7 @@ async function main() {
     // 300
     const drawerWidth = 320 + 50 * flowchartIds.length;
     drawParchmentBox(
-      lyrAbove,
+      lyrAboveUnzoomed,
       c.width - drawerWidth,
       c.height - 80,
       drawerWidth + 10,
@@ -2255,15 +2285,16 @@ async function main() {
 
     for (const [i, flowchartId] of flowchartIds.entries()) {
       drawFlowchartSigil(
-        lyrAbove,
+        lyrAboveUnzoomed,
         flowchartId,
         [c.width - 340 - 50 * (flowchartIds.length - 1 - i), c.height - 60],
         state.defs.flowcharts[flowchartId] !== undefined,
+        true,
       );
     }
 
     drawDomino(
-      lyrAbove,
+      lyrAboveUnzoomed,
       c.width - 270,
       c.height - 20 - (cellSize - dominoPadding * 2),
       "h",
@@ -2272,10 +2303,11 @@ async function main() {
         onClick: () => {
           tool = { type: "domino", orientation: "h" };
         },
+        unzoomed: true,
       },
     );
     drawDomino(
-      lyrAbove,
+      lyrAboveUnzoomed,
       c.width - 220,
       c.height - 20 - (2 * cellSize - dominoPadding * 2),
       "v",
@@ -2284,53 +2316,66 @@ async function main() {
         onClick: () => {
           tool = { type: "domino", orientation: "v" };
         },
+        unzoomed: true,
       },
     );
 
-    drawCandle(lyrAbove);
+    drawCandle(lyrAboveUnzoomed);
 
-    addClickHandler([c.width - 145, c.height - 160, 90, 130], () => {
-      tool = { type: "purging-flame" };
-    });
+    addClickHandler(
+      [c.width - 145, c.height - 160, 90, 130],
+      () => {
+        tool = { type: "purging-flame" };
+      },
+      { unzoomed: true },
+    );
 
     // the ear
-    lyrAbove.do(() => {
-      lyrAbove.fillStyle = isPlayingBackgroundMusic
+    lyrAboveUnzoomed.do((lyr) => {
+      lyr.fillStyle = isPlayingBackgroundMusic
         ? "rgba(0, 0, 0, 1)"
         : "rgba(0, 0, 0, 0.5)";
-      lyrAbove.textAlign = "right";
-      lyrAbove.textBaseline = "bottom";
-      lyrAbove.font = "35px serif";
-      lyrAbove.fillText("𓂈", c.width - 9, c.height - 35);
+      lyr.textAlign = "right";
+      lyr.textBaseline = "bottom";
+      lyr.font = "35px serif";
+      lyr.fillText("𓂈", c.width - 9, c.height - 35);
     });
-    addClickHandler([c.width - 38, c.height - 69, 38, 30], async () => {
-      if (!isPlayingBackgroundMusic) {
-        try {
-          // On the first user interaction, try playing the audio
-          await backgroundMusic.play();
-          isPlayingBackgroundMusic = true;
-        } catch (error) {
-          console.error("Failed to start audio playback:", error);
+    addClickHandler(
+      [c.width - 38, c.height - 69, 38, 30],
+      async () => {
+        if (!isPlayingBackgroundMusic) {
+          try {
+            // On the first user interaction, try playing the audio
+            await backgroundMusic.play();
+            isPlayingBackgroundMusic = true;
+          } catch (error) {
+            console.error("Failed to start audio playback:", error);
+            isPlayingBackgroundMusic = false;
+          }
+        } else {
+          // If it was already playing, just pause it
+          backgroundMusic.pause();
           isPlayingBackgroundMusic = false;
         }
-      } else {
-        // If it was already playing, just pause it
-        backgroundMusic.pause();
-        isPlayingBackgroundMusic = false;
-      }
-    });
+      },
+      { unzoomed: true },
+    );
 
     // the eye
-    lyrAbove.do(() => {
-      lyrAbove.fillStyle = "rgba(0, 0, 0, 1)";
-      lyrAbove.textAlign = "right";
-      lyrAbove.textBaseline = "bottom";
-      lyrAbove.font = "20px serif";
-      lyrAbove.fillText("𓂀", c.width - 8, c.height - 8);
+    lyrAboveUnzoomed.do((lyr) => {
+      lyr.fillStyle = "rgba(0, 0, 0, 1)";
+      lyr.textAlign = "right";
+      lyr.textBaseline = "bottom";
+      lyr.font = "20px serif";
+      lyr.fillText("𓂀", c.width - 8, c.height - 8);
     });
-    addClickHandler([c.width - 38, c.height - 33, 38, 30], () => {
-      window.location.href = "./credits.html";
-    });
+    addClickHandler(
+      [c.width - 38, c.height - 33, 38, 30],
+      () => {
+        window.location.href = "./credits.html";
+      },
+      { unzoomed: true },
+    );
 
     (window as any).DEBUG = false;
 
@@ -2351,7 +2396,8 @@ async function main() {
         undefined,
         undefined,
         undefined,
-        add([mouseX, mouseY], v(-cellSize / 2)),
+        // TODO: hardcoded adjustment to adjust for workspace value margin stuff
+        add([mouseX, mouseY], v(-cellSize / 2 - 10)),
       );
     } else if (tool.type === "purging-flame") {
       drawSpriteSheet(
@@ -2384,10 +2430,12 @@ async function main() {
 
     // clickables debug
     if (false) {
-      lyrAbove.strokeStyle = "rgba(255, 0, 255, 1)";
-      lyrAbove.lineWidth = 4;
-      for (const clickable of _clickables) {
-        lyrAbove.strokeRect(...clickable.xywh);
+      for (const lyr of [lyrAbove, lyrAboveUnzoomed]) {
+        lyr.strokeStyle = "rgba(255, 0, 255, 1)";
+        lyr.lineWidth = 4;
+      }
+      for (const { xywh, unzoomed } of _clickables) {
+        (unzoomed ? lyrAboveUnzoomed : lyrAbove).strokeRect(...xywh);
       }
     }
 
@@ -2421,6 +2469,8 @@ async function main() {
     }
 
     lyrAbove.place();
+    lyrMain.restore();
+    lyrAboveUnzoomed.place();
     lyrMain.draw();
 
     // remove persistent values that haven't been accessed lately

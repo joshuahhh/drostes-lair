@@ -1,4 +1,10 @@
-import { ActionAnnotation, Scene, Step, SuccessfulScene } from "./interpreter";
+import {
+  ActionAnnotation,
+  CallStack,
+  Scene,
+  Step,
+  SuccessfulScene,
+} from "./interpreter";
 import { assert } from "./util";
 
 export type SceneWithId = Scene & { stepId: string };
@@ -18,6 +24,8 @@ export type ViewchartStack = {
   scenes: SceneWithId[];
   nextNodes: ViewchartNode[];
   someStepIsStuck: boolean;
+  isFinal: boolean;
+  callStack: CallStack;
 };
 
 export type ViewchartStackGroup = {
@@ -89,5 +97,7 @@ export function stepToViewchartStack(
       stepsOnFrameToViewchartNode(nextSteps, callDepth),
     ),
     someStepIsStuck: step.isStuck,
+    isFinal: callDepth === 0 && Object.values(step.nextSteps).length === 0,
+    callStack: step.callStack,
   };
 }
