@@ -135,8 +135,23 @@ const act = (f: (stateYouCanChange: UIState) => void) => {
 let undoStack: UIState[] = [examples.dominoesBlank];
 let redoStack: UIState[] = [];
 
+let viewchartMaxX = Infinity;
+let viewchartMaxY = Infinity;
+
+let zoom = 1.1;
+
 let pan: Vec2 = [0, 0];
 const setPan = (v: Vec2) => {
+  console.log("setPan", v);
+  v[0] = Math.max(
+    Math.min(v[0], (c.width - 200) / zoom),
+    100 / zoom - viewchartMaxX,
+  );
+  v[1] = Math.max(
+    Math.min(v[1], (c.height - 400) / zoom),
+    100 / zoom - viewchartMaxY,
+  );
+
   localStorage.setItem("pan", JSON.stringify(v));
   pan = v;
 };
@@ -145,6 +160,7 @@ const loadExample = (key: keyof typeof examples) => {
   undoStack = [examples[key]];
   redoStack = [];
   syncStacks();
+  setPan([0, 0]);
 };
 
 const pushState = (newState: UIState) => {
@@ -360,6 +376,7 @@ async function main() {
       } else {
         zoom *= e.key === "=" ? 1.1 : 1 / 1.1;
       }
+      setPan(pan);
     }
     if (e.key === "p" && (e.ctrlKey || e.metaKey)) {
       e.preventDefault();
@@ -423,8 +440,6 @@ async function main() {
       altHeld = false;
     }
   });
-
-  let zoom = 1.1;
 
   let mouseX = 0;
   let mouseY = 0;
@@ -2236,7 +2251,10 @@ async function main() {
       // exitingSteps,
       add(pan, v(100)),
     );
+    viewchartMaxX = topLevel.maxX - pan[0];
+    viewchartMaxY = topLevel.maxY - pan[1];
     lyrAboveViewchart.place();
+
     // is there more than one final stack?
     // TODO: figure out final stacks
     // const finalStacks = Object.values(viewchart.stackByFrameId).filter(
