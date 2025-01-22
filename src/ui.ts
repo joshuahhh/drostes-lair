@@ -1421,6 +1421,7 @@ async function main() {
         value: state.initialValue,
       },
     );
+    (window as any).initialStep = initialStep;
     const initialStack = stepToViewchartStack(initialStep, 0);
     (window as any).initialStack = initialStack;
 

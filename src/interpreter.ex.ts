@@ -1,4 +1,5 @@
-import { Flowchart, success } from "./interpreter";
+import { Flowchart } from "./interpreter";
+import { success } from "./test-utils";
 import { indexById } from "./util";
 
 export const twoCallsInARowFlowcharts: Flowchart[] = [
@@ -54,7 +55,11 @@ export const branchingFlowchart: Flowchart[] = [
         id: "2",
         action: {
           type: "test-func",
-          func: (x) => [success(x), success(x + 10), success(x + 20)],
+          func: (x) => [
+            success(x, "0"),
+            success(x + 10, "1"),
+            success(x + 20, "2"),
+          ],
         },
       },
       {

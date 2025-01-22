@@ -1,4 +1,4 @@
-import { assertNever, indexById, truthy } from "./util";
+import { assertNever, truthy } from "./util";
 
 // STATIC WORLD
 
@@ -413,7 +413,7 @@ function applyAction(
   callId: string,
 ): ActionResult {
   if (!action || action.type === "start" || action.type === "escape") {
-    return [{ scene: { ...scene, actionAnnotation: undefined }, key: "" }];
+    return [{ scene: { ...scene, actionAnnotation: undefined }, key: "0" }];
   } else if (action.type === "call") {
     return applyCall(ctx, callId, scene, action);
   } else if (action.type === "test-func") {
@@ -466,6 +466,10 @@ function applyCall(
   scene: SuccessfulScene,
   action: Action & { type: "call" },
 ): ActionResult {
+  if (ctx.callStack.length > 10) {
+    throw new Error("call stack too deep");
+  }
+
   const lens = action.lens;
 
   // Prepare initial scene, using lens if necessary
@@ -657,23 +661,6 @@ const lenses: Record<string, LensImpl> = {
     },
   }),
 };
-
-/**
- * Convenience function to run a flowchart in a typical situation.
- */
-export function runHelper(flowcharts: Flowchart[], value: any) {
-  const defs: Definitions = { flowcharts: indexById(flowcharts) };
-  const ctx: RunContext = { defs, callStack: [] };
-  return runFlowchart(ctx, flowcharts[0].id, { type: "success", value });
-}
-
-export function exitingValues(steps: SuccessfulStep[]) {
-  return steps.map((step) => step.scene.value);
-}
-
-export function success(value: any): Scene {
-  return { type: "success", value };
-}
 
 /**
  * We want to show scenes in the context of nested function calls.
