@@ -59,7 +59,6 @@ export type Action =
 export type ActionAnnotation =
   | {
       type: "call";
-      initialStep: Step;
       returningStepId: string;
     }
   | {
@@ -172,6 +171,7 @@ export type Step = {
   flowchartId: string;
   scene: Scene;
   nextSteps: { [frameId: string]: Step[] };
+  nextCalls: { [frameId: string]: { initialStep: Step } };
   isStuck: boolean;
   // UNCOOL: this is super-redundant info; very object-network
   callStack: CallStack;
@@ -210,6 +210,16 @@ export function assertSuccessful(step: Step): asserts step is SuccessfulStep {
 export function assertSuccessfulValue(step: Step): SuccessfulStep {
   assertSuccessful(step);
   return step;
+}
+
+export function callActionAnnotation(
+  scene: Scene,
+): ActionAnnotation & { type: "call" } {
+  if (scene.type === "success" && scene.actionAnnotation?.type === "call") {
+    return scene.actionAnnotation;
+  } else {
+    throw new Error("Expected a call annotation");
+  }
 }
 
 export type RunContext = {
@@ -256,6 +266,8 @@ export function runPreFrame(
 ): {
   /* Steps immediately produced */
   steps: Step[];
+  /* Call immediately produced */
+  call: { initialStep: Step } | undefined;
   /* All downstream steps exiting this flow-chart */
   exitingSteps: SuccessfulStep[];
 } {
@@ -265,17 +277,24 @@ export function runPreFrame(
 
   // Apply the action to produce output scenes
   try {
-    const scenes = applyAction(ctx, inputScene, frame.action, stepId);
-    if (scenes.length === 0) {
-      // TODO: we currently regard an empty set of output scenes as a
-      // failure, so that, e.g., you can provide an escape route if
-      // "move any item" is called on an empty list. this is all
-      // weird and hacky and deserves more thought.
-      throw new ErrorWithAnnotation("no way to go", {
-        type: "scene",
-        scene: inputScene,
-      });
+    let scenes: ActionResult;
+    let call: { initialStep: Step } | undefined = undefined;
+    if (frame.action?.type === "call") {
+      [scenes, call] = applyCall(ctx, stepId, inputScene, frame.action);
+    } else {
+      scenes = applyAction(inputScene, frame.action);
+      if (scenes.length === 0) {
+        // TODO: we currently regard an empty set of output scenes as a
+        // failure, so that, e.g., you can provide an escape route if
+        // "move any item" is called on an empty list. this is all
+        // weird and hacky and deserves more thought.
+        throw new ErrorWithAnnotation("no way to go", {
+          type: "scene",
+          scene: inputScene,
+        });
+      }
     }
+
     // We have scenes for the immediate steps. Now we run each one to
     // completion. Remember: Each scene lives on ME (this frameId).
     const steps: Step[] = [];
@@ -292,7 +311,7 @@ export function runPreFrame(
       exitingSteps.push(...result.exitingSteps);
     }
 
-    return { steps: steps, exitingSteps };
+    return { steps, call, exitingSteps };
   } catch (e) {
     let scene: Scene = { type: "error", message: "unknown" };
     if (e instanceof ErrorWithAnnotation) {
@@ -309,11 +328,12 @@ export function runPreFrame(
       frameId,
       flowchartId,
       nextSteps: {},
+      nextCalls: {},
       scene,
       isStuck: false, // stuck is for successful steps
       callStack: ctx.callStack,
     };
-    return { steps: [nextStep], exitingSteps: [] };
+    return { steps: [nextStep], call: undefined, exitingSteps: [] };
   }
 }
 
@@ -340,6 +360,7 @@ export function runPostFrame(
     frameId,
     flowchartId,
     nextSteps: {},
+    nextCalls: {},
     scene: outputScene,
     isStuck: false,
     callStack: ctx.callStack,
@@ -375,11 +396,13 @@ export function runPostFrame(
       nextFrameId,
     );
     step.nextSteps[nextFrameId] = followResult.steps;
+    if (followResult.call) step.nextCalls[nextFrameId] = followResult.call;
     exitingSteps.push(...followResult.exitingSteps);
 
     if (
       // Criteria for successful continuation...
-      followResult.steps.some((step) => step.scene.type === "success")
+      followResult.steps.some((step) => step.scene.type === "success") ||
+      followResult.call
     ) {
       continuedSuccessfully = true;
     }
@@ -406,16 +429,13 @@ export function runPostFrame(
 export type ActionResult = { scene: Scene; key: string }[];
 
 function applyAction(
-  ctx: RunContext,
   scene: SuccessfulScene,
   action: Action | undefined,
-  /* kinda weird: id for a call if this happens to be one */
-  callId: string,
 ): ActionResult {
   if (!action || action.type === "start" || action.type === "escape") {
     return [{ scene: { ...scene, actionAnnotation: undefined }, key: "0" }];
   } else if (action.type === "call") {
-    return applyCall(ctx, callId, scene, action);
+    throw new Error("INTERNAL ERROR: call action not expected here");
   } else if (action.type === "test-func") {
     return action.func(scene.value);
   } else if (action.type === "place-domino") {
@@ -465,9 +485,9 @@ function applyCall(
   callId: string,
   scene: SuccessfulScene,
   action: Action & { type: "call" },
-): ActionResult {
-  if (ctx.callStack.length > 10) {
-    throw new Error("call stack too deep");
+): [ActionResult, { initialStep: Step }] {
+  if (ctx.callStack.length > 5) {
+    throw new Error("too deep");
   }
 
   const lens = action.lens;
@@ -503,7 +523,6 @@ function applyCall(
       ...exitingStep.scene,
       actionAnnotation: {
         type: "call",
-        initialStep,
         returningStepId: exitingStep.id,
       },
     };
@@ -520,7 +539,7 @@ function applyCall(
     result.push({ scene: returnScene, key: exitingStep.id });
   }
 
-  return result;
+  return [result, { initialStep }];
 }
 
 function applyActionWorkspacePick(
