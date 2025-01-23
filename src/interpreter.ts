@@ -721,8 +721,11 @@ export function topLevelValueForStep(
   );
 }
 
-export function getNextFrameIds(frameId: string, flowchart: Flowchart) {
-  // TODO: what about special arrows?
+export function getNextFrameIds(
+  defs: Definitions,
+  { flowchartId, frameId }: { flowchartId: string; frameId: string },
+) {
+  const flowchart = defs.flowcharts[flowchartId];
   return [
     ...flowchart.arrows
       .filter(({ from }) => from === frameId)
@@ -731,8 +734,11 @@ export function getNextFrameIds(frameId: string, flowchart: Flowchart) {
   ].filter(truthy);
 }
 
-export function getPrevFrameIds(frameId: string, flowchart: Flowchart) {
-  // TODO: what about special arrows?
+export function getPrevFrameIds(
+  defs: Definitions,
+  { flowchartId, frameId }: { flowchartId: string; frameId: string },
+) {
+  const flowchart = defs.flowcharts[flowchartId];
   return [
     ...flowchart.arrows
       .filter(({ to }) => to === frameId)

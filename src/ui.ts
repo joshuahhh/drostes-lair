@@ -50,8 +50,8 @@ import {
   ViewchartNode,
   ViewchartStack,
   ViewchartStackGroup,
-  stepToViewchartStack,
 } from "./viewchart";
+import { stepToViewchartStack } from "./viewchart-split";
 
 const browser = detectBrowser();
 
