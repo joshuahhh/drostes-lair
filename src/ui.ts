@@ -26,6 +26,7 @@ import {
   stringifyEqual,
   topLevelValueForStep,
 } from "./interpreter";
+import { matchesCombo } from "./keyboard";
 import { Layer, getLayerCommandCount, layer } from "./layer";
 import { howManyTimesDidModWrap, mod } from "./number";
 import { drawSpriteSheet, makeCandleRenderer } from "./ui_candle";
@@ -364,24 +365,21 @@ async function main() {
     if (e.key === "Alt") {
       altHeld = true;
     }
-    if (e.key === "z" && (e.ctrlKey || e.metaKey) && !e.shiftKey) {
+    if (matchesCombo(e, "c+z")) {
       e.preventDefault();
       if (undoStack.length > 1) {
         redoStack.push(undoStack.pop()!);
         syncStacks();
       }
     }
-    if (
-      (e.key === "y" && (e.ctrlKey || e.metaKey)) ||
-      (e.key === "z" && (e.ctrlKey || e.metaKey) && e.shiftKey)
-    ) {
+    if (matchesCombo(e, "c+y, c+s+z")) {
       e.preventDefault();
       if (redoStack.length > 0) {
         undoStack.push(redoStack.pop()!);
         syncStacks();
       }
     }
-    if (e.key === "s" && (e.ctrlKey || e.metaKey)) {
+    if (matchesCombo(e, "c+s")) {
       e.preventDefault();
       saveFile(
         new Blob([JSON.stringify(state, null, 2)], {
@@ -390,10 +388,7 @@ async function main() {
         "state.json",
       );
     }
-    if (
-      (e.key === "=" || e.key === "-" || e.key === "0") &&
-      (e.ctrlKey || e.metaKey)
-    ) {
+    if (matchesCombo(e, "c+=, c+-, c+0")) {
       e.preventDefault();
       if (e.key === "0") {
         zoom = 1;
@@ -402,11 +397,11 @@ async function main() {
       }
       setPan(pan);
     }
-    if (e.key === "p" && (e.ctrlKey || e.metaKey)) {
+    if (matchesCombo(e, "c+p")) {
       e.preventDefault();
       setPan([0, 0]);
     }
-    if (e.key === "o" && (e.ctrlKey || e.metaKey)) {
+    if (matchesCombo(e, "c+o")) {
       e.preventDefault();
       let prompt = "Select # or key of example to load:\n";
       for (const [i, key] of Object.keys(examples).entries()) {
@@ -423,19 +418,19 @@ async function main() {
       }
       window.alert("Can't find that, sorry.");
     }
-    if (e.key === "h") {
+    if (matchesCombo(e, "h")) {
       tool = { type: "domino", orientation: "h" };
     }
-    if (e.key === "v" && !(e.ctrlKey || e.metaKey)) {
+    if (matchesCombo(e, "v")) {
       tool = { type: "domino", orientation: "v" };
     }
-    if (e.key === "Escape") {
+    if (matchesCombo(e, "Escape")) {
       tool = { type: "pointer" };
     }
-    if (e.key === "a") {
+    if (matchesCombo(e, "a")) {
       tool = { type: "dev-action" };
     }
-    if (e.key === "i" && (e.ctrlKey || e.metaKey)) {
+    if (matchesCombo(e, "c+i")) {
       e.preventDefault();
       const result = window.prompt(
         "JSON for initial value:",
@@ -449,19 +444,19 @@ async function main() {
         window.alert("Can't read that JSON, sorry.");
       }
     }
-    if (e.key >= "1" && e.key <= "9") {
+    if (matchesCombo(e, "1,2,3,4,5,6,7,8,9")) {
       viewDepth = parseInt(e.key) - 1;
     }
-    if (e.key === "0" && !(e.ctrlKey || e.metaKey)) {
+    if (matchesCombo(e, "0")) {
       viewDepth = Infinity;
     }
-    if (e.key === "m") {
+    if (matchesCombo(e, "m")) {
       viewchartSystem = viewchartSystem === Split ? Joined : Split;
     }
-    if (e.key === "z" && !(e.ctrlKey || e.metaKey)) {
+    if (matchesCombo(e, "z")) {
       showEmptyFrames = !showEmptyFrames;
     }
-    if (e.key === "g") {
+    if (matchesCombo(e, "g")) {
       showGhostGloves = !showGhostGloves;
     }
   });
