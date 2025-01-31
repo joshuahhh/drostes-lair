@@ -5,17 +5,27 @@ import {
   getNextFrameIds,
 } from "./interpreter";
 import { truthy } from "./util";
-import { ViewchartCall, ViewchartStack } from "./viewchart";
+import { ViewchartCall, ViewchartOptions, ViewchartStack } from "./viewchart";
 
 export namespace Joined {
   export const name = "joined";
 
+  type Context = {
+    defs: Definitions;
+    showEmptyFrames: boolean;
+  };
+
   export function initialStepToViewchartStack(
     defs: Definitions,
     initialStep: Step,
+    opts: ViewchartOptions = {},
   ) {
-    return stepsToViewchartStack(
+    const ctx: Context = {
       defs,
+      showEmptyFrames: opts.showEmptyFrames ?? false,
+    };
+    return stepsToViewchartStack(
+      ctx,
       initialStep.flowchartId,
       initialStep.frameId,
       [initialStep],
@@ -40,14 +50,14 @@ export namespace Joined {
 
   // given a set of steps that belong on a stack together, put em together!
   export function stepsToViewchartStack(
-    defs: Definitions,
+    ctx: Context,
     flowchartId: string,
     frameId: string,
     steps: Step[],
     callStack: JoinedCallStack,
     stepIdToStackId: { [stepId: string]: string },
   ): ViewchartStack {
-    const nextFrameIds = getNextFrameIds(defs, { flowchartId, frameId });
+    const nextFrameIds = getNextFrameIds(ctx.defs, { flowchartId, frameId });
     const stackId = stringifyJoinedCallStack(callStack) + "/" + frameId;
     for (const step of steps) {
       stepIdToStackId[step.id] = stackId;
@@ -67,11 +77,11 @@ export namespace Joined {
             (step) => step.nextCalls[nextFrameId] || [],
           );
           if (nextCalls.length === 0) {
-            if (nextSteps.length === 0) {
+            if (!ctx.showEmptyFrames && nextSteps.length === 0) {
               return undefined;
             } else {
               return stepsToViewchartStack(
-                defs,
+                ctx,
                 flowchartId,
                 nextFrameId,
                 nextSteps,
@@ -83,7 +93,7 @@ export namespace Joined {
             // we assume that all nextSteps are returns from the
             // nextCalls
             return callsToViewchartCall(
-              defs,
+              ctx,
               flowchartId,
               nextFrameId,
               nextSteps,
@@ -100,7 +110,7 @@ export namespace Joined {
   }
 
   function callsToViewchartCall(
-    defs: Definitions,
+    ctx: Context,
     flowchartId: string,
     frameId: string,
     steps: Step[],
@@ -110,7 +120,7 @@ export namespace Joined {
   ): ViewchartCall {
     const stepIdToStackIdForInside: { [stepId: string]: string } = {};
     const initialStack = stepsToViewchartStack(
-      defs,
+      ctx,
       calls[0].initialStep.flowchartId,
       calls[0].initialStep.frameId,
       calls.map((call) => call.initialStep),
@@ -121,25 +131,28 @@ export namespace Joined {
       type: "call",
       flowchartId,
       initialStack,
-      returns: [
-        {
-          isTopLevel: true,
-          innerStackIds: steps.map(
-            (step) =>
-              stepIdToStackIdForInside[
-                callActionAnnotation(step.scene).returningStepId
-              ],
-          ),
-          outerStack: stepsToViewchartStack(
-            defs,
-            flowchartId,
-            frameId,
-            steps,
-            callStack,
-            stepIdToStackId,
-          ),
-        },
-      ],
+      returns:
+        steps.length > 0
+          ? [
+              {
+                isTopLevel: true,
+                innerStackIds: steps.map(
+                  (step) =>
+                    stepIdToStackIdForInside[
+                      callActionAnnotation(step.scene).returningStepId
+                    ],
+                ),
+                outerStack: stepsToViewchartStack(
+                  ctx,
+                  flowchartId,
+                  frameId,
+                  steps,
+                  callStack,
+                  stepIdToStackId,
+                ),
+              },
+            ]
+          : [],
       callDepth: callStack.length + 1,
     };
   }

@@ -39,10 +39,13 @@ export type ViewchartCall = {
   callDepth: number;
 };
 
+export type ViewchartOptions = { showEmptyFrames?: boolean };
+
 export type ViewchartSystem = {
   name: string;
   initialStepToViewchartStack(
     defs: Definitions,
     initialStep: Step,
+    opts?: ViewchartOptions,
   ): ViewchartStack;
 };

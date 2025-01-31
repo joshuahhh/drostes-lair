@@ -585,6 +585,59 @@ export const examples = assertExtends<Record<string, UIState>>()({
       ]),
     },
   },
+  reverseRecurseWithoutEscape: {
+    initialValue: {
+      type: "workspace",
+      contents: [["a", "b", "c", "d"], []],
+    },
+    initialFlowchartId: "♌︎",
+    defs: {
+      flowcharts: {
+        "♌︎": {
+          id: "♌︎",
+          initialFrameId: "1",
+          frames: {
+            "1": {
+              id: "1",
+              action: {
+                type: "start",
+              },
+            },
+            "♌︎-1": {
+              id: "♌︎-1",
+              action: {
+                type: "workspace-pick",
+                source: 0,
+                index: "last",
+                target: {
+                  type: "at",
+                  index: 1,
+                  side: "after",
+                },
+              },
+            },
+            "♌︎-2": {
+              id: "♌︎-2",
+              action: {
+                type: "call",
+                flowchartId: "♌︎",
+              },
+            },
+          },
+          arrows: [
+            {
+              from: "1",
+              to: "♌︎-1",
+            },
+            {
+              from: "♌︎-1",
+              to: "♌︎-2",
+            },
+          ],
+        },
+      },
+    },
+  },
   reverseDone: {
     initialValue: {
       type: "workspace",

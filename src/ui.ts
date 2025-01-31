@@ -232,6 +232,7 @@ if (hashParams["example"]) {
 
 let viewDepth = Infinity;
 let viewchartSystem: ViewchartSystem = Split;
+let showEmptyFrames = false;
 
 const persistentValuesById = new Map<string, number>();
 const persistentValuesAccessedLately = new Set<string>();
@@ -437,6 +438,9 @@ async function main() {
     }
     if (e.key === "m") {
       viewchartSystem = viewchartSystem === Split ? Joined : Split;
+    }
+    if (e.key === "z" && !(e.ctrlKey || e.metaKey)) {
+      showEmptyFrames = !showEmptyFrames;
     }
   });
   window.addEventListener("keyup", (e) => {
@@ -1449,6 +1453,7 @@ async function main() {
     const initialStack = viewchartSystem.initialStepToViewchartStack(
       defs,
       initialStep,
+      { showEmptyFrames },
     );
     (window as any).initialStack = initialStack;
 
@@ -2506,7 +2511,11 @@ async function main() {
         lyrAbove.strokeStyle = "rgba(255, 0, 255, 1)";
         lyrAbove.lineWidth = 4;
         lyrAbove.fillStyle = "rgba(255, 0, 255, 1)";
-        lyrAbove.fillText(viewchartSystem.name, 20, 20);
+        lyrAbove.fillText(
+          viewchartSystem.name + (showEmptyFrames ? " empty" : ""),
+          20,
+          20,
+        );
       });
     }
 
