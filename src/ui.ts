@@ -233,6 +233,7 @@ if (hashParams["example"]) {
 let viewDepth = Infinity;
 let viewchartSystem: ViewchartSystem = Split;
 let showEmptyFrames = false;
+let showGhostGloves = false;
 
 const persistentValuesById = new Map<string, number>();
 const persistentValuesAccessedLately = new Set<string>();
@@ -459,6 +460,9 @@ async function main() {
     }
     if (e.key === "z" && !(e.ctrlKey || e.metaKey)) {
       showEmptyFrames = !showEmptyFrames;
+    }
+    if (e.key === "g") {
+      showGhostGloves = !showGhostGloves;
     }
   });
   window.addEventListener("keyup", (e) => {
@@ -1904,6 +1908,7 @@ async function main() {
 
       const { flowchartId, frameId } = stack;
       if (
+        showGhostGloves &&
         hoveredStackInfo &&
         hoveredStackInfo.stackId !== stackId &&
         hoveredStackInfo.flowchartId === flowchartId &&
