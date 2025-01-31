@@ -44,7 +44,7 @@ import {
   mr,
   saveFile,
 } from "./ui_util";
-import { assertNever, indexById, objectEntries } from "./util";
+import { assertNever, indexById } from "./util";
 import { Vec2, add, angleBetween, distance, mul, sub, v } from "./vec2";
 import {
   ViewchartCall,
@@ -1534,7 +1534,7 @@ async function main() {
 
     // draw trace
     const scenePadX = 20;
-    const scenePadY = 15; // 40 for stacks
+    const scenePadY = viewchartSystem === Split ? 15 : 40;
     const callPad = 20; // space between elements and edges of the bottom of the hole
     const callTopPad = 20; // height of the "top of the hole" (transition from top to bottom)
 
@@ -2178,12 +2178,18 @@ async function main() {
 
       lyrAbove.place();
 
-      for (const [innerStackId, outerStack] of objectEntries(call.exitStacks)) {
-        // one case it's not gonna be found: it's "top"
-        const innerStackXYWH = stackXYWHs[innerStackId] as XYWH | undefined;
-        if (innerStackXYWH) {
-          y = Math.max(y, innerStackXYWH[1] - callPad - callTopPad);
+      for (const { innerStackIds, outerStack, isTopLevel } of call.returns) {
+        if (innerStackIds.length === 0) {
+          throw new Error("no innerStackIds");
         }
+        if (!isTopLevel) {
+          // console.log(innerStackIds, Object.keys(stackXYWHs));
+          const innerStacksMinY = Math.min(
+            ...innerStackIds.map((id) => stackXYWHs[id][1]),
+          );
+          y = Math.max(y, innerStacksMinY - callPad - callTopPad);
+        }
+
         const continuation = drawStackAndDownstream(
           lyr,
           lyrAboveViewchart,
@@ -2198,17 +2204,22 @@ async function main() {
 
         // draw connector line
         let holeEdgeOutside: Vec2;
-        if (innerStackXYWH) {
+        for (const innerStackId of innerStackIds) {
+          const innerStackXYWH = stackXYWHs[innerStackId];
           const lineStart: Vec2 = mr(innerStackXYWH);
           const lineEnd = continuation.initialPosForConnector;
-          const holeEdgeInside = v(child.maxX + callPad, lineStart[1]);
+          const holeEdgeInside = v(
+            child.maxX + callPad,
+            lineEnd[1] + callPad + callTopPad,
+          );
           holeEdgeOutside = v(child.maxX + callPad, lineEnd[1]);
           drawConnectorLine(lyr, lineStart, holeEdgeInside);
-        } else {
-          holeEdgeOutside = v(child.maxX + callPad, myY + sceneH / 2);
         }
+        //  else {
+        //   holeEdgeOutside = v(child.maxX + callPad, myY + sceneH / 2);
+        // }
         const lineEnd = continuation.initialPosForConnector;
-        drawConnectorLine(lyr, lineEnd, holeEdgeOutside);
+        drawConnectorLine(lyr, lineEnd, holeEdgeOutside!);
       }
 
       return {

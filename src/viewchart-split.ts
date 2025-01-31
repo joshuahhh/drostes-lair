@@ -1,5 +1,5 @@
 import { Definitions, Step, callActionAnnotation } from "./interpreter";
-import { objectEntries, objectFromEntries } from "./util";
+import { objectEntries } from "./util";
 import { ViewchartNode, ViewchartStack } from "./viewchart";
 
 export namespace Split {
@@ -25,12 +25,10 @@ export namespace Split {
           maybeCall.initialStep,
           callDepth + 1,
         ) as ViewchartStack,
-        exitStacks: objectFromEntries(
-          steps.map((step) => [
-            callActionAnnotation(step.scene).returningStepId,
-            stepToViewchartStack(step, callDepth),
-          ]),
-        ),
+        returns: steps.map((step) => ({
+          innerStackIds: [callActionAnnotation(step.scene).returningStepId],
+          outerStack: stepToViewchartStack(step, callDepth),
+        })),
         callDepth: callDepth + 1,
       };
     } else {

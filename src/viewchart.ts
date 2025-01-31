@@ -31,8 +31,11 @@ export type ViewchartCall = {
   type: "call";
   flowchartId: string;
   initialStack: ViewchartStack;
-  // innerStackId of "top" means it's a top-level return
-  exitStacks: { [innerStackId: string]: ViewchartStack };
+  returns: {
+    innerStackIds: string[];
+    outerStack: ViewchartStack;
+    isTopLevel?: boolean;
+  }[];
   callDepth: number;
 };
 
