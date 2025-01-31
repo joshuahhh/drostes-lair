@@ -2239,9 +2239,11 @@ async function main() {
         if (!isTopLevel) {
           // console.log(innerStackIds, Object.keys(stackXYWHs));
           const innerStacksMinY = Math.min(
-            ...innerStackIds.map((id) => stackXYWHs[id][1]),
+            ...innerStackIds.map((id) => stackXYWHs[id]?.[1] ?? Infinity),
           );
-          y = Math.max(y, innerStacksMinY - callPad - callTopPad);
+          if (innerStacksMinY < Infinity) {
+            y = Math.max(y, innerStacksMinY - callPad - callTopPad);
+          }
         }
 
         const continuation = drawStackAndDownstream(
@@ -2257,9 +2259,10 @@ async function main() {
         maxY = Math.max(maxY, y);
 
         // draw connector line
-        let holeEdgeOutside: Vec2;
+        let holeEdgeOutside = v(child.maxX + callPad, myY + sceneH / 2);
         for (const innerStackId of innerStackIds) {
           const innerStackXYWH = stackXYWHs[innerStackId];
+          if (!innerStackXYWH) continue;
           const lineStart: Vec2 = mr(innerStackXYWH);
           const lineEnd = continuation.initialPosForConnector;
           const holeEdgeInside = v(
