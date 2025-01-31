@@ -1,76 +1,124 @@
-import {
-  Definitions,
-  Step,
-  callActionAnnotation,
-  getFrame,
-  getNextFrameIds,
-} from "./interpreter";
+import { Definitions, Step, getNextFrameIds } from "./interpreter";
 import { ViewchartNode, ViewchartStack } from "./viewchart";
 
 export namespace Joined {
-  function stepsOnFrameToViewchartNode(
-    steps: Step[],
-    calls: { initialStep: Step }[],
-    callStack: Step[],
-  ): ViewchartNode {
-    if (calls.length > 0) {
-      const firstCall = calls[0];
-      return {
-        type: "call",
-        flowchartId: firstCall.initialStep.flowchartId,
-        initialStack: stepsToViewchartStack(
-          calls.map((call) => call.initialStep),
-          callDepth + 1,
-        ) as ViewchartStack,
-        exitStacks: Object.fromEntries(
-          steps.map((step) => [
-            callActionAnnotation(step.scene).returningStepId,
-            stepToViewchartStack(step, callDepth),
-          ]),
-        ),
-        callDepth: callDepth + 1,
-      };
-    } else {
-      if (steps.length === 1) {
-        return stepToViewchartStack(steps[0], callDepth);
-      } else {
-        return {
-          type: "stack-group",
-          nextStacks: steps.map((step) =>
-            stepToViewchartStack(step, callDepth),
-          ),
-        };
-      }
-    }
+  export const name = "joined";
+
+  export function initialStepToViewchartStack(
+    defs: Definitions,
+    initialStep: Step,
+  ) {
+    return stepsToViewchartStack(
+      defs,
+      initialStep.flowchartId,
+      initialStep.frameId,
+      [initialStep],
+      [],
+    );
   }
 
+  // A stack in the joined viewchart is a frame in a flowchart, which
+  // itself might be in a call that comes from a frame in another
+  // flowchart, etc.
+
+  type JoinedCallStack = JoinedCallRecord[];
+  type JoinedCallRecord = {
+    framechartId: string;
+    // the frame of the call
+    frameId: string;
+  };
+  function stringifyJoinedCallStack(callStack: JoinedCallStack): string {
+    return JSON.stringify(callStack);
+  }
+
+  // given a set of steps that belong on a stack together, put em together!
   export function stepsToViewchartStack(
     defs: Definitions,
     flowchartId: string,
     frameId: string,
     steps: Step[],
-    callStack: Step[],
+    callStack: JoinedCallStack,
   ): ViewchartStack {
-    const frame = getFrame(defs, { flowchartId, frameId });
     const nextFrameIds = getNextFrameIds(defs, { flowchartId, frameId });
     return {
       type: "stack",
-      id: step.id,
+      id: stringifyJoinedCallStack(callStack) + "/" + frameId,
       frameId: frameId,
       flowchartId: flowchartId,
-      scenes: steps.map((step) => ({ ...step.scene, stepId: step.id })),
-      nextNodes: nextFrameIds.map((frameId) => {
-        const nextSteps = steps.flatMap(step => step.nextSteps[frameId] || []);
-        const nextCalls = steps.flatMap(step => step.nextCalls[frameId] || []);
-        stepsOnFrameToViewchartNode(
-          nextSteps,
-          nextCalls,
+      steps,
+      nextNodes: nextFrameIds.flatMap((nextFrameId) => {
+        const nextSteps = steps.flatMap(
+          (step) => step.nextSteps[nextFrameId] || [],
+        );
+        const nextCalls = steps.flatMap(
+          (step) => step.nextCalls[nextFrameId] || [],
+        );
+        if (nextCalls.length === 0) {
+          return [
+            stepsToViewchartStack(
+              defs,
+              flowchartId,
+              nextFrameId,
+              nextSteps,
+              callStack,
+            ),
+          ];
+        } else {
+          // we assume that all nextSteps are returns from the
+          // nextCalls
+          return [
+            callsToViewchartCall(
+              defs,
+              flowchartId,
+              nextFrameId,
+              nextSteps,
+              nextCalls,
+              callStack,
+            ),
+          ];
+        }
+      }),
+      someStepIsStuck: steps.some((step) => step.isStuck),
+      isFinal: callStack.length === 0 && nextFrameIds.length === 0,
+    };
+  }
+
+  function callsToViewchartCall(
+    defs: Definitions,
+    flowchartId: string,
+    frameId: string,
+    steps: Step[],
+    calls: { initialStep: Step }[],
+    callStack: JoinedCallStack,
+  ): ViewchartNode {
+    return {
+      type: "call",
+      flowchartId,
+      initialStack: stepsToViewchartStack(
+        defs,
+        calls[0].initialStep.flowchartId,
+        calls[0].initialStep.frameId,
+        calls.map((call) => call.initialStep),
+        [...callStack, { framechartId: flowchartId, frameId }],
+      ),
+      exitStacks: {
+        top: stepsToViewchartStack(
+          defs,
+          flowchartId,
+          frameId,
+          steps,
           callStack,
         ),
-      ),
-      someStepIsStuck: step.isStuck,
-      isFinal: callDepth === 0 && Object.values(step.nextSteps).length === 0,
-      callStack: step.callStack,
+      },
+      // mapValues(
+      //   groupBy(
+      //     steps,
+      //     (step) => callActionAnnotation(step.scene).returningStepId,
+      //   ),
+      //   (steps) =>
+      //     stepsToViewchartStack(defs, flowchartId, frameId, steps, callStack),
+      // ),
+      callDepth: callStack.length + 1,
     };
   }
 }

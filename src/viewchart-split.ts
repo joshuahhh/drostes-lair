@@ -1,7 +1,17 @@
-import { Step, callActionAnnotation } from "./interpreter";
+import { Definitions, Step, callActionAnnotation } from "./interpreter";
+import { objectEntries, objectFromEntries } from "./util";
 import { ViewchartNode, ViewchartStack } from "./viewchart";
 
 export namespace Split {
+  export const name = "split";
+
+  export function initialStepToViewchartStack(
+    _defs: Definitions,
+    initialStep: Step,
+  ) {
+    return stepToViewchartStack(initialStep, 0);
+  }
+
   function stepsOnFrameToViewchartNode(
     steps: Step[],
     maybeCall: { initialStep: Step } | undefined,
@@ -15,7 +25,7 @@ export namespace Split {
           maybeCall.initialStep,
           callDepth + 1,
         ) as ViewchartStack,
-        exitStacks: Object.fromEntries(
+        exitStacks: objectFromEntries(
           steps.map((step) => [
             callActionAnnotation(step.scene).returningStepId,
             stepToViewchartStack(step, callDepth),
@@ -46,8 +56,8 @@ export namespace Split {
       id: step.id,
       frameId: step.frameId,
       flowchartId: step.flowchartId,
-      scenes: [{ ...step.scene, stepId: step.id }],
-      nextNodes: Object.entries(step.nextSteps).map(([frameId, nextSteps]) =>
+      steps: [step],
+      nextNodes: objectEntries(step.nextSteps).map(([frameId, nextSteps]) =>
         stepsOnFrameToViewchartNode(
           nextSteps,
           step.nextCalls[frameId],
@@ -56,7 +66,6 @@ export namespace Split {
       ),
       someStepIsStuck: step.isStuck,
       isFinal: callDepth === 0 && Object.values(step.nextSteps).length === 0,
-      callStack: step.callStack,
     };
   }
 }

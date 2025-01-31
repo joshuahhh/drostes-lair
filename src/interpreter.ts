@@ -170,8 +170,12 @@ export type Step = {
   frameId: string;
   flowchartId: string;
   scene: Scene;
-  nextSteps: { [frameId: string]: Step[] };
-  nextCalls: { [frameId: string]: { initialStep: Step } };
+  // If this step is followed by a non-call frame, this frame will
+  // contribute to nextSteps but not nextCalls. A call frame will
+  // contribute to nextCalls, and if it successfully returns,
+  // returning steps will also appear in nextSteps.
+  nextSteps: { [nextFrameId: string]: Step[] };
+  nextCalls: { [nextFrameId: string]: { initialStep: Step } };
   isStuck: boolean;
   // UNCOOL: this is super-redundant info; very object-network
   callStack: CallStack;

@@ -10,9 +10,11 @@ import {
 import {
   Action,
   ActionAnnotation,
+  CallStack,
   Definitions,
   DominoesValue,
   Flowchart,
+  Step,
   SuccessfulScene,
   WorkspaceValue,
   getActionText,
@@ -42,16 +44,17 @@ import {
   mr,
   saveFile,
 } from "./ui_util";
-import { assertNever, indexById } from "./util";
+import { assertNever, indexById, objectEntries } from "./util";
 import { Vec2, add, angleBetween, distance, mul, sub, v } from "./vec2";
 import {
-  SceneWithId,
   ViewchartCall,
   ViewchartNode,
   ViewchartStack,
   ViewchartStackGroup,
+  ViewchartSystem,
 } from "./viewchart";
-import { stepToViewchartStack } from "./viewchart-split";
+import { Joined } from "./viewchart-joined";
+import { Split } from "./viewchart-split";
 
 const browser = detectBrowser();
 
@@ -142,7 +145,7 @@ let zoom = 1.1;
 
 let pan: Vec2 = [0, 0];
 const setPan = (v: Vec2) => {
-  console.log("setPan", v);
+  // console.log("setPan", v);
   v[0] = Math.max(
     Math.min(v[0], (c.width - 200) / zoom),
     100 / zoom - viewchartMaxX,
@@ -228,6 +231,7 @@ if (hashParams["example"]) {
 }
 
 let viewDepth = Infinity;
+let viewchartSystem: ViewchartSystem = Split;
 
 const persistentValuesById = new Map<string, number>();
 const persistentValuesAccessedLately = new Set<string>();
@@ -430,6 +434,9 @@ async function main() {
     }
     if (e.key === "0" && !(e.ctrlKey || e.metaKey)) {
       viewDepth = Infinity;
+    }
+    if (e.key === "m") {
+      viewchartSystem = viewchartSystem === Split ? Joined : Split;
     }
   });
   window.addEventListener("keyup", (e) => {
@@ -636,6 +643,7 @@ async function main() {
     lyr: Layer,
     value: DominoesValue,
     scene: SuccessfulScene,
+    callStack: CallStack,
     stepId: string | undefined,
     stack: ViewchartStack,
     pos: Vec2,
@@ -652,7 +660,7 @@ async function main() {
     let dx = 0;
     let dy = 0;
 
-    for (const record of stack.callStack) {
+    for (const record of callStack) {
       const action = record.action;
       const lens = action.lens!; // TODO: what if not here
       dx += lens.dx;
@@ -761,7 +769,7 @@ async function main() {
     let y = 0;
     let width = value.width;
     let height = value.height;
-    for (const [i, record] of stack.callStack.entries()) {
+    for (const [i, record] of callStack.entries()) {
       const action = record.action;
       const lens = action.lens!; // TODO: what if not here
       x += lens.dx;
@@ -776,7 +784,7 @@ async function main() {
       if (true) {
         lyr.fillStyle = patternParchment;
         patternParchment.setTransform(new DOMMatrix().translate(...pan, 0));
-        lyr.globalAlpha = i === stack.callStack.length - 1 ? 0.8 : 0.4;
+        lyr.globalAlpha = i === callStack.length - 1 ? 0.8 : 0.4;
       } else {
         lyr.fillStyle = "rgba(0,0,0,0.4)";
       }
@@ -1201,10 +1209,16 @@ async function main() {
   /* This draws the main contents of a scene onto a parchment. It is
   called in two contexts: 1. a scene was successful, 2. a scene
   errored out but it has an error annotation with a scene on it. In
-  either case, it receives a successful scene to show. */
+  either case, it receives a successful scene to show.
+
+  The input to this function isn't a step, but a bundle of step-like
+  information. That's cuz sometimes we'll want to draw scene contents
+  that don't come from a step, per se, but from things like error
+  annotations. */
   const drawSceneContents = (
     lyr: Layer,
     scene: SuccessfulScene,
+    callStack: CallStack,
     stepId: string | undefined,
     stack: ViewchartStack,
     defs: Definitions,
@@ -1217,9 +1231,9 @@ async function main() {
     lyr.rect(...topLeft, sceneW, sceneH);
     lyr.clip();
 
-    const value = topLevelValueForStep(scene.value, stack.callStack);
+    const value = topLevelValueForStep(scene.value, callStack);
     if (isDominoesValue(value)) {
-      drawDominoesValue(lyr, value, scene, stepId, stack, topLeft);
+      drawDominoesValue(lyr, value, scene, callStack, stepId, stack, topLeft);
     } else if (isWorkspaceValue(value)) {
       drawWorkspaceValue(
         lyr,
@@ -1243,16 +1257,17 @@ async function main() {
 
   /* This draws a scene onto parchment. It might be one scene of many
   in a stack. It might be an errored-out scene. */
-  const drawScene = (
+  const drawStep = (
     lyr: Layer,
-    scene: SceneWithId,
+    step: Step,
     stack: ViewchartStack,
     topleft: Vec2,
     onHover: () => void,
   ) => {
     const { defs } = state;
 
-    const frame = getFrame(defs, stack);
+    const scene = step.scene;
+    const frame = getFrame(defs, step);
 
     const xywh = [...topleft, sceneW, sceneH] as const;
     if (inXYWH(mouseX, mouseY, expand(xywh, 10))) {
@@ -1314,6 +1329,7 @@ async function main() {
           drawSceneContents(
             lyr,
             errorAnnotation.scene,
+            step.callStack, // use the step's callStack for the error annotation scene
             undefined,
             stack,
             defs,
@@ -1343,7 +1359,15 @@ async function main() {
       return;
     }
 
-    drawSceneContents(lyr, scene, scene.stepId, stack, defs, topleft);
+    drawSceneContents(
+      lyr,
+      scene,
+      step.callStack,
+      step.id,
+      stack,
+      defs,
+      topleft,
+    );
 
     if (tool.type === "purging-flame" && frame.action?.type !== "start") {
       addClickHandler(xywh, () => {
@@ -1422,7 +1446,10 @@ async function main() {
       },
     );
     (window as any).initialStep = initialStep;
-    const initialStack = stepToViewchartStack(initialStep, 0);
+    const initialStack = viewchartSystem.initialStepToViewchartStack(
+      defs,
+      initialStep,
+    );
     (window as any).initialStack = initialStack;
 
     _clickables = [];
@@ -1775,7 +1802,7 @@ async function main() {
       myY: number,
     ): { maxX: number; maxY: number; layerUsed: Layer } => {
       const stackId = stack.id;
-      const scenes = stack.scenes;
+      const steps = stack.steps;
 
       let maxX = curX;
       let maxY = myY;
@@ -1795,14 +1822,14 @@ async function main() {
       const stackH = scenePadY - 5;
       const layerToUse = hovered ? lyrAboveViewchart : lyr;
       layerToUse.do((lyr) => {
-        for (const [sceneIdx, scene] of scenes.entries()) {
+        for (const [stepIdx, step] of steps.entries()) {
           let targetX = curX;
-          let targetY = myY + (sceneIdx / scenes.length) * stackH;
+          let targetY = myY + (stepIdx / steps.length) * stackH;
           if (hovered) {
             const stackFanX = sceneW + 10;
             const stackFanY = sceneH + 10;
             const modArgs = [
-              myY + sceneIdx * stackFanY,
+              myY + stepIdx * stackFanY,
               c.height - sceneH,
               myY,
             ] as const;
@@ -1812,34 +1839,29 @@ async function main() {
           }
 
           const xy: Vec2 = [
-            interpTo(`${stackId} ${sceneIdx} x`, targetX - pan[0]) + pan[0],
-            interpTo(`${stackId} ${sceneIdx} y`, targetY - pan[1]) + pan[1],
+            interpTo(`${step.id} x`, targetX - pan[0]) + pan[0],
+            interpTo(`${step.id} y`, targetY - pan[1]) + pan[1],
           ];
-          drawScene(lyr, scene, stack, xy, () => {
+          drawStep(lyr, step, stack, xy, () => {
             hoveredStackId = stackId;
           });
 
-          if (sceneIdx === 0) {
+          if (stepIdx === 0) {
             // TODO: Only one step is used to determine size. This is
             // needed, at least, for consistent connector placement.
             maxX = Math.max(maxX, curX + sceneW);
             maxY = Math.max(maxY, myY + sceneH);
           }
         }
-        if (stack.scenes.length > 1) {
+        if (stack.steps.length > 1) {
           // draw number of steps in stack
-          drawOutlinedText(
-            lyr,
-            `${stack.scenes.length}`,
-            [curX + sceneW, myY],
-            {
-              textAlign: "right",
-              size: 20,
-              color: "#BDAA94",
-            },
-          );
+          drawOutlinedText(lyr, `${stack.steps.length}`, [curX + sceneW, myY], {
+            textAlign: "right",
+            size: 20,
+            color: "#BDAA94",
+          });
         }
-        if (stack.scenes.length === 0) {
+        if (stack.steps.length === 0) {
           const w = 60;
           const h = 50;
           drawParchmentBox(lyr, curX, myY, w, h, {
@@ -1895,7 +1917,7 @@ async function main() {
       const { flowchartId, frameId } = stack;
       const flowchart = defs.flowcharts[flowchartId];
       const frame = flowchart.frames[frameId];
-      const scenes = stack.scenes;
+      const steps = stack.steps;
 
       // draw stack
       // curX is now lhs of stack
@@ -1992,7 +2014,7 @@ async function main() {
         );
       }
 
-      const hasSuccess = scenes.some((scene) => scene.type === "success");
+      const hasSuccess = steps.some((step) => step.scene.type === "success");
 
       // draw downstream
       let maxX = curX;
@@ -2003,7 +2025,7 @@ async function main() {
         if (
           nextNode.type === "stack" &&
           isEscapeRoute(nextNode.frameId, flowchart) &&
-          nextNode.scenes.length === 0
+          nextNode.steps.length === 0
         ) {
           // draw unused escape route mark
           const markPos = add(lastConnectionJoint, [
@@ -2156,9 +2178,8 @@ async function main() {
 
       lyrAbove.place();
 
-      for (const [innerStackId, outerStack] of Object.entries(
-        call.exitStacks,
-      )) {
+      for (const [innerStackId, outerStack] of objectEntries(call.exitStacks)) {
+        // one case it's not gonna be found: it's "top"
         const innerStackXYWH = stackXYWHs[innerStackId] as XYWH | undefined;
         if (innerStackXYWH) {
           y = Math.max(y, innerStackXYWH[1] - callPad - callTopPad);
@@ -2465,6 +2486,16 @@ async function main() {
         lyrAbove.lineWidth = 4;
         lyrAbove.fillStyle = "rgba(255, 0, 255, 1)";
         lyrAbove.fillText(JSON.stringify(ix), 20, 20);
+      });
+    }
+
+    // view mode debug
+    if (true) {
+      lyrAbove.do(() => {
+        lyrAbove.strokeStyle = "rgba(255, 0, 255, 1)";
+        lyrAbove.lineWidth = 4;
+        lyrAbove.fillStyle = "rgba(255, 0, 255, 1)";
+        lyrAbove.fillText(viewchartSystem.name, 20, 20);
       });
     }
 

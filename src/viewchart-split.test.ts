@@ -3,8 +3,8 @@ import { runHelper, success } from "./test-utils";
 import { indexById } from "./util";
 import { Split } from "./viewchart-split";
 
-test("Split.stepToViewchartStack works with a very simple flowchart", () => {
-  const { initialStep } = runHelper(
+test("Split.initialStepToViewchartStack works with a very simple flowchart", () => {
+  const { initialStep, defs } = runHelper(
     [
       {
         id: "fc1",
@@ -25,7 +25,7 @@ test("Split.stepToViewchartStack works with a very simple flowchart", () => {
     3,
   );
 
-  const stack = Split.stepToViewchartStack(initialStep, 0);
+  const stack = Split.initialStepToViewchartStack(defs, initialStep);
 
   expect(stack).toMatchInlineSnapshot(`
     {
@@ -63,8 +63,8 @@ test("Split.stepToViewchartStack works with a very simple flowchart", () => {
   `);
 });
 
-test("Split.stepToViewchartStack works with a single call", () => {
-  const { initialStep } = runHelper(
+test("Split.initialStepToViewchartStack works with a single call", () => {
+  const { initialStep, defs } = runHelper(
     [
       {
         id: "fc1",
@@ -100,7 +100,7 @@ test("Split.stepToViewchartStack works with a single call", () => {
     3,
   );
 
-  const stack = Split.stepToViewchartStack(initialStep, 0);
+  const stack = Split.initialStepToViewchartStack(defs, initialStep);
 
   expect(stack).toMatchInlineSnapshot(`
     {

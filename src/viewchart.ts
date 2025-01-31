@@ -1,4 +1,8 @@
-import { CallStack, Scene } from "./interpreter";
+import { Definitions, Scene, Step } from "./interpreter";
+
+// NOTE: right now viewchart stuff is runtime-only. if you try to
+// serialize it, you will get a terrible exponentially-redundant
+// mess. don't do that.
 
 export type SceneWithId = Scene & { stepId: string };
 
@@ -12,11 +16,10 @@ export type ViewchartStack = {
   id: string;
   frameId: string;
   flowchartId: string;
-  scenes: SceneWithId[];
+  steps: Step[];
   nextNodes: ViewchartNode[];
   someStepIsStuck: boolean;
   isFinal: boolean;
-  callStack: CallStack;
 };
 
 export type ViewchartStackGroup = {
@@ -28,6 +31,15 @@ export type ViewchartCall = {
   type: "call";
   flowchartId: string;
   initialStack: ViewchartStack;
+  // innerStackId of "top" means it's a top-level return
   exitStacks: { [innerStackId: string]: ViewchartStack };
   callDepth: number;
+};
+
+export type ViewchartSystem = {
+  name: string;
+  initialStepToViewchartStack(
+    defs: Definitions,
+    initialStep: Step,
+  ): ViewchartStack;
 };

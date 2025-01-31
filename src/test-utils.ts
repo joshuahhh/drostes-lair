@@ -14,7 +14,10 @@ import { indexById } from "./util";
 export function runHelper(flowcharts: Flowchart[], value: any) {
   const defs: Definitions = { flowcharts: indexById(flowcharts) };
   const ctx: RunContext = { defs, callStack: [] };
-  return runFlowchart(ctx, flowcharts[0].id, { type: "success", value });
+  return {
+    ...runFlowchart(ctx, flowcharts[0].id, { type: "success", value }),
+    defs,
+  };
 }
 
 export function exitingValues(steps: SuccessfulStep[]) {
