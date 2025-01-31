@@ -1915,8 +1915,8 @@ async function main() {
           imgGlove3,
           curX + Math.min(hoveredStackInfo.relMouseX, sceneW),
           myY + Math.min(hoveredStackInfo.relMouseY, sceneH),
-          imgGlove1.width * scale,
-          imgGlove1.height * scale,
+          (imgGlove1.width * scale) / zoom,
+          (imgGlove1.height * scale) / zoom,
         );
         lyrAbove.globalAlpha = 1;
       }
