@@ -232,8 +232,8 @@ if (hashParams["example"]) {
 }
 
 let viewDepth = Infinity;
-let viewchartSystem: ViewchartSystem = Split;
-let showEmptyFrames = false;
+let viewchartSystem: ViewchartSystem = Joined;
+let showEmptyFrames = true;
 let showGhostGloves = false;
 
 const persistentValuesById = new Map<string, number>();
@@ -2192,7 +2192,7 @@ async function main() {
       return {
         maxX,
         maxY,
-        initialPosForConnector: [myX, myY + sceneH / 2],
+        initialPosForConnector: [myX, (myY + drawStackResult.maxY) / 2],
       };
     };
 
@@ -2553,7 +2553,7 @@ async function main() {
     }
 
     // view mode debug
-    if (true) {
+    if (false) {
       lyrAbove.do(() => {
         lyrAbove.strokeStyle = "rgba(255, 0, 255, 1)";
         lyrAbove.lineWidth = 4;
